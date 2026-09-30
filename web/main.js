@@ -14,7 +14,7 @@ const key = new THREE.DirectionalLight(0xffffff, 2); key.position.set(2, 3, 3); 
 scene.add(new THREE.GridHelper(4, 16, 0x555555, 0x333333));
 
 const values = { skin: '#c99a80' }; let body;
-new GLTFLoader().load('../output/base_body.glb', g => {
+new GLTFLoader().load('./base_body.glb', g => {
   scene.add(g.scene);
   g.scene.traverse(o => { if (o.isSkinnedMesh) body = o; });
   body.frustumCulled = false; window.__body = body; window.__ready = true;
