@@ -55,8 +55,91 @@ export function applySliders(mesh, values) {
   }
 }
 
+// ---- runtime tints --------------------------------------------------------------------------------
+// Tintable materials carry glTF extras { tint: { gain, default } } (three.js: material.userData.tint).
+// Their textures are normalised to a neutral grey of mean k (linear), gain = 1 / k, so
+//   rendered = texel * color,  color = tint (linear) * gain   ->  the mean rendered colour == the picked tint,
+// while the texture keeps its detail (skin: pores/lips/redness; hair/brows/lashes: strands; iris: fibres).
+// Materials without extras (old GLBs, flat colour) get the plain tint (gain 1).
+
+/** Tint role of a material by its glTF name: 'skin' | 'hair' | 'brows' | 'lashes' | 'eyes' | null. */
+export function materialRole(name) {
+  const n = String(name || '');
+  if (n === 'Skin') return 'skin';
+  if (n.startsWith('Hair')) return 'hair';
+  if (n === 'Eyebrow') return 'brows';
+  if (n === 'Eyelash') return 'lashes';
+  if (n === 'Iris') return 'eyes';
+  return null;
+}
+
+/** material.color = hex (converted by Color.set, i.e. sRGB -> working space) * userData.tint.gain. */
+export function applyTint(material, hex) {
+  if (!material?.color) return;
+  material.color.set(hex);
+  const g = Number(material.userData?.tint?.gain);
+  if (g > 0 && g !== 1) material.color.multiplyScalar(g);
+}
+
 export function applySkinColor(mesh, hex) {
-  for (const m of [].concat(mesh.material)) m?.color?.set(hex);
+  for (const m of [].concat(mesh.material)) applyTint(m, hex);
+}
+
+/** Applies tints = { role: hex } to every material below root (see materialRole). */
+export function applyTints(root, tints) {
+  const seen = new Set();
+  const visit = o => {
+    for (const m of [].concat(o.material || [])) {
+      if (!m || seen.has(m)) continue;
+      seen.add(m);
+      const r = materialRole(m.name);
+      if (r && tints[r]) applyTint(m, tints[r]);
+    }
+    (o.children || []).forEach(visit);
+  };
+  visit(root);
+}
+
+// ---- several meshes, one skeleton -------------------------------------------------------------------
+
+/** Skinned meshes below root that carry morph targets (body, eyes, brows, lashes, teeth, tongue, hair). */
+export function characterMeshes(root) {
+  const out = [];
+  const visit = o => {
+    if (o.isSkinnedMesh && o.morphTargetInfluences && o.morphTargetDictionary) out.push(o);
+    (o.children || []).forEach(visit);
+  };
+  if (root) visit(root);
+  return out;
+}
+
+/**
+ * Makes `mesh` use `skeleton` (the body's): its skinIndex attribute is remapped by bone NAME from the mesh's
+ * own skeleton to `skeleton`, then mesh.bind(skeleton, bindMatrix). A shared skeleton means applySkeleton(),
+ * which rebases skeleton.boneInverses, moves every part of the character at once (a GLTFLoader gives each
+ * skinned mesh its own Skeleton / boneInverses copy, which applySkeleton would not touch).
+ * Returns { remapped, missing } (missing: bone names of the mesh not found in `skeleton`; mesh left as is).
+ */
+export function bindToSkeleton(mesh, skeleton, bindMatrix) {
+  const own = mesh?.skeleton;
+  if (!own || !skeleton) return { remapped: false, missing: ['<no skeleton>'] };
+  if (own === skeleton) return { remapped: false, missing: [] };
+  const idx = new Map();
+  skeleton.bones.forEach((b, i) => { idx.set(b.name, i); if (!idx.has(sanitize(b.name))) idx.set(sanitize(b.name), i); });
+  const map = own.bones.map(b => idx.get(b.name) ?? idx.get(sanitize(b.name)));
+  const missing = own.bones.filter((b, i) => map[i] === undefined).map(b => b.name);
+  if (missing.length) {
+    console.warn(`[character] ${mesh.name}: bones not in the body skeleton:`, missing.join(', '));
+    return { remapped: false, missing };
+  }
+  const remapped = map.some((v, i) => v !== i);
+  if (remapped) {
+    const a = mesh.geometry.attributes.skinIndex;
+    for (let i = 0; i < a.array.length; i++) a.array[i] = map[a.array[i]];
+    a.needsUpdate = true;
+  }
+  mesh.bind(skeleton, bindMatrix ?? mesh.bindMatrix);
+  return { remapped, missing };
 }
 
 // ---- skeleton follows morphs ----------------------------------------------------------------
