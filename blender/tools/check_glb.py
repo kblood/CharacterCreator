@@ -119,6 +119,9 @@ def main():
         ok = False
         print("CHECK FAIL sidecar morphs not in GLB:", unknown)
     for m, offs in sc["morphs"].items():
+        if not offs:                       # face / expression morphs move no joint
+            print("CHECK %-20s (no joint offsets)" % m)
+            continue
         mx = max(offs.items(), key=lambda kv: math.hypot(*kv[1]))
         h = offs.get("head", [0, 0, 0])
         print("CHECK %-20s head dY %+.3f  max |d| %.3f (%s)" % (m, h[1], math.hypot(*mx[1]), mx[0]))

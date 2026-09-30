@@ -230,9 +230,11 @@ print("BAKE sign-aligned %d rotation keys" % align_rotation_signs(args.out))
 spec = json.loads(scene.get("cc_materials", "{}"))
 if spec:
     sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "tools"))
-    from glbutil import read_glb, write_glb, patch_materials
+    from glbutil import read_glb, write_glb, patch_materials, embed_textures, quantize_morphs
     g, b = read_glb(args.out)
     print("BAKE materials patched", patch_materials(g, spec))
+    b = embed_textures(g, b, spec)          # e.g. the skin region mask (build/textures, written by build_base.py)
+    b = quantize_morphs(g, b)               # same morph encoding as base_body.glb
     write_glb(args.out, g, b)
 print("BAKE exported", args.out, "%d bytes" % os.path.getsize(args.out))
 print("BAKE done (the .blend is not saved)")

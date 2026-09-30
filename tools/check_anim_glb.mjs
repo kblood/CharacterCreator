@@ -5,7 +5,7 @@
 //
 // Checks: same 53 joints with the same rest TRS as the base GLB (<= 1e-5, keeps the joints sidecar valid),
 // same inverse bind matrices, every mesh node of the base (Body + face parts) present with the same
-// 12 morph targets / vertex counts / skin; one animation per clip in index.json with the JSON's
+// morph targets (same names/count as the base, >= 12) / vertex counts / skin; one animation per clip in index.json with the JSON's
 // frame count/duration; rotation channels only, except one translation channel on the root bone; every
 // baked rotation key == qToLocal(restLocal, restWorld, q_json) (<= 0.5 deg), joints the clip does not
 // drive stay at rest; Root translation == rest + pose.root (<= 1 mm); loop closure; bone-level FK on the
@@ -92,7 +92,7 @@ if (trs <= 1e-5) ok(`node rest TRS equal to base (max diff ${trs.toExponential(1
 }
 {
   // every mesh node of the base (Body + eyes/brows/lashes/teeth/tongue) must be in the anim GLB with the
-  // same 12 morph targets, vertex counts per primitive and skin
+  // same morph targets, vertex counts per primitive and skin
   const meshNodes = g => g.json.nodes.filter(nd => nd.mesh !== undefined);
   const bodyName = B.json.meshes[B.json.nodes[B.byName.Body]?.mesh ?? 0].extras?.targetNames || [];
   for (const nb of meshNodes(B)) {
@@ -104,9 +104,9 @@ if (trs <= 1e-5) ok(`node rest TRS equal to base (max diff ${trs.toExponential(1
     const va = ma.primitives.map(p => A.json.accessors[p.attributes.POSITION].count);
     const vb = mb.primitives.map(p => B.json.accessors[p.attributes.POSITION].count);
     const nt = ma.primitives.map(p => (p.targets || []).length);
-    const good = nt.every(n => n === 12) && names.join() === (mb.extras?.targetNames || []).join() &&
+    const good = nt.every(n => n === bodyName.length && n >= 12) && names.join() === (mb.extras?.targetNames || []).join() &&
       names.join() === bodyName.join() && va.join() === vb.join() && na.skin === 0;
-    if (good) ok(`${nb.name}: 12 morph targets, ${va.join('+')} vertices, skin 0`);
+    if (good) ok(`${nb.name}: ${nt[0]} morph targets (same names as the base), ${va.join('+')} vertices, skin 0`);
     else fail(`${nb.name}: targets ${nt.join('/')} names ${names.join()}, vertices ${va.join('+')} vs ${vb.join('+')}, skin ${na.skin}`);
   }
   const extraMeshes = meshNodes(A).filter(nd => B.byName[nd.name] === undefined).map(nd => nd.name);

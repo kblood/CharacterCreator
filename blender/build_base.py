@@ -74,7 +74,7 @@ from bl_ext.user_default.mpfb.entities.clothes.mhclo import Mhclo
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path[:0] = [_HERE, os.path.join(_HERE, "tools")]
 import cc_textures as tex                                   # noqa: E402  blender/cc_textures.py
-from glbutil import read_glb, write_glb, patch_materials    # noqa: E402  blender/tools/glbutil.py
+from glbutil import read_glb, write_glb, patch_materials, embed_textures, quantize_morphs  # noqa: E402
 
 PROJECT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RIG = "game_engine"
@@ -89,6 +89,73 @@ MACRO_MORPHS = [
     ("height_short", "height", 0.0), ("height_tall", "height", 1.0),
     ("proportions_ideal", "proportions", 1.0), ("proportions_uncommon", "proportions", 0.0),
 ]
+MACRO_VALUE = {k: (p, v) for k, p, v in MACRO_MORPHS}
+
+# Face-shape morphs from MakeHuman detail targets (MPFB data/targets, CC0 like the macros; see LICENSE-NOTES.md).
+# (stem, negative-side targets, positive-side targets); "L/" expands to the l- and r- file of a sided target.
+# Each becomes face_<stem>_decr / face_<stem>_incr (one bipolar slider in web/character.js FACE_SLIDERS).
+FACE_TARGETS = [
+    ("nose_width", ["nose/nose-scale-horiz-decr"], ["nose/nose-scale-horiz-incr"]),
+    ("nose_length", ["nose/nose-scale-vert-decr"], ["nose/nose-scale-vert-incr"]),
+    ("nose_height", ["nose/nose-trans-down"], ["nose/nose-trans-up"]),
+    ("jaw_width", ["chin/chin-bones-decr"], ["chin/chin-bones-incr"]),
+    ("chin", ["chin/chin-prominent-decr"], ["chin/chin-prominent-incr"]),
+    ("cheekbones", ["L/cheek/cheek-bones-decr"], ["L/cheek/cheek-bones-incr"]),
+    ("eye_size", ["L/eyes/eye-scale-decr"], ["L/eyes/eye-scale-incr"]),
+    ("eye_spacing", ["L/eyes/eye-trans-in"], ["L/eyes/eye-trans-out"]),
+    ("eye_tilt", ["L/eyes/eye-corner2-down"], ["L/eyes/eye-corner2-up"]),
+    ("lips", ["mouth/mouth-upperlip-volume-decr", "mouth/mouth-lowerlip-volume-decr"],
+             ["mouth/mouth-upperlip-volume-incr", "mouth/mouth-lowerlip-volume-incr"]),
+    ("mouth_width", ["mouth/mouth-scale-horiz-decr"], ["mouth/mouth-scale-horiz-incr"]),
+    ("ear_size", ["L/ears/ear-scale-decr"], ["L/ears/ear-scale-incr"]),
+    ("forehead", ["forehead/forehead-scale-vert-decr"], ["forehead/forehead-scale-vert-incr"]),
+]
+# Eyelid closure for blinking (MakeHuman expression units, caucasian variant; the skin texture is caucasian too).
+EXPR_TARGETS = [("blink_left", ["expression/units/caucasian/eye-left-closure"]),
+                ("blink_right", ["expression/units/caucasian/eye-right-closure"])]
+# Gaze: rigid rotation of each eyeball (Eyes mesh only, zero on every other mesh), degrees at weight 1.
+LOOK_MORPHS = [("look_left", "yaw", 30.0), ("look_right", "yaw", -30.0),
+               ("look_up", "pitch", 25.0), ("look_down", "pitch", -25.0)]
+# Corrective morphs for macro interactions: sample(A and B together) - neutral - delta(A) - delta(B).
+# Runtime weight = weight(A) * weight(B) (web/character.js). Chosen by measured interaction size
+# (probe: gender x age up to 65 mm, weight x muscle up to 81 mm, gender x muscle 24 mm, gender x weight 13 mm).
+CORRECTIVE_PAIRS = [("gender", "age"), ("weight", "muscle"), ("gender", "muscle"), ("gender", "weight")]
+
+
+def _expand(paths):
+    out = []
+    for p in paths:
+        if p.startswith("L/"):
+            cat, name = p[2:].split("/", 1)
+            out += ["%s/l-%s" % (cat, name), "%s/r-%s" % (cat, name)]
+        else:
+            out.append(p)
+    return out
+
+
+FACE_MORPHS = []
+for _stem, _neg, _pos in FACE_TARGETS:
+    FACE_MORPHS += [("face_%s_decr" % _stem, _expand(_neg)), ("face_%s_incr" % _stem, _expand(_pos))]
+CORR_MORPHS = []
+for _a, _b in CORRECTIVE_PAIRS:
+    for _ka in [k for k, p, _ in MACRO_MORPHS if p == _a]:
+        for _kb in [k for k, p, _ in MACRO_MORPHS if p == _b]:
+            CORR_MORPHS.append(("corr_%s__%s" % (_ka, _kb), _ka, _kb))
+# every mesh (body, face parts, hair) carries exactly these targets, in this order
+MORPH_KIND = {}
+for _k, _, _ in MACRO_MORPHS:
+    MORPH_KIND[_k] = "macro"
+for _k, _ in FACE_MORPHS:
+    MORPH_KIND[_k] = "face"
+for _k, _ in EXPR_TARGETS:
+    MORPH_KIND[_k] = "expr"
+for _k, _, _ in LOOK_MORPHS:
+    MORPH_KIND[_k] = "look"
+for _k, _, _ in CORR_MORPHS:
+    MORPH_KIND[_k] = "corr"
+CORR_PARTS = {k: (a, b) for k, a, b in CORR_MORPHS}
+TARGET_FILES = dict(FACE_MORPHS + EXPR_TARGETS)
+ZERO_BELOW = {"face": 5e-5, "expr": 5e-5, "corr": 2e-4}   # |delta| below this (m) is written as exact 0 (sparse glTF)
 
 
 # MakeHuman system assets (all CC0, checked at build time by check_license()).
@@ -102,7 +169,13 @@ HAIR_STYLES = [
     ("long01", {"da": "Langt", "en": "Long"}),
     ("ponytail01", {"da": "Hestehale", "en": "Ponytail"}),
     ("braid01", {"da": "Fletning", "en": "Braid"}),
+    ("short04", {"da": "Kort, glat", "en": "Short, sleek"}),
+    ("bob01", {"da": "Page, lang", "en": "Bob, long"}),
+    ("afro01", {"da": "Afro", "en": "Afro"}),
 ]
+# per style: how much of the painted low-frequency lighting (baked highlights) is flattened, 0..1
+HAIR_FLATTEN = {"braid01": 0.85, "bob02": 0.6}
+HAIR_FLATTEN_DEFAULT = 0.45
 HAIR_DEFAULT = "short02"
 HAIR_BONES = {"head", "neck_01", "spine_03", "spine_02", "clavicle_l", "clavicle_r"}  # no arm bones in hair
 # default runtime tints (sRGB hex); web/main.js uses the same values
@@ -208,21 +281,74 @@ base_lo, base_hi = body_extent(base)
 print("BUILD base verts", len(base), "body verts", len(body_idx), "bones fitted", len(base_heads),
       "height %.4f m" % (base_hi - base_lo))
 
-samples, offsets, raw = {}, {}, {}
-for key, prop, val in MACRO_MORPHS:
-    set_macro(prop, val)
+MPFB_TARGETS = LocationService.get_mpfb_data("targets")
+BASE_ARR = np.array([tuple(p) for p in base])
+
+
+def sample_now():
     c = coords()
     heads = fit_heads(c)
     lo, hi = body_extent(c)
     dz = (base_lo - lo) if not args.no_ground_fix else 0.0
-    shift = Vector((0.0, 0.0, dz))
-    samples[key] = [p + shift for p in c]
-    raw[key] = (np.array([tuple(p) for p in c]), dz)       # full basemesh (incl. helpers), for asset fitting
-    offsets[key] = {b: heads[b] + shift - base_heads[b] for b in base_heads}
-    mx = max(offsets[key].items(), key=lambda kv: kv[1].length)
-    print("BUILD sample %-20s height %.4f m (%+.4f)  ground shift %+.4f  max bone offset %.4f (%s)"
-          % (key, hi - lo, (hi - lo) - (base_hi - base_lo), dz, mx[1].length, mx[0]))
-    set_macro(prop, NEUTRAL)
+    arr = np.array([tuple(p) for p in c]) + np.array([0.0, 0.0, dz])
+    return arr, heads, dz, hi - lo
+
+
+def with_targets(files):
+    """Load MakeHuman target files at weight 1 on top of the neutral human, sample, remove them again."""
+    names = []
+    for i, rel in enumerate(files):
+        full = os.path.join(MPFB_TARGETS, rel + ".target.gz")
+        assert os.path.isfile(full), "target missing: %s" % full
+        n = "cc_probe_%d" % i
+        TargetService.load_target(human, full, weight=1.0, name=n)
+        names.append(n)
+    s = sample_now()
+    for n in names:
+        human.shape_key_remove(human.data.shape_keys.key_blocks[n])
+    return s
+
+
+# delta[key]: (n_basemesh, 3) vertex offsets incl. helper geometry (for the asset fit, see add_asset);
+# raw[key] = (absolute sampled coordinates incl. ground shift, dz) for the MHCLO fit of the parts;
+# offsets[key]: bone head offsets (joints sidecar)
+delta, offsets, raw = {}, {}, {}
+for key, kind in MORPH_KIND.items():
+    if kind == "look":
+        continue                                          # eyes only, computed from the Eyes mesh below
+    if kind == "macro":
+        prop, val = MACRO_VALUE[key]
+        set_macro(prop, val)
+        arr, heads, dz, h = sample_now()
+        set_macro(prop, NEUTRAL)
+    elif kind == "corr":
+        (pa, va), (pb, vb) = MACRO_VALUE[CORR_PARTS[key][0]], MACRO_VALUE[CORR_PARTS[key][1]]
+        set_macro(pa, va)
+        set_macro(pb, vb)
+        arr, heads, dz, h = sample_now()
+        set_macro(pa, NEUTRAL)
+        set_macro(pb, NEUTRAL)
+    else:
+        arr, heads, dz, h = with_targets(TARGET_FILES[key])
+    raw[key] = (arr - np.array([0.0, 0.0, dz]), dz)
+    d = arr - BASE_ARR
+    offs = {b: heads[b] + Vector((0.0, 0.0, dz)) - base_heads[b] for b in base_heads}
+    if kind == "corr":
+        a, b = CORR_PARTS[key]
+        d = d - delta[a] - delta[b]
+        offs = {n: offs[n] - offsets[a][n] - offsets[b][n] for n in offs}
+    if kind in ZERO_BELOW:
+        d[np.linalg.norm(d, axis=1) < ZERO_BELOW[kind]] = 0.0
+    delta[key] = d
+    if kind == "expr":
+        offs = {}                                         # eyelids do not move joints
+    elif kind in ("face", "corr"):
+        offs = {n: o for n, o in offs.items() if o.length > 1e-4}
+    offsets[key] = offs
+    nb = np.linalg.norm(d[body_idx], axis=1)
+    mx = max(offs.items(), key=lambda kv: kv[1].length) if offs else ("-", Vector())
+    print("BUILD sample %-34s %-5s height %.4f m (%+.4f)  ground %+.4f  max |d| %.1f mm  verts moved %5d  max bone %.4f (%s)"
+          % (key, kind, h, h - (base_hi - base_lo), dz, nb.max() * 1000, int((nb > 0).sum()), mx[1].length, mx[0]))
 
 # neutral must be restored exactly, otherwise every delta is off
 drift = max((a - b).length for a, b in zip(base, coords()))
@@ -232,13 +358,21 @@ assert drift < 1e-5, "neutral not restored, drift %g" % drift
 TargetService.bake_targets(human)
 if human.data.shape_keys:
     human.shape_key_clear()
-human.shape_key_add(name="Basis", from_mix=False)
-for key, _, _ in MACRO_MORPHS:
+basis = human.shape_key_add(name="Basis", from_mix=False)
+# add the deltas to the stored basis (not to BASE_ARR): the baked mesh differs from the evaluated neutral by
+# float noise, which would make every "zero" delta non-zero and defeat sparse export
+basis_co = np.empty(len(human.data.vertices) * 3, np.float32)
+basis.data.foreach_get("co", basis_co)
+basis_co = basis_co.reshape(-1, 3)
+print("BUILD basis vs evaluated neutral max diff %.1e m" % float(np.abs(basis_co - BASE_ARR).max()))
+morph_names = list(MORPH_KIND)
+for key in morph_names:
     sk = human.shape_key_add(name=key, from_mix=False)
     sk.slider_min, sk.slider_max = 0.0, 1.0
-    for i, c in enumerate(samples[key]):
-        sk.data[i].co = c
-print("BUILD morphs", len(MACRO_MORPHS), [k.name for k in human.data.shape_keys.key_blocks])
+    if key in delta:
+        sk.data.foreach_set("co", (basis_co + delta[key].astype(np.float32)).ravel())
+print("BUILD morphs", len(morph_names), "=", {k: sum(1 for v in MORPH_KIND.values() if v == k)
+                                            for k in ("macro", "face", "expr", "look", "corr")})
 
 # rig with weights on the full mesh (weights are indexed on the complete basemesh)
 bpy.context.view_layer.objects.active = human
@@ -275,8 +409,7 @@ assert fit_err < 1e-4, "neutral refit does not match the created rig"
 # Each asset vertex = sum(w_i * basemesh_vertex_i) + offset * (per-axis scale measured on the basemesh),
 # i.e. MPFB's ClothesService.fit_clothes_to_human. The same formula is evaluated on every morph sample,
 # so every asset carries the same 12 morph targets as the body.
-BASE_NP = np.array([tuple(p) for p in base])
-morph_names = [k for k, _, _ in MACRO_MORPHS]
+BASE_NP = BASE_ARR
 
 
 class MhcloFit:
@@ -354,12 +487,23 @@ def add_asset(name, pack_key, rel, atype):
     err = float(np.abs(cur.reshape(-1, 3) - neutral).max())
     obj.data.vertices.foreach_set("co", neutral.ravel())
     obj.shape_key_add(name="Basis", from_mix=False)
+    part_delta = {}
     for key in morph_names:
-        hv, dz = raw[key]
-        co = fit(hv) + np.array([0.0, 0.0, dz])
+        kind = MORPH_KIND[key]
+        if kind == "look":
+            d = np.zeros_like(neutral)                    # set on the Eyes mesh by add_look_morphs()
+        else:
+            hv, dz = raw[key]
+            d = fit(hv) + np.array([0.0, 0.0, dz]) - neutral
+            if kind == "corr":
+                a, b = CORR_PARTS[key]
+                d = d - part_delta[a] - part_delta[b]
+            if kind in ZERO_BELOW:
+                d[np.linalg.norm(d, axis=1) < ZERO_BELOW[kind]] = 0.0
+        part_delta[key] = d
         sk = obj.shape_key_add(name=key, from_mix=False)
         sk.slider_min, sk.slider_max = 0.0, 1.0
-        sk.data.foreach_set("co", co.ravel())
+        sk.data.foreach_set("co", (neutral + d).astype(np.float32).ravel())
     for md in list(obj.modifiers):
         if md.type != 'ARMATURE':
             obj.modifiers.remove(md)
@@ -367,6 +511,162 @@ def add_asset(name, pack_key, rel, atype):
     obj.data.materials.clear()
     print("BUILD asset %-16s %-12s verts %5d  faces %5d  MPFB snapshot diff %.1e m" % (name, pack_key, n, len(obj.data.polygons), err))
     return obj
+
+
+def sphere_fit(p):
+    """Least-squares sphere through points p (n, 3): returns (centre, radius)."""
+    A = np.c_[2 * p, np.ones(len(p))]
+    f = (p * p).sum(1)
+    sol = np.linalg.lstsq(A, f, rcond=None)[0]
+    c = sol[:3]
+    return c, float(np.sqrt(sol[3] + c @ c))
+
+
+def add_look_morphs(eyes):
+    """Gaze morphs on the Eyes mesh: each eyeball (+ its cornea) rotated rigidly about its own centre.
+    Centre = sphere fit of the sclera faces (material 0). Blender space: +Z up, the face looks along -Y,
+    the character's left is +X. yaw > 0 turns the gaze to the character's left, pitch > 0 up."""
+    me = eyes.data
+    n = len(me.vertices)
+    co = np.empty(n * 3)
+    me.vertices.foreach_get("co", co)
+    co = co.reshape(-1, 3)
+    sclera = np.zeros(n, bool)
+    for poly in me.polygons:
+        if poly.material_index == 0:
+            sclera[list(poly.vertices)] = True
+    side = co[:, 0] > 0
+    centres = {}
+    for s in (True, False):
+        c, r = sphere_fit(co[sclera & (side == s)])
+        centres[s] = c
+        print("BUILD eye %s centre %s radius %.4f m" % ("left" if s else "right", np.round(c, 4).tolist(), r))
+    kb = me.shape_keys.key_blocks
+    for key, axis, deg in LOOK_MORPHS:
+        a = np.radians(deg)
+        ca, sa = np.cos(a), np.sin(a)
+        if axis == "yaw":       # about +Z: (0,-1,0) -> (+sin a, -cos a, 0)
+            R = np.array([[ca, -sa, 0], [sa, ca, 0], [0, 0, 1]])
+        else:                   # about +X with -a: (0,-1,0) -> (0, -cos a, +sin a)
+            R = np.array([[1, 0, 0], [0, ca, sa], [0, -sa, ca]])
+        out = co.copy()
+        for s, c in centres.items():
+            m = side == s
+            out[m] = (co[m] - c) @ R.T + c
+        kb[key].data.foreach_set("co", out.astype(np.float32).ravel())
+    return centres
+
+
+def smoothstep(e0, e1, x):
+    t = np.clip((x - e0) / (e1 - e0), 0, 1)
+    return t * t * (3 - 2 * t)
+
+
+def skin_region_masks(eye_centres, size=512):
+    """UV-space masks of the body skin, derived from 3D landmarks of the neutral mesh (Blender space, face -Y):
+    redfix (knees, elbows, eye surround), scalp (painted stubble -> skin), flush (cheeks, nose, ears),
+    areola (runtime: toned down for male bodies), thin (ears, nose: runtime back-light transmission).
+    Returns ({name: (size, size) mask}, forehead UV points)."""
+    P = BASE_ARR
+    nv = len(P)
+    in_body = np.zeros(nv, bool)
+    in_body[body_idx] = True
+    hg = human.vertex_groups["head"].index
+    head_w = np.zeros(nv)
+    for v in human.data.vertices:
+        for g in v.groups:
+            if g.group == hg:
+                head_w[v.index] = g.weight
+    x, y, z = P[:, 0], P[:, 1], P[:, 2]
+    el, er = eye_centres[True], eye_centres[False]
+    xe, ye, ze = (abs(el[0]) + abs(er[0])) / 2, (el[1] + er[1]) / 2, (el[2] + er[2]) / 2
+    g = lambda c, s: np.exp(-((P - np.asarray(c)) ** 2).sum(1) / (2 * s * s))
+    H = {n: np.array(base_heads[n]) for n in ("calf_l", "calf_r", "lowerarm_l", "lowerarm_r", "upperarm_l")}
+    headish = smoothstep(0.3, 0.7, head_w)
+    knees = np.maximum(g(H["calf_l"], 0.045), g(H["calf_r"], 0.045))
+    elbows = np.maximum(g(H["lowerarm_l"], 0.035), g(H["lowerarm_r"], 0.035))
+    # eye surround: centred on the lids (1.2 cm in front of the eyeball centre, face -Y), not the eyeball
+    lid = lambda c: (c[0], c[1] - 0.012, c[2])
+    eyes_ = np.maximum(g(lid(el), 0.016), g(lid(er), 0.016)) * headish
+    redfix = np.clip(np.maximum.reduce([knees, 0.8 * elbows, 0.9 * eyes_]), 0, 1)
+    # scalp: above the forehead line, and the back of the head down to the nape hairline (the painted
+    # stubble reaches ~10 cm below eye height at the back)
+    # (weaker head-weight gate than headish: the nape stubble sits where the head weight already fades)
+    scalp = smoothstep(0.05, 0.35, head_w) * np.maximum(
+        smoothstep(ze + 0.035, ze + 0.06, z),
+        smoothstep(ye + 0.055, ye + 0.09, y) * smoothstep(ze - 0.145, ze - 0.105, z))
+    # ears: the laterally outermost head vertices at eye/ear height; nose tip: the most forward midline vertex
+    hv = in_body & (head_w > 0.5)
+    xmax = np.abs(x[hv & (np.abs(z - ze) < 0.04)]).max()
+    ears = headish * smoothstep(xmax - 0.035, xmax - 0.012, np.abs(x)) * smoothstep(ze - 0.07, ze - 0.04, z) \
+        * (1 - smoothstep(ze + 0.02, ze + 0.045, z))
+    mid = hv & (np.abs(x) < 0.006) & (z < ze) & (z > ze - 0.06)
+    nose_tip = P[mid][np.argmin(y[mid])]
+    nose = g(nose_tip, 0.012) * headish
+    cheeks = np.maximum(g((xe + 0.008, ye - 0.004, ze - 0.035), 0.017), g((-xe - 0.008, ye - 0.004, ze - 0.035), 0.017)) * headish
+    flush = np.clip(np.maximum.reduce([0.8 * cheeks, 0.7 * nose, 0.6 * ears]), 0, 1)
+    thin = np.clip(np.maximum(ears, 0.6 * nose), 0, 1)
+    global SCALP_V
+    SCALP_V = scalp                                   # per vertex, for the hairline attribute (add_hair_length_attr)
+    sh = H["upperarm_l"][2]
+    areola = np.zeros(nv)
+    for sgn in (1, -1):
+        chest = in_body & (sgn * x > 0.04) & (sgn * x < 0.16) & (z < sh - 0.06) & (z > sh - 0.3)
+        tip = P[chest][np.argmin(y[chest])]
+        areola = np.maximum(areola, g(tip, 0.017))
+    print("BUILD skin landmarks eye y %.3f z %.3f, ear |x| %.3f, nose tip %s, shoulder z %.3f"
+          % (ye, ze, xmax, np.round(nose_tip, 3).tolist(), sh))
+
+    me = human.data
+    nl = len(me.loops)
+    uv = np.empty(nl * 2)
+    me.uv_layers[0].data.foreach_get("uv", uv)
+    uv = uv.reshape(-1, 2)
+    lv = np.empty(nl, dtype=np.int64)
+    me.loops.foreach_get("vertex_index", lv)
+    keep = in_body[lv]
+    per_v = np.stack([redfix, scalp, flush, areola, thin], 1)
+    me.calc_loop_triangles()
+    nt = len(me.loop_triangles)
+    tl = np.empty(nt * 3, dtype=np.int64)
+    me.loop_triangles.foreach_get("loops", tl)
+    tl = tl.reshape(-1, 3)
+    tl = tl[keep[tl].all(1)]                         # body skin triangles only (no helper geometry)
+    m = tex.raster(uv[tl], per_v[lv[tl]], size=size, radius=2)
+    names = ["redfix", "scalp", "flush", "areola", "thin"]
+    masks = {n: np.clip(m[..., i], 0, 1) for i, n in enumerate(names)}
+    fh = in_body & (np.abs(x) < 0.025) & (z > ze + 0.02) & (z < ze + 0.04) & (y < ye)
+    fh_loops = keep & fh[lv]
+    return masks, uv[fh_loops]
+
+
+def add_hair_length_attr(obj):
+    """Per-vertex float attribute _CCHAIR = distance (m) of the neutral hair vertex from the nearest head/neck
+    skin vertex. Exported as glTF attribute _CCHAIR (three.js: geometry.attributes._cchair); the viewer uses
+    it for the root-to-tip colour gradient and to weight the shoulder collision.
+    _CCEDGE = distance (m) from the nearest bare (non-scalp) head/neck skin vertex (forehead, temples, nape):
+    small at the hairline, where the viewer fades the hair cards out for a soft hairline."""
+    from mathutils.kdtree import KDTree
+    hg = [human.vertex_groups[n].index for n in ("head", "neck_01") if n in human.vertex_groups]
+    skin = [i for i in body_idx if any(g.group in hg and g.weight > 0.3 for g in human.data.vertices[i].groups)]
+    n = len(obj.data.vertices)
+    co = np.empty(n * 3)
+    obj.data.vertices.foreach_get("co", co)
+    co = co.reshape(-1, 3)
+    bare = [i for i in skin if SCALP_V[i] < 0.25]
+    out = {}
+    for attr, verts in (("_CCHAIR", skin), ("_CCEDGE", bare)):
+        kd = KDTree(len(verts))
+        for k, i in enumerate(verts):
+            kd.insert(BASE_ARR[i], k)
+        kd.balance()
+        dist = np.array([kd.find(p)[2] for p in co], np.float32)
+        at = obj.data.attributes.new(attr, 'FLOAT', 'POINT')
+        at.data.foreach_set("value", dist)
+        out[attr] = dist
+    print("BUILD hair %s attrs: length median %.3f max %.3f m, hairline (edge < 1.5 cm) %.1f%% of vertices"
+          % (obj.name, float(np.median(out["_CCHAIR"])), float(out["_CCHAIR"].max()),
+             100 * float((out["_CCEDGE"] < 0.015).mean())))
 
 
 def image_node(nt, path, non_color=False):
@@ -426,16 +726,16 @@ if not args.no_assets:
     # --- textures (see blender/cc_textures.py for the normalisation / tint contract) ---
     check_license(SKIN, A("skins", SKIN, SKIN + ".mhmat"))
     skin_src = A("skins", SKIN, sorted(fn for fn in os.listdir(A("skins", SKIN)) if fn.endswith(".png"))[0])
-    skin_gain, skin_mean = tex.skin_albedo(skin_src, os.path.join(T, "skin_albedo.jpg"))
     tex.skin_normal(skin_src, os.path.join(T, "skin_normal.jpg"))
     check_license(EYE_TEX, A("eyes", "materials", EYE_TEX + ".mhmat"))
-    iris_gain, eye_c, iris_r, ring_r = tex.eye(A("eyes", "materials", EYE_TEX + "_eye.png"), os.path.join(T, "eye.jpg"))
+    iris_gain, eye_c, iris_r, ring_r = tex.eye(A("eyes", "materials", EYE_TEX + "_eye.png"), os.path.join(T, "eye.jpg"),
+                                               iris_scale=1.1, sclera_redfix=0.8)
     brow_gain = tex.tintable_alpha(A("eyebrows", BROWS, BROWS + ".png"), os.path.join(T, "eyebrow.png"), 512, k=0.55)
     lash_gain = tex.tintable_alpha(A("eyelashes", LASHES, LASHES + ".png"), os.path.join(T, "eyelash.png"), 512, k=0.55)
     tex.plain(A("teeth", "teeth_base", "teeth.png"), os.path.join(T, "teeth.jpg"), 512)
     tex.plain(A("tongue", "tongue01", "tongue01_diffuse.png"), os.path.join(T, "tongue.jpg"), 512)
-    print("BUILD textures skin gain %.3f (mean lin %s) iris gain %.3f eye centres %s brow %.3f lash %.3f"
-          % (skin_gain, np.round(skin_mean, 3).tolist(), iris_gain, np.round(eye_c, 4).tolist(), brow_gain, lash_gain))
+    print("BUILD textures iris gain %.3f eye centres %s brow %.3f lash %.3f"
+          % (iris_gain, np.round(eye_c, 4).tolist(), brow_gain, lash_gain))
 
     # --- face assets ---
     eyes = add_asset("Eyes", "high-poly", "eyes/high-poly/high-poly.mhclo", "Eyes")
@@ -465,13 +765,23 @@ if not args.no_assets:
             poly.material_index = 0
         counts[poly.material_index] += 1
     print("BUILD eye faces sclera/iris/cornea", counts)
+    EYE_CENTRES = add_look_morphs(eyes)
+
+    # skin albedo with region fixes (knees/elbows/eye surround, scalp, flush) + runtime region mask texture
+    rmasks, forehead_uv = skin_region_masks(EYE_CENTRES)
+    skin_gain, skin_mean = tex.skin_albedo(skin_src, os.path.join(T, "skin_albedo.jpg"), fix=(rmasks, forehead_uv))
+    tex.regions([rmasks["thin"], rmasks["areola"], rmasks["flush"]], os.path.join(T, "skin_regions.jpg"))
+    tex.regions([rmasks["redfix"], rmasks["scalp"], rmasks["flush"]], os.path.join(T, "debug_skin_fixmasks.jpg"), 512)
+    print("BUILD skin gain %.3f (mean lin %s), region masks %s" % (skin_gain, np.round(skin_mean, 3).tolist(),
+          {k: round(float(v.mean()), 4) for k, v in rmasks.items()}))
     brows.data.materials.append(make_material("Eyebrow", os.path.join(T, "eyebrow.png"), alpha=True))
     lashes.data.materials.append(make_material("Eyelash", os.path.join(T, "eyelash.png"), alpha=True))
     teeth.data.materials.append(make_material("Teeth", os.path.join(T, "teeth.jpg")))
     tongue.data.materials.append(make_material("Tongue", os.path.join(T, "tongue.jpg")))
 
     MATERIALS.update({
-        "Skin": tint_spec(DEFAULTS["skin"], skin_gain, roughness=0.52, metallic=0.0, normalScale=0.6, doubleSided=True),
+        "Skin": tint_spec(DEFAULTS["skin"], skin_gain, roughness=0.52, metallic=0.0, normalScale=0.6, doubleSided=True,
+                          extraTextures={"ccRegions": os.path.join(T, "skin_regions.jpg")}),
         "Eye": {"roughness": 0.25, "metallic": 0.0, "doubleSided": False},
         "Iris": tint_spec(DEFAULTS["eyes"], iris_gain, roughness=0.3, metallic=0.0, doubleSided=False),
         "Cornea": {"baseColorFactor": [1, 1, 1, 0.08], "alphaMode": "BLEND", "roughness": 0.03, "metallic": 0.0},
@@ -488,10 +798,12 @@ if not args.no_assets:
         o = add_asset("Hair_" + hid, hid, "hair/%s/%s.mhclo" % (hid, hid), "Hair")
         set_weights(o, allowed=HAIR_BONES)
         src = sorted(fn for fn in os.listdir(A("hair", hid)) if fn.endswith("_diffuse.png"))[0]
-        gain = tex.tintable_alpha(A("hair", hid, src), os.path.join(T, "hair_%s.png" % hid), 1024, k=0.5)
+        gain = tex.tintable_alpha(A("hair", hid, src), os.path.join(T, "hair_%s.png" % hid), 1024, k=0.5,
+                                  flatten=HAIR_FLATTEN.get(hid, HAIR_FLATTEN_DEFAULT))
         o.data.materials.append(make_material("Hair_" + hid, os.path.join(T, "hair_%s.png" % hid), alpha=True))
         MATERIALS["Hair_" + hid] = tint_spec(DEFAULTS["hair"], gain, alphaMode="MASK", alphaCutoff=0.35,
                                             roughness=0.62, metallic=0.0, doubleSided=True)
+        add_hair_length_attr(o)
         hair_objs[hid] = o
     for o in face_objs:
         o["cc_export"] = "base"
@@ -536,6 +848,8 @@ def export(path, objs, **kw):
     bpy.ops.export_scene.gltf(filepath=path, **dict(GLTF_OPTS, **kw))
     g, b = read_glb(path)
     patched = patch_materials(g, MATERIALS)
+    b = embed_textures(g, b, MATERIALS)
+    b = quantize_morphs(g, b)                  # KHR_mesh_quantization for the morph deltas (see glbutil.py)
     write_glb(path, g, b)
     print("BUILD exported %s  %d bytes  meshes %s  materials patched %s"
           % (os.path.basename(path), os.path.getsize(path), [m["name"] for m in g.get("meshes", [])], patched))
@@ -550,7 +864,7 @@ if hair_objs:
     for hid, labels in HAIR_STYLES:
         fn = "hair_%s.glb" % hid
         # hair morph normals are not worth the bytes (cards; the base normals are fine)
-        export(os.path.join(out_dir, fn), [hair_objs[hid], rig], export_morph_normal=False)
+        export(os.path.join(out_dir, fn), [hair_objs[hid], rig], export_morph_normal=False, export_attributes=True)
         manifest["styles"].append({"id": hid, "file": fn, "label": labels, "mesh": "Hair_" + hid,
                                    "bytes": os.path.getsize(os.path.join(out_dir, fn)),
                                    "license": "CC0", "source": "MakeHuman system assets: hair/" + hid})
