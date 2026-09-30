@@ -6,9 +6,48 @@ This is a summary, not legal advice. Check the upstream licenses when in doubt.
 |---|---|---|---|
 | MPFB 2 Blender extension (code) | makehumancommunity/mpfb2 | GPL-3.0 | Only *runs* inside Blender at build time. It is not copied into this repo or into the GLB. If you ever vendor or modify MPFB code here, that code is GPL. |
 | MakeHuman base mesh, macro/detail targets, `game_engine` rig and weights | MakeHuman system assets | CC0 1.0 | `output/*.glb` and `output/*.joints.json` are derived from CC0 data only, so they can be used in closed/commercial projects without attribution. |
-| three.js (loaded by `web/`) | mrdoob/three.js | MIT | Keep the MIT notice if three.js files are vendored into the site. |
-| Scripts in this repo (`blender/`, `web/`) | this project | owner's choice (no license file yet = all rights reserved) | Add a LICENSE before publishing the repo. |
-| Future hair/clothing/texture assets | various | check each | Prefer CC0; record source + license per asset here. |
+| Eyes, eyebrows, eyelashes, teeth, tongue, 5 hair styles, skin texture (table below) | MakeHuman system assets CC0 pack | CC0 1.0 | Meshes and (re-processed) textures ship inside `output/base_body.glb`, `output/base_body_anim.glb` and `output/hair_*.glb`. |
+| three.js (loaded by `web/`) | mrdoob/three.js | MIT | Keep the MIT notice if three.js files are vendored into the site. `RoomEnvironment` (IBL) is part of three.js. |
+| Scripts in this repo (`blender/`, `web/`, `tools/`) | this project | owner's choice (no license file yet = all rights reserved) | Add a LICENSE before publishing the repo. |
+| Future clothing/other assets | various | check each | Prefer CC0; record source + license per asset here. |
 
-Why the GPL does not reach the exported assets: the GLB contains only mesh/morph/weight data that
+Why the GPL does not reach the exported assets: the GLB contains only mesh/morph/weight/texture data that
 comes from the CC0 MakeHuman assets; the GPL applies to MPFB's program code, not to its output.
+
+## Shipped MakeHuman assets
+
+Source for all of them: the MakeHuman "system assets" CC0 pack,
+<https://files.makehumancommunity.org/asset_packs/makehuman_system_assets/makehuman_system_assets_cc0.zip>
+(author `makehuman_system`, <http://www.makehumancommunity.org>). Fetched into the git-ignored
+`build/mh_assets/` by `blender/tools/fetch_mh_assets.py`; nothing from the pack is committed except the
+derived `output/` files.
+
+| Asset | Type | File in the pack | License | Shipped in |
+|---|---|---|---|---|
+| young_caucasian_female | skin (albedo, used for the albedo + generated normal map) | `skins/young_caucasian_female/young_caucasian_female.mhmat` + `.png` | CC0 | base / anim GLB (`skin_albedo`, `skin_normal`) |
+| high-poly | eye mesh | `eyes/high-poly/high-poly.mhclo` | CC0 | base / anim GLB (`Eyes`) |
+| lightblue | eye texture (iris made grey + tintable) | `eyes/materials/lightblue.mhmat` | CC0 | base / anim GLB (`eye`) |
+| eyebrow001 | eyebrows | `eyebrows/eyebrow001/eyebrow001.mhclo` | CC0 | base / anim GLB (`Eyebrows`) |
+| eyelashes01 | eyelashes | `eyelashes/eyelashes01/eyelashes01.mhclo` | CC0 | base / anim GLB (`Eyelashes`) |
+| teeth_base | teeth | `teeth/teeth_base/teeth_base.mhclo` | CC0 | base / anim GLB (`Teeth`) |
+| tongue01 | tongue | `tongue/tongue01/tongue01.mhclo` | CC0 | base / anim GLB (`Tongue`) |
+| short02 | hair | `hair/short02/short02.mhclo` | CC0 | `output/hair_short02.glb` |
+| bob02 | hair | `hair/bob02/bob02.mhclo` | CC0 | `output/hair_bob02.glb` |
+| long01 | hair | `hair/long01/long01.mhclo` | CC0 | `output/hair_long01.glb` |
+| ponytail01 | hair | `hair/ponytail01/ponytail01.mhclo` | CC0 | `output/hair_ponytail01.glb` |
+| braid01 | hair | `hair/braid01/braid01.mhclo` | CC0 | `output/hair_braid01.glb` |
+
+How the licenses were verified (automatically, on every build, in `blender/build_base.py` `check_license`):
+
+1. the pack's own index `packs/makehuman_system_assets.json` lists the asset with `"license": "CC0"`
+   (all 94 assets of the pack are CC0), and
+2. the asset's own `.mhclo`/`.mhmat` header contains the MakeHuman statement "... explicitly released as
+   CC0 in september 2020"; the skin PNGs additionally carry the "PUBLICDOMAIN MAKEHUMAN.ORG" mark.
+
+The build aborts if either check fails, and writes the verified list to `asset_licenses.json` next to the
+.blend; `output/hair.json` repeats license + source per hair style.
+
+The textures in the GLBs are derived from these CC0 images (resized, colour-normalised, iris greyed,
+normal map generated from the albedo luminance plus procedural noise); no other image source is used.
+
+Not used: MakeHuman community assets (other packs, often CC-BY); only the CC0 system pack is used.
