@@ -29,6 +29,33 @@ export const CAPSULES = [
   ['foot_l', 'foot_l', 'foot_l', 'ball_l'], ['foot_r', 'foot_r', 'foot_r', 'ball_r'],
 ];
 
+// Cloth collision set (web/cloth, docs/CLOTH_RUNTIME.md): thicker radii (quantile q of the distances, i.e. close
+// to the skin surface instead of inscribed) and legs/arms split into sub-segments t0..t1 of from -> to, so a
+// segment's radius fits its own part of the limb. name, bones measured, from, to, t0, t1, q.
+// limit groups: a garment lists the groups (ccCloth.limit, default "arms,hips") whose capsules push a particle
+// out no further than its skinned target lies (+ solver limitSlack). Where the garment's own cut already lies
+// inside them (hands at the coat's sides, a tight skirt over the hips / upper thighs) the cloth must not fight
+// its pins. A long coat keeps the thighs hard (the knee must not poke through in run); lower legs, feet and the
+// floor are always hard.
+export const CLOTH_LIMIT = { arms: /^(upperarm|lowerarm|hand)_[lr]$/, hips: /^(torso|hips)$/, thighs: /^thighUp_[lr]$/ };
+const limitGroup = name => Object.keys(CLOTH_LIMIT).find(k => CLOTH_LIMIT[k].test(name));
+export const CLOTH_CAPSULES = [
+  ['torso', ['spine_01', 'spine_02'], 'spine_01', 'spine_03', 0, 1, 0.35],
+  ['hips', ['pelvis'], 'thigh_r', 'thigh_l', 0, 1, 0.55],
+  ['thighUp_l', ['thigh_l'], 'thigh_l', 'calf_l', 0, 0.5, 0.75], ['thighUp_r', ['thigh_r'], 'thigh_r', 'calf_r', 0, 0.5, 0.75],
+  ['thighLo_l', ['thigh_l'], 'thigh_l', 'calf_l', 0.5, 1, 0.75], ['thighLo_r', ['thigh_r'], 'thigh_r', 'calf_r', 0.5, 1, 0.75],
+  ['calfUp_l', ['calf_l'], 'calf_l', 'foot_l', 0, 0.5, 0.85], ['calfUp_r', ['calf_r'], 'calf_r', 'foot_r', 0, 0.5, 0.85],
+  ['calfLo_l', ['calf_l'], 'calf_l', 'foot_l', 0.5, 1, 0.85], ['calfLo_r', ['calf_r'], 'calf_r', 'foot_r', 0.5, 1, 0.85],
+  // heel (t < 0) to toe tips (t > 1)
+  ['foot_l', ['foot_l', 'ball_l'], 'foot_l', 'ball_l', -0.3, 1.5, 0.75], ['foot_r', ['foot_r', 'ball_r'], 'foot_r', 'ball_r', -0.3, 1.5, 0.75],
+  ['upperarm_l', ['upperarm_l'], 'upperarm_l', 'lowerarm_l', 0, 1, 0.7], ['upperarm_r', ['upperarm_r'], 'upperarm_r', 'lowerarm_r', 0, 1, 0.7],
+  ['lowerarm_l', ['lowerarm_l'], 'lowerarm_l', 'hand_l', 0, 1, 0.7], ['lowerarm_r', ['lowerarm_r'], 'lowerarm_r', 'hand_r', 0, 1, 0.7],
+  // palm + fingers: wrist to past the knuckles, measured on the hand and finger vertices
+  ...['l', 'r'].map(s => [`hand_${s}`, ['hand', 'thumb_01', 'thumb_02', 'thumb_03', 'index_01', 'index_02', 'index_03', 'middle_01',
+    'middle_02', 'middle_03', 'ring_01', 'ring_02', 'ring_03', 'pinky_01', 'pinky_02', 'pinky_03'].map(b => `${b}_${s}`),
+  `hand_${s}`, `middle_01_${s}`, 0, 1.9, 0.8]),
+];
+
 function segDist(p, a, b) {
   const ab = Q.vSub(b, a), l2 = Q.vDot(ab, ab);
   const t = l2 < 1e-12 ? 0 : Q.vDot(Q.vSub(p, a), ab) / l2;
@@ -71,6 +98,36 @@ export function buildColliders(dir) {
     const ds = sel.map(p => segDist(p, a, b)).filter(x => x.t > 0.1 && x.t < 0.9).map(x => x.d);
     return { a, b, r: pct(ds, RQ) };
   };
+  const measureCloth = (c, w) => {
+    const [, bones, from, to, t0, t1, q] = c;
+    const A = headAt(from, w), B = headAt(to, w);
+    const a = Q.vAdd(A, Q.vScale(Q.vSub(B, A), t0)), b = Q.vAdd(A, Q.vScale(Q.vSub(B, A), t1));
+    const ds = [];
+    prim.pos.forEach((p, i) => {
+      if (!bones.includes(dominant[i])) return;
+      let v = p;
+      for (const [m, x] of Object.entries(w)) v = Q.vAdd(v, Q.vScale(prim.targets[P.targetNames.indexOf(m)][i], x));
+      const s = segDist(v, a, b);
+      if (s.t > 0.05 && s.t < 0.95) ds.push(s.d);
+    });
+    return { r: pct(ds, q) };
+  };
+  const cloth = [];
+  for (const c of CLOTH_CAPSULES) {
+    const r0 = measureCloth(c, {}).r;
+    const radiusMorphs = {};
+    for (const [n] of morphs) {
+      let r = measureCloth(c, { [n]: 1 }).r - r0;
+      if (n.startsWith('corr_')) {
+        const [x, y] = parts(n);
+        r = measureCloth(c, { [x]: 1, [y]: 1, [n]: 1 }).r - r0 - (radiusMorphs[x] ?? 0) - (radiusMorphs[y] ?? 0);
+      }
+      if (Math.abs(r) > 5e-4) radiusMorphs[n] = +r.toFixed(4);
+    }
+    const [name, bones, from, to, t0, t1, q] = c;
+    cloth.push({ name, bones, from, to, t0, t1, quantile: q, ...(limitGroup(name) ? { clothLimit: limitGroup(name) } : {}),
+      radius: +r0.toFixed(4), radiusMorphs });
+  }
   const out = [];
   for (const c of CAPSULES) {
     const m0 = measure(c, {});
@@ -95,6 +152,13 @@ export function buildColliders(dir) {
       + 'in a pose they follow the skinned joints (from/to bone world positions)',
     radiusModel: 'radius + sum(morphWeight * radiusMorphs[morph]); correctives weight = product of their two macro weights',
     capsules: out,
+    cloth: {
+      use: 'collision set of the cloth runtime (web/cloth): ends = from + t0 * (to - from) .. from + t1 * (to - from) '
+        + 'of the posed joint positions; radius = quantile of the skin distances (near the surface), same radius model; '
+        + 'clothLimit (group): for garments listing the group in ccCloth.limit the capsule pushes a particle out no '
+        + 'further than its skinned target lies (+ solver limitSlack)',
+      capsules: cloth,
+    },
   };
 }
 
@@ -103,4 +167,5 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const c = buildColliders(dir);
   fs.writeFileSync(path.join(dir, 'body_colliders.json'), JSON.stringify(c, null, 1));
   for (const k of c.capsules) console.log(`COLLIDER ${k.name.padEnd(11)} r ${(k.radius * 100).toFixed(1)} cm, morphs ${Object.keys(k.radiusMorphs).length}`);
+  for (const k of c.cloth.capsules) console.log(`CLOTH    ${k.name.padEnd(11)} r ${(k.radius * 100).toFixed(1)} cm, morphs ${Object.keys(k.radiusMorphs).length}`);
 }

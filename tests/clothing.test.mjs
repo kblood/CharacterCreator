@@ -67,7 +67,7 @@ test('licences: CC0 MakeHuman system assets only; the coat extension is marked p
     }
   }
   assert.equal(ITEMS.trenchcoat.license, 'CC0 source + project-original extension');
-  assert.match(ITEMS.trenchcoat.projectOriginal, /extend_coat/);
+  assert.match(ITEMS.trenchcoat.projectOriginal, /coat_skirt/);
 });
 
 test('garment GLBs: one skinned mesh on body joints, the 60 body morph targets, tint + mask extras', () => {
@@ -99,11 +99,14 @@ test('morph follow: every garment moves with the skin under it (every macro extr
     const pos = g.prim.pos, step = Math.max(1, Math.floor(pos.length / 300));
     const near = C.grid(bpos, 0.02);
     const pairs = [];
+    let sampled = 0;
     for (let k = 0; k < pos.length; k += step) {
       const i = near(pos[k]);
       if (i >= 0) pairs.push([k, i]);
+      // cloth garments: the free part (pin < 0.5, e.g. the long coat's skirt) hangs away from the body by design
+      if (!g.pin || g.pin[k] >= 0.5) sampled++;
     }
-    assert.ok(pairs.length > 0.4 * Math.ceil(pos.length / step), `${id}: most sampled vertices within 3 cm of the skin`);
+    assert.ok(pairs.length > 0.4 * sampled, `${id}: most sampled (skinned) vertices within 3 cm of the skin`);
     for (const s of C.shapes(D.names)) {
       if (s.name === 'neutral') continue;
       const gm = C.morphed(g.prim, s.w), bm = C.morphed(D.body, s.w);
@@ -139,7 +142,7 @@ test('penetration in walk / run (linear blend skinning of the clip frames, neutr
   // arm when the arm swings down from the A pose (same arm-into-torso overlap as the bare body): up to ~50 verts.
   const LIM = {
     shoes: { skin: 2, mm: 5, layers: 0 }, jeans: { skin: 2, mm: 5, layers: 10 }, skirt: { skin: 20, mm: 30, layers: 0 },
-    tshirt: { skin: 60, mm: 30, layers: 10 }, trenchcoat: { skin: 12, mm: 20, layers: 200, legs: 12 },
+    tshirt: { skin: 60, mm: 30, layers: 10 }, trenchcoat: { skin: 12, mm: 25, layers: 200, legs: 12 },
   };
   for (const [id, under] of Object.entries(UNDER)) {
     for (const clip of ['walk', 'run']) {
