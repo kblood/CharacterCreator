@@ -1,0 +1,227 @@
+{
+ "generated": "prep_hair.mjs",
+ "bodies": {
+  "neutral": {
+   "headSphere": {
+    "c": [
+     0,
+     1.5437,
+     0.0556
+    ],
+    "r": 0.1014,
+    "n": 4238
+   },
+   "capsules": {
+    "neck": {
+     "a": "neck",
+     "b": "head",
+     "r": 0.0575,
+     "n": 210
+    },
+    "chest": {
+     "a": "upperChest",
+     "b": "neck",
+     "r": 0.1224,
+     "n": 254
+    },
+    "shoulderL": {
+     "a": "leftShoulder",
+     "b": "leftUpperArm",
+     "r": 0.0633,
+     "n": 34
+    },
+    "shoulderR": {
+     "a": "rightShoulder",
+     "b": "rightUpperArm",
+     "r": 0.0633,
+     "n": 34
+    }
+   }
+  },
+  "tall": {
+   "headSphere": {
+    "c": [
+     0,
+     1.8475,
+     0.0638
+    ],
+    "r": 0.1143,
+    "n": 4238
+   },
+   "capsules": {
+    "neck": {
+     "a": "neck",
+     "b": "head",
+     "r": 0.0653,
+     "n": 210
+    },
+    "chest": {
+     "a": "upperChest",
+     "b": "neck",
+     "r": 0.1326,
+     "n": 226
+    },
+    "shoulderL": {
+     "a": "leftShoulder",
+     "b": "leftUpperArm",
+     "r": 0.0715,
+     "n": 34
+    },
+    "shoulderR": {
+     "a": "rightShoulder",
+     "b": "rightUpperArm",
+     "r": 0.0715,
+     "n": 34
+    }
+   }
+  },
+  "short": {
+   "headSphere": {
+    "c": [
+     0,
+     1.1976,
+     0.0487
+    ],
+    "r": 0.0896,
+    "n": 4238
+   },
+   "capsules": {
+    "neck": {
+     "a": "neck",
+     "b": "head",
+     "r": 0.0515,
+     "n": 210
+    },
+    "chest": {
+     "a": "upperChest",
+     "b": "neck",
+     "r": 0.107,
+     "n": 270
+    },
+    "shoulderL": {
+     "a": "leftShoulder",
+     "b": "leftUpperArm",
+     "r": 0.0574,
+     "n": 34
+    },
+    "shoulderR": {
+     "a": "rightShoulder",
+     "b": "rightUpperArm",
+     "r": 0.0574,
+     "n": 34
+    }
+   }
+  },
+  "heavy": {
+   "headSphere": {
+    "c": [
+     0,
+     1.5437,
+     0.0556
+    ],
+    "r": 0.1014,
+    "n": 4238
+   },
+   "capsules": {
+    "neck": {
+     "a": "neck",
+     "b": "head",
+     "r": 0.0575,
+     "n": 212
+    },
+    "chest": {
+     "a": "upperChest",
+     "b": "neck",
+     "r": 0.124,
+     "n": 252
+    },
+    "shoulderL": {
+     "a": "leftShoulder",
+     "b": "leftUpperArm",
+     "r": 0.0662,
+     "n": 34
+    },
+    "shoulderR": {
+     "a": "rightShoulder",
+     "b": "rightUpperArm",
+     "r": 0.0662,
+     "n": 34
+    }
+   }
+  },
+  "child": {
+   "headSphere": {
+    "c": [
+     0,
+     1.21,
+     0.0458
+    ],
+    "r": 0.092,
+    "n": 4238
+   },
+   "capsules": {
+    "neck": {
+     "a": "neck",
+     "b": "head",
+     "r": 0.0493,
+     "n": 214
+    },
+    "chest": {
+     "a": "upperChest",
+     "b": "neck",
+     "r": 0.1031,
+     "n": 324
+    },
+    "shoulderL": {
+     "a": "leftShoulder",
+     "b": "leftUpperArm",
+     "r": 0.0553,
+     "n": 34
+    },
+    "shoulderR": {
+     "a": "rightShoulder",
+     "b": "rightUpperArm",
+     "r": 0.0553,
+     "n": 34
+    }
+   }
+  },
+  "old": {
+   "headSphere": {
+    "c": [
+     0,
+     1.5194,
+     0.0689
+    ],
+    "r": 0.0995,
+    "n": 4238
+   },
+   "capsules": {
+    "neck": {
+     "a": "neck",
+     "b": "head",
+     "r": 0.0563,
+     "n": 201
+    },
+    "chest": {
+     "a": "upperChest",
+     "b": "neck",
+     "r": 0.1137,
+     "n": 253
+    },
+    "shoulderL": {
+     "a": "leftShoulder",
+     "b": "leftUpperArm",
+     "r": 0.068,
+     "n": 34
+    },
+    "shoulderR": {
+     "a": "rightShoulder",
+     "b": "rightUpperArm",
+     "r": 0.068,
+     "n": 34
+    }
+   }
+  }
+ }
+}

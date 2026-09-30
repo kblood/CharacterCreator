@@ -1,0 +1,71 @@
+{
+ "node": "v24.6.0",
+ "cpu": "AMD Ryzen 7 5700G with Radeon Graphics",
+ "repeats": 3,
+ "rows": [
+  {
+   "solver": "xpbd",
+   "particles": 512,
+   "msMedian": 0.808,
+   "msMean": 0.908,
+   "msP95": 1.284,
+   "initMs": 0.2
+  },
+  {
+   "solver": "xpbd",
+   "particles": 2048,
+   "msMedian": 3.573,
+   "msMean": 4.104,
+   "msP95": 6.081,
+   "initMs": 0.3
+  },
+  {
+   "solver": "rapier",
+   "particles": 512,
+   "msMedian": 17.257,
+   "msMean": 20.556,
+   "msP95": 40.396,
+   "initMs": 1.8
+  },
+  {
+   "solver": "rapier",
+   "particles": 2048,
+   "msMedian": 75.777,
+   "msMean": 77.376,
+   "msP95": 114.627,
+   "initMs": 5.2
+  },
+  {
+   "solver": "jolt",
+   "particles": 512,
+   "msMedian": 0.729,
+   "msMean": 0.739,
+   "msP95": 0.825,
+   "initMs": 3.6
+  },
+  {
+   "solver": "jolt",
+   "particles": 2048,
+   "msMedian": 2.819,
+   "msMean": 2.827,
+   "msP95": 2.891,
+   "initMs": 12.5
+  },
+  {
+   "solver": "springbone",
+   "particles": 512,
+   "msMedian": 0.566,
+   "msMean": 0.582,
+   "msP95": 0.632,
+   "initMs": 5.2
+  },
+  {
+   "solver": "springbone",
+   "particles": 2048,
+   "msMedian": 3.985,
+   "msMean": 4.142,
+   "msP95": 5.23,
+   "initMs": 16.5
+  }
+ ]
+}

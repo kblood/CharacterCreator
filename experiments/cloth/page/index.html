@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cloth solver experiment</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #2a2d34; color: #ddd; font: 13px system-ui, sans-serif; overflow: hidden; }
+  #hud { position: fixed; left: 8px; top: 8px; background: #0008; padding: 6px 8px; border-radius: 4px; white-space: pre; }
+  canvas { display: block; }
+</style>
+<script type="importmap">{"imports":{
+  "three": "../node_modules/three/build/three.module.js",
+  "three/addons/": "../node_modules/three/examples/jsm/",
+  "@dimforge/rapier3d-compat": "../node_modules/@dimforge/rapier3d-compat/dist/rapier.mjs",
+  "jolt-physics/wasm-compat": "../node_modules/jolt-physics/dist/jolt-physics.wasm-compat.js",
+  "@pixiv/three-vrm-springbone": "../node_modules/@pixiv/three-vrm-springbone/lib/three-vrm-springbone.module.js"
+}}</script>
+</head><body><div id="hud">loading...</div>
+<script type="module" src="main.js"></script>
+</body></html>

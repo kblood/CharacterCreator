@@ -82,6 +82,38 @@ Animation bake (`blender/bake_clips.py`, separate step): opens a fresh `.blend` 
 keeps both GLBs consistent. Details/gotchas (slotted actions, frame offset, no forced sampling) in
 `docs/ANIMATION_PLAN.md` section 4 D; gate with `node tools/check_anim_glb.mjs`.
 
+## Clothing (blender/cc_clothing.py, after the hair)
+- `GARMENTS` lists each item: pack, the connected components to keep (by vertex count), slot/layer/zone,
+  colours and cloth settings. Garments are added lowest layer first; each is fitted with MPFB's mhclo fit
+  (`add_asset`).
+  - The fit is evaluated on every morph sample (`fit_keys`), so all 60 targets are baked like the hair.
+  - MPFB's side effects on the basemesh (`Delete.*` vertex group, MASK modifier) are removed after each
+    garment.
+- Per garment:
+  1. delete the unused parts;
+  2. orient the normals outward;
+  3. clearance: push out of the body and out of the lower layers by 3 mm, per shape (neutral, 12 macros,
+     16 corrective corners), then rebuild the deltas;
+  4. body zone: delete_verts, limited to skin the garment covers along the skin normal, plus covered skin
+     away from the garment edges. Shoes keep the whole list;
+  5. pin mask + pelvis/thigh weights for the free part;
+  6. textures.
+- Trench coat (`extend_coat`):
+  - the CC0 jacket's hem loop is extended with rows down to knee + 6 cm, flared, with at least 5.5 cm
+    clearance over the body at every shape;
+  - the new vertices are bound to the nearest body triangle (barycentric + scaled offset) so they get all
+    morph targets;
+  - UVs point at a rectangle of the texture filled with the median jacket cloth colour and a fine twill
+    noise.
+- Textures: albedo is grey-normalised per region (primary / secondary) for runtime tinting, JPEG <= 1024 px;
+  normal 512 px; mask 256 px (R = secondary weight, material extras `ccMask`).
+- Export: `export_attributes=True` for `_CLOTH_PIN` (garments) and `_CCZONE` (body); three.js sees them
+  lowercased.
+- Verify: `node tools/cloth_check.mjs [dir]` and `node --test "tests/*.test.mjs"`
+  (`tests/clothing.test.mjs`).
+  - Build into a scratch dir with `-- <scratch>\base_body.glb --blend <scratch>\base_body.blend`, then run
+    `cloth_check` on it before building into `output/`.
+
 ## Gotchas
 - `create_human(feet_on_ground=True)` is required, otherwise the figure floats/sinks relative to the origin (I had it off first: feet ended below the grid).
 - MPFB scale factor 0.1 gives metres; `height_tall` is +0.7 m at full influence, so `web/character.js` caps that side with `scale: { pos: 0.45 }` (~+0.3 m). Keep the morph itself unscaled in the GLB.
@@ -98,4 +130,4 @@ keeps both GLBs consistent. Details/gotchas (slotted actions, frame offset, no f
 - Render check: `webxr-test` skill (`node check.js --url=... --screenshot=...`); the page exposes `window.__ready` and `window.__set(id, value)` for scripted slider tests.
 
 ## Licensing
-MPFB code is GPL; MakeHuman base mesh, targets and system assets are CC0, so exported GLBs are unencumbered. The shipped face/hair/skin assets are all from the CC0 system pack and are checked by the build (see above and `LICENSE-NOTES.md`). Third-party assets (clothes, community hair) must be checked individually (prefer CC0).
+MPFB code is GPL; MakeHuman base mesh, targets and system assets are CC0, so exported GLBs are unencumbered. The shipped face/hair/skin assets are all from the CC0 system pack and are checked by the build (see above and `LICENSE-NOTES.md`). The clothing packs (`shoes01`, `male_casualsuit04`, `female_elegantsuit01`, `male_casualsuit05`) go through the same CC0 check; the trench coat's lengthening is project-original. Third-party assets (community clothes/hair) must be checked individually (prefer CC0).

@@ -111,18 +111,75 @@
   was not reproduced, so the collider is a safety net; upward gaze has no lid-raise morph (hence the 8 deg clamp);
   correctives cover pairs only (small dark patch on the hip at combined extremes); mobile / real GPU.
 
+## Clothing prototype (2026-09-30, uncommitted)
+- Built by `blender/cc_clothing.py` (called from `build_base.py`; `--no-clothing` skips it):
+
+  | item | slot / layer | source | size |
+  |---|---|---|---|
+  | T-shirt | top / 3 | CC0 `male_casualsuit04` | 0.35 MB |
+  | jeans | bottom / 2 | CC0 `male_casualsuit04` | 0.41 MB |
+  | skirt | bottom / 2 | CC0 `female_elegantsuit01` | 0.19 MB |
+  | shoes + socks | shoes / 1 | CC0 `shoes01` | 0.83 MB |
+  | trench coat | outerwear / 4 | CC0 `male_casualsuit05` jacket + collar, extended to the knee by `extend_coat` | 0.96 MB |
+
+  Catalog: `output/clothing.json`.
+- Build steps: MPFB mhclo fit, all 60 morph targets baked, 3 mm clearance per shape (body and lower layers,
+  neutral + 12 macros + 16 corrective corners), 53-bone skin.
+- Hidden skin: body zones in the `_CCZONE` body attribute (MakeHuman delete_verts, limited to skin the
+  garment really covers along the skin normal). The viewer drops body triangles whose 3 vertices are all
+  hidden.
+- Tinting: grey-normalised albedo, primary tint, and a secondary colour through a mask texture (T-shirt
+  trim, socks, coat collar/trim).
+- Viewer (`web/clothing.js`, `web/clothing_rules.js`):
+  - a "Clothes" section with one select per slot plus two colour pickers, in da/en;
+  - Reset takes the clothes off;
+  - `?outfit=`, and `__set('outfit' | 'wear' | 'takeOff' | 'clothColor')`, `__clothingState()`.
+- Cloth-ready data: `_CLOTH_PIN` + `ccCloth` extras on skirt and coat, `output/body_colliders.json` (16
+  capsules/sphere that scale with the sliders), [CLOTH_SPEC.md](CLOTH_SPEC.md). No solver.
+- Measurements (`node tools/cloth_check.mjs`). Counts are garment vertices more than 2 mm inside visible
+  skin; 8 frames per clip, neutral body.
+
+  | item | morph extremes | walk | run | other |
+  |---|---|---|---|---|
+  | T-shirt | <= 4 | <= 48 (<= 24 mm) | <= 41 (<= 26 mm) | walk/run count is the armpit: the arm swings down into the tee's side, the same overlap as the bare body |
+  | jeans | <= 2 | 0 | 0 | |
+  | skirt | 0 | <= 4 (15 mm) | <= 9 (13 mm) | |
+  | shoes | 0 | 0 | 0 | |
+  | trench coat | 0 skin; <= 26 of 2634 inside tee/jeans (weight + muscle max, front edges) | <= 7 (10 mm) | <= 2 (17 mm) | |
+
+  - Trench coat vs tee in poses: 48-104 vertices, mostly at the armpit/side (the arm pressing the coat side
+    into the tee).
+  - Coat into the legs: <= 7.
+  - Holes (hidden skin not covered): T-shirt 2, jeans 2, skirt 0, coat 0, shoes 32 (foot soles facing the
+    ground, not visible).
+- Trench coat behaviour:
+  - At the slider extremes (tall/short/heavy/child/muscle) it follows without clipping or tearing.
+  - Walk: fine.
+  - Run: the coat skirt is skinned rigidly (front panels 100 % to the thigh, back 70 % thigh / 30 % pelvis),
+    so a front panel lifts with the knee like a stiff board and opens the front. It does not tear and the
+    knee no longer pierces it (it did before: legShare 0.45 cut ~120 vertices into the legs).
+  - Edge stretch at run: max 6.3x, p99 2.0x, at the side between the front and back panels.
+  - It needs the cloth solver to look right in motion.
+- Screenshots (git-ignored): `build/shots/clothing/` (front/side/back, extremes 10-16, walk/run 20-26,
+  close-ups 30-35).
+- Known look issues:
+  - the coat reads more like a long safari/field jacket (patch pockets from the CC0 jacket) than a
+    belted trench;
+  - a visible seam where the generated skirt starts;
+  - the coat hangs as a straight bell in the A pose.
+
 ## Open issues
 - Macro morphs outside the 16 corrective pairs (and 3-way combinations) are still linear.
 - Joint offsets are linear per morph (correctives and face morphs move no joints).
 
 ## TODO (scope v1)
 - Jaw bone / mouth expressions (teeth/tongue are rigid on the head).
-- Clothing fitting (swappable parts fitted to the body).
+- Clothing: cloth solver for skirt/coat (data ready, see CLOTH_SPEC.md); a dress (occupies top+bottom, rules exist); more garments.
 - More clips (jump, wave, crouch, ...) as new `CLIPS` entries; retarget test of the baked GLB in other engines.
 - Hair: second alpha-blended card layer for a soft hairline; hair physics; CC0 beard if one turns up.
 - Engine ports of `character.js` (Unity/Godot/Unreal) reading the same GLB + joints sidecar.
 
 ## Licensing
 MPFB code is GPL; the MakeHuman base mesh/targets/assets are CC0 -> exported GLBs are free to use. Every shipped
-asset (skin, eyes, brows, lashes, teeth, tongue, 8 hair styles) is checked for CC0 by the build; face/expression
+asset (skin, eyes, brows, lashes, teeth, tongue, 8 hair styles, 4 clothing packs) is checked for CC0 by the build; face/expression
 targets are CC0 per MakeHuman's LICENSE.md; list in `LICENSE-NOTES.md`.

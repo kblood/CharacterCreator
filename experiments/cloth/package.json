@@ -1,0 +1,25 @@
+{
+  "name": "cloth-solver-experiment",
+  "version": "1.0.0",
+  "description": "Cloth/hair solver comparison for CharacterCreator (see README.md and docs/CLOTH_SOLVER_REPORT.md)",
+  "scripts": {
+    "prep": "node prep_bodies.mjs && node prep_hair.mjs",
+    "bench": "node bench.mjs",
+    "hair": "node hair.mjs",
+    "shoot": "node shoot.mjs",
+    "serve": "node server.mjs",
+    "simplecloth:install": "cd simplecloth && npm install && node patch.mjs"
+  },
+  "type": "module",
+  "dependencies": {
+    "@dimforge/rapier3d": "0.21.0",
+    "@dimforge/rapier3d-compat": "0.21.0",
+    "@pixiv/three-vrm-springbone": "3.5.5",
+    "jolt-physics": "1.1.0",
+    "three": "0.170.0"
+  },
+  "devDependencies": {
+    "puppeteer-core": "^25.12.0"
+  },
+  "private": true
+}

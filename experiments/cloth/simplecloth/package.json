@@ -1,0 +1,14 @@
+{
+  "name": "cloth-simplecloth",
+  "version": "1.0.0",
+  "description": "Candidate C (three-simplecloth, WebGPU, three r182) - separate because it needs a newer three",
+  "scripts": {
+    "postinstall": "node patch.mjs"
+  },
+  "type": "module",
+  "dependencies": {
+    "three": "0.182.0",
+    "three-simplecloth": "0.0.6"
+  },
+  "private": true
+}
