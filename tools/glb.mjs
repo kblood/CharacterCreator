@@ -49,7 +49,8 @@ export function readGlb(file) {
   return { json, bin, size: b.length, accessor, parent, byName };
 }
 
-/** Mesh parts by NODE name: { name: { node, mesh, prims: [{ pos, targets: [[dx,dy,dz]...], joints, weights, material }] } } */
+/** Mesh parts by NODE name: { name: { node, mesh, prims: [{ pos, targets: [[dx,dy,dz]...], joints, weights, material,
+ *  indices (flat, or null), attr(name) -> custom attribute (e.g. '_CCZONE') or null }] } } */
 export function meshParts(g, { withSkin = true } = {}) {
   const out = {};
   g.json.nodes.forEach((nd, i) => {
@@ -63,6 +64,8 @@ export function meshParts(g, { withSkin = true } = {}) {
         targets: (p.targets || []).map(t => g.accessor(t.POSITION)),
         joints: withSkin && p.attributes.JOINTS_0 !== undefined ? g.accessor(p.attributes.JOINTS_0) : null,
         weights: withSkin && p.attributes.WEIGHTS_0 !== undefined ? g.accessor(p.attributes.WEIGHTS_0) : null,
+        get indices() { return p.indices !== undefined ? g.accessor(p.indices) : null; },
+        attr: n => (p.attributes[n] !== undefined ? g.accessor(p.attributes[n]) : null),
       })),
     };
   });

@@ -1,4 +1,4 @@
-"""Download the MakeHuman CC0 system asset pack (eyes, eyebrows, eyelashes, teeth, tongue, hair, skins) and
+"""Download the MakeHuman CC0 system asset pack (eyes, eyebrows, eyelashes, teeth, tongue, hair, skins, clothes) and
 unpack the parts the build uses into build/mh_assets/ (git-ignored). Plain Python 3, no Blender needed.
 
 Run (project root):  python blender/tools/fetch_mh_assets.py [--dest build/mh_assets] [--zip <already downloaded zip>]
@@ -15,8 +15,8 @@ import zipfile
 
 URL = "https://files.makehumancommunity.org/asset_packs/makehuman_system_assets/makehuman_system_assets_cc0.zip"
 PROJECT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-# only these top-level folders are unpacked (clothes/proxymeshes are not used yet)
-KEEP = ("packs/", "eyes/", "eyebrows/", "eyelashes/", "teeth/", "tongue/", "hair/", "skins/")
+# only these top-level folders are unpacked (proxymeshes are not used)
+KEEP = ("packs/", "eyes/", "eyebrows/", "eyelashes/", "teeth/", "tongue/", "hair/", "skins/", "clothes/")
 
 
 def main():

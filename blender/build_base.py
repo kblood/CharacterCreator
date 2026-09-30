@@ -193,7 +193,8 @@ def parse_args():
     p.add_argument("--assets", default=os.environ.get("CC_MH_ASSETS", os.path.join(PROJECT, "build", "mh_assets")),
                    help="unpacked MakeHuman CC0 system assets (blender/tools/fetch_mh_assets.py)")
     p.add_argument("--no-assets", action="store_true", help="bare body only (no eyes/brows/teeth/hair/skin texture)")
-    p.add_argument("--textures", default=os.path.join(PROJECT, "build", "textures"), help="prepared texture files")
+    p.add_argument("--no-clothing", action="store_true", help="skip the garments (blender/cc_clothing.py)")
+    p.add_argument("--textures",default=os.path.join(PROJECT, "build", "textures"), help="prepared texture files")
     a = p.parse_args(argv)
     a.out = os.path.abspath(a.out)
     a.blend = os.path.abspath(a.blend)
@@ -465,6 +466,28 @@ def set_weights(obj, allowed=None, rigid=None):
             obj.vertex_groups.remove(g)
 
 
+_LAST_FIT = [None]
+
+
+def fit_keys(fit, neutral):
+    """Morph deltas of a fitted asset: fit(vertex positions) evaluated on every morph sample (see add_asset)."""
+    part_delta = {}
+    for key in morph_names:
+        kind = MORPH_KIND[key]
+        if kind == "look":
+            d = np.zeros_like(neutral)                    # set on the Eyes mesh by add_look_morphs()
+        else:
+            hv, dz = raw[key]
+            d = fit(hv) + np.array([0.0, 0.0, dz]) - neutral
+            if kind == "corr":
+                a, b = CORR_PARTS[key]
+                d = d - part_delta[a] - part_delta[b]
+            if kind in ZERO_BELOW:
+                d[np.linalg.norm(d, axis=1) < ZERO_BELOW[kind]] = 0.0
+        part_delta[key] = d
+    return part_delta
+
+
 def add_asset(name, pack_key, rel, atype):
     f = os.path.join(args.assets, rel)
     check_license(pack_key, f)
@@ -487,23 +510,12 @@ def add_asset(name, pack_key, rel, atype):
     err = float(np.abs(cur.reshape(-1, 3) - neutral).max())
     obj.data.vertices.foreach_set("co", neutral.ravel())
     obj.shape_key_add(name="Basis", from_mix=False)
-    part_delta = {}
+    part_delta = fit_keys(fit, neutral)
+    _LAST_FIT[0] = fit
     for key in morph_names:
-        kind = MORPH_KIND[key]
-        if kind == "look":
-            d = np.zeros_like(neutral)                    # set on the Eyes mesh by add_look_morphs()
-        else:
-            hv, dz = raw[key]
-            d = fit(hv) + np.array([0.0, 0.0, dz]) - neutral
-            if kind == "corr":
-                a, b = CORR_PARTS[key]
-                d = d - part_delta[a] - part_delta[b]
-            if kind in ZERO_BELOW:
-                d[np.linalg.norm(d, axis=1) < ZERO_BELOW[kind]] = 0.0
-        part_delta[key] = d
         sk = obj.shape_key_add(name=key, from_mix=False)
         sk.slider_min, sk.slider_max = 0.0, 1.0
-        sk.data.foreach_set("co", (neutral + d).astype(np.float32).ravel())
+        sk.data.foreach_set("co", (neutral + part_delta[key]).astype(np.float32).ravel())
     for md in list(obj.modifiers):
         if md.type != 'ARMATURE':
             obj.modifiers.remove(md)
@@ -710,7 +722,7 @@ def tint_spec(hex_default, gain, **kw):
 
 
 PACK, LICENSES, MATERIALS = {}, [], {}
-face_objs, hair_objs = [], {}
+face_objs, hair_objs, CLOTH = [], {}, None
 if not args.no_assets:
     pack_json = os.path.join(args.assets, "packs", "makehuman_system_assets.json")
     assert os.path.isfile(pack_json), ("MakeHuman assets missing in %s: run python blender/tools/fetch_mh_assets.py "
@@ -810,6 +822,20 @@ if not args.no_assets:
     for o in hair_objs.values():
         o["cc_export"] = "hair"
 
+    # --- clothing (blender/cc_clothing.py): one object per garment, exported to its own GLB below ---
+    if not args.no_clothing:
+        import cc_clothing
+        from types import SimpleNamespace
+        assert body_idx == list(range(len(body_idx))), "body vertices are expected to be 0..n-1"
+        CLOTH = cc_clothing.Clothing(SimpleNamespace(
+            human=human, N_BODY=len(body_idx), BASE_ARR=BASE_ARR, delta=delta, base_heads=base_heads, args=args,
+            check_license=check_license, add_asset=add_asset, last_fit=lambda: _LAST_FIT[0], fit_keys=fit_keys,
+            MORPH_KIND=MORPH_KIND, CORR_PARTS=CORR_PARTS, ZERO_BELOW=ZERO_BELOW, tex=tex,
+            make_material=make_material, MATERIALS=MATERIALS, bone_names={b.name for b in rig.data.bones}))
+        for _g in sorted(cc_clothing.GARMENTS, key=lambda g: g["layer"]):
+            CLOTH.add(_g)
+        CLOTH.finish_body()
+
 # strip helper geometry: keep only the 'body' vertex group
 bpy.ops.object.select_all(action='DESELECT')
 human.select_set(True); bpy.context.view_layer.objects.active = human
@@ -856,9 +882,11 @@ def export(path, objs, **kw):
 
 
 # base GLB: body + face assets (+ rig). Hair is exported separately (one small GLB per style, loaded on demand).
-export(args.out, [human, rig] + face_objs)
+export(args.out, [human, rig] + face_objs, export_attributes=CLOTH is not None)   # attributes: Body _CCZONE
 
 out_dir = os.path.dirname(args.out)
+if CLOTH is not None:
+    CLOTH.export_all(out_dir, export, rig, read_glb, write_glb)
 if hair_objs:
     manifest = {"version": 1, "default": HAIR_DEFAULT, "defaultColor": DEFAULTS["hair"], "styles": []}
     for hid, labels in HAIR_STYLES:
