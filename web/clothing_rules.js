@@ -41,6 +41,16 @@ export function coveringZoneMask(catalog, worn, id) {
   return hiddenZoneMask(catalog, worn.filter(w => (catalog.items.find(i => i.id === w)?.layer ?? 0) > layer));
 }
 
+/**
+ * Whether a cloth garment worn over item `it` collides with it as a lower layer (web/cloth/layers.js). Footwear
+ * (hides only the feet) does not: the coat hem only reaches it on short bodies, where pushing the hem out over
+ * the shoe fights the floor and the shoe kicks through it (tools/cloth_sim.mjs --under ... shoes).
+ */
+export function collidesAsLayer(it) {
+  const z = it?.hidesBodyZones ?? [];
+  return !(z.length === 1 && z[0] === 'feet');
+}
+
 /** Triangle index of `geometry` without the triangles whose three vertices are all hidden. */
 export function filterIndex(fullIndex, zoneAttr, mask) {
   if (!mask || !zoneAttr) return fullIndex;

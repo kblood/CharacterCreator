@@ -2,7 +2,10 @@
 // REAL animator (web/animation) on a duck-typed copy of the exported skeleton, with slider joint offsets applied
 // like character.js applySkeleton (bone positions + rebased inverse bind matrices). Used by tests/cloth.test.mjs
 // and as a report:
-//   node tools/cloth_sim.mjs [garment ...] [--bodies neutral,tall,...] [--seconds 10]
+//   node tools/cloth_sim.mjs [garment ...] [--bodies neutral,tall,...] [--seconds 10] [--under tshirt,jeans]
+// --under: lower layers worn under the garment -> "layer" = visible-layer penetration (layer/body vertices showing
+// through the simulated cloth, pokeThrough()) per layer, max over frames and per clip; "layerSkin" = the same for
+// the skinned garment (cloth off).
 // Timeline (like experiments/cloth): 1 s idle preroll, walk 0-3 s, run 3-5.5 s, idle 5.5-7.5 s, idle->run 7.5-10 s,
 // 0.3 s crossfades, 60 Hz. The character runs in place (root motion is only reported, as in the viewer): the
 // air moves past it at the animator's rootSpeed instead.
@@ -18,6 +21,8 @@ import { createSolver, clothParams, hashFloats } from '../web/cloth/solver.js';
 import { morphBase, skinPositions, skinNormals } from '../web/cloth/skin.js';
 import { clothColliderDefs, evalColliders, limitFlags } from '../web/cloth/colliders.js';
 import { windVelocity } from '../web/cloth/wind.js';
+import { hiddenZoneMask, coveringZoneMask, collidesAsLayer } from '../web/clothing_rules.js';
+import { createLayerSet, selectLayerVertices } from '../web/cloth/layers.js';
 
 const PROJECT = fileURLToPath(new URL('..', import.meta.url));
 export const OUT = path.join(PROJECT, 'output');
@@ -87,6 +92,7 @@ export function loadData(dir = OUT) {
       positions: flat(prim.pos), index: Uint32Array.from(prim.indices),
       normals: prim.attr('NORMAL') ? flat(prim.attr('NORMAL')) : null,
       pin: prim.attr('_CLOTH_PIN') ? Float32Array.from(prim.attr('_CLOTH_PIN')) : null,
+      zone: prim.attr('_CCZONE') ? Uint32Array.from(prim.attr('_CCZONE')) : null,
       skinIndex: Uint16Array.from(prim.joints.flat().map(j => remap[j])), skinWeight: flat(prim.weights),
       targets: prim.targets.map(flat),
     };
@@ -96,7 +102,7 @@ export function loadData(dir = OUT) {
     dir, G, joints, colliders, catalog, names, ibm, garments,
     body: { positions: flat(bprim.pos), index: Uint32Array.from(bprim.indices), normals: flat(bprim.attr('NORMAL')),
       skinIndex: Uint16Array.from(bprim.joints.flat()), skinWeight: flat(bprim.weights), targets: bprim.targets.map(flat),
-      targetNames: body.targetNames },
+      targetNames: body.targetNames, zone: bprim.attr('_CCZONE') ? Uint32Array.from(bprim.attr('_CCZONE')) : null },
   };
   cache.set(dir, d);
   return d;
@@ -182,7 +188,7 @@ export const targetWeights = (names, infl) => names.map(n => infl[n] || 0);
  * One garment's cloth instance, same data flow as web/cloth/runtime.js: morphed base -> CPU skinning -> anchors
  * of the simulated particles -> solver.step().
  */
-export function createGarmentSim(D, id, ch, over = {}) {
+export function createGarmentSim(D, id, ch, over = {}, under = []) {
   const g = D.garments[id];
   const model = buildClothModel({ positions: g.positions, index: g.index, pin: g.pin });
   const w = targetWeights(g.targetNames, ch.influences);
@@ -194,10 +200,24 @@ export function createGarmentSim(D, id, ch, over = {}) {
   const solver = createSolver(sim, restX, params);
   const limit = limitFlags(clothColliderDefs(D.colliders), params.limit);
   const anchors = new Float32Array(sim.count * 3);
+  // lower layers (web/cloth/layers.js), as web/cloth/runtime.js builds them for the worn garments under this one
+  const lay = under.length ? layerSetFor(D, g, model, under) : null;
   return {
-    id, model, solver, params, reps, base, limit,
+    id, model, solver, params, reps, base, limit, layerCount: lay ? lay.count : 0,
     anchorsNow() { return skinPositions(anchors, base, g.skinIndex, g.skinWeight, ch.skinMats, reps); },
+    layerNow() { return lay ? lay.update(() => ch.skinMats, k => targetWeights(D.garments[under[k]].targetNames, ch.influences)) : null; },
   };
+}
+
+/** Lower-layer collision set of cloth garment g (model) over the garments `under` (same selection as the runtime). */
+export function layerSetFor(D, g, model, under) {
+  const freeBind = [];
+  for (let p = 0; p < model.particleCount; p++) if (model.pin[p] < 0.999) { const v = model.rep[p]; freeBind.push(g.positions[3 * v], g.positions[3 * v + 1], g.positions[3 * v + 2]); }
+  const fb = Float32Array.from(freeBind);
+  return createLayerSet(under.map(id => {
+    const u = D.garments[id];
+    return { positions: u.positions, normals: u.normals, skinIndex: u.skinIndex, skinWeight: u.skinWeight, targets: u.targets, list: selectLayerVertices(u.positions, fb) };
+  }));
 }
 
 /** Frame inputs shared by all garments: capsules, floor, lateral axis, air velocity. */
@@ -234,6 +254,153 @@ function bodyGrid(pos, cell = 0.03) {
   };
 }
 
+// ---- visible-layer penetration (what the viewer shows: a lower layer poking out through the simulated cloth) ----
+/**
+ * Lower layers worn under a cloth garment: the garments `under` + the body, skinned every measured frame. Only
+ * vertices of DRAWN triangles count (web/clothing.js applyZones: body triangles hidden by the outfit's zones and
+ * lower-garment triangles covered by a higher layer are not drawn, so they cannot show through).
+ */
+export function layerSurfaces(D, ch, clothId, under = []) {
+  const outfit = [...under, clothId];
+  const srcs = [...under.map(id => ({ id, g: D.garments[id], mask: coveringZoneMask(D.catalog, outfit, id) })),
+    { id: 'body', g: D.body, mask: hiddenZoneMask(D.catalog, outfit) }];
+  return srcs.map(({ id, g, mask }) => {
+    const n = g.positions.length / 3, drawn = new Uint8Array(n), idx = g.index;
+    for (let t = 0; t < idx.length; t += 3) {
+      const a = idx[t], b = idx[t + 1], c = idx[t + 2];
+      if (mask && g.zone && (g.zone[a] & mask) && (g.zone[b] & mask) && (g.zone[c] & mask)) continue;
+      drawn[a] = drawn[b] = drawn[c] = 1;
+    }
+    const w = targetWeights(g.targetNames, ch.influences);
+    const base = morphBase(new Float32Array(g.positions.length), g.positions, g.targets.map((t, k) => (w[k] ? t : null)), w);
+    const list = Int32Array.from({ length: n }, (_, i) => i).filter(i => drawn[i]);
+    const pos = new Float32Array(list.length * 3), nrm = new Float32Array(list.length * 3);
+    const bn = new Float32Array(list.length * 3);
+    list.forEach((v, k) => bn.set(g.normals.subarray(3 * v, 3 * v + 3), 3 * k));
+    const si = new Uint16Array(list.length * 4), sw = new Float32Array(list.length * 4);
+    list.forEach((v, k) => { si.set(g.skinIndex.subarray(4 * v, 4 * v + 4), 4 * k); sw.set(g.skinWeight.subarray(4 * v, 4 * v + 4), 4 * k); });
+    const lbase = new Float32Array(list.length * 3);
+    list.forEach((v, k) => lbase.set(base.subarray(3 * v, 3 * v + 3), 3 * k));
+    // body: hands, arms and the head legitimately lie outside the coat (a hand beside the skirt), skip them
+    const skip = /^(upperarm|lowerarm|hand|thumb|index|middle|ring|pinky|neck|head|clavicle)/;
+    const ok = new Uint8Array(list.length).fill(1);
+    if (id === 'body') list.forEach((v, k) => {
+      let bj = 0, bw = -1;
+      for (let q = 0; q < 4; q++) if (g.skinWeight[4 * v + q] > bw) { bw = g.skinWeight[4 * v + q]; bj = g.skinIndex[4 * v + q]; }
+      if (skip.test(D.names[bj] || '')) ok[k] = 0;
+    });
+    return {
+      id, count: list.length, pos, nrm, ok, covered: null,
+      update() { skinPositions(pos, lbase, si, sw, ch.skinMats); skinNormals(nrm, bn, si, sw, ch.skinMats); return this; },
+    };
+  });
+}
+
+/**
+ * Oriented triangles (particle indices + outward sign from the exported normals) of the cloth garment's simulated
+ * part (triangles with a free particle): the part that can move off its skinned (checked) shape.
+ */
+export function clothTris(D, id, model) {
+  const g = D.garments[id], idx = g.index, P = g.positions, N = g.normals, tris = [];
+  for (let t = 0; t < idx.length; t += 3) {
+    const v = [idx[t], idx[t + 1], idx[t + 2]], p = v.map(i => model.vmap[i]);
+    if (p[0] === p[1] || p[1] === p[2] || p[0] === p[2]) continue;
+    if (!p.some(q => model.pin[q] < 0.999)) continue;
+    const a = v[0], b = v[1], c = v[2];
+    const ux = P[3 * b] - P[3 * a], uy = P[3 * b + 1] - P[3 * a + 1], uz = P[3 * b + 2] - P[3 * a + 2];
+    const wx = P[3 * c] - P[3 * a], wy = P[3 * c + 1] - P[3 * a + 1], wz = P[3 * c + 2] - P[3 * a + 2];
+    const nx = uy * wz - uz * wy, ny = uz * wx - ux * wz, nz = ux * wy - uy * wx;
+    let s = 0;
+    for (const i of v) s += nx * N[3 * i] + ny * N[3 * i + 1] + nz * N[3 * i + 2];
+    tris.push(p[0], p[1], p[2], s >= 0 ? 1 : -1);
+  }
+  return Int32Array.from(tris);
+}
+
+/** Full particle positions as drawn: skinned everywhere, solver positions for the simulated particles. */
+export function drawnParticles(D, id, sim, ch, x) {
+  const g = D.garments[id], m = sim.model;
+  sim.skinAll ??= new Float32Array(g.positions.length);
+  sim.PX ??= new Float32Array(m.particleCount * 3);
+  skinPositions(sim.skinAll, sim.base, g.skinIndex, g.skinWeight, ch.skinMats);
+  for (let p = 0; p < m.particleCount; p++) { const v = m.rep[p]; sim.PX[3 * p] = sim.skinAll[3 * v]; sim.PX[3 * p + 1] = sim.skinAll[3 * v + 1]; sim.PX[3 * p + 2] = sim.skinAll[3 * v + 2]; }
+  if (x) m.sim.particles.forEach((p, s) => { sim.PX[3 * p] = x[3 * s]; sim.PX[3 * p + 1] = x[3 * s + 1]; sim.PX[3 * p + 2] = x[3 * s + 2]; });
+  return sim.PX;
+}
+
+/**
+ * Visible-layer penetration: lower-layer vertices (drawn) OUTSIDE the cloth where the cloth covers them, i.e. the
+ * vertex projects inside a cloth triangle within `reach` and lies on its outer side by more than tol. That is a
+ * speck of jeans / T-shirt / skin showing through the coat. Returns { [layer]: { n, mm } }.
+ */
+export function pokeThrough(layers, PX, tris, { reach = 0.04, tol = TOL_LAYER, cell = 0.05, cover = false, where = null } = {}) {
+  const grid = new Map(), key = (x, y, z) => (x * 73856093) ^ (y * 19349663) ^ (z * 83492791);
+  for (let t = 0; t < tris.length; t += 4) {
+    const a = 3 * tris[t], b = 3 * tris[t + 1], c = 3 * tris[t + 2];
+    const lo = [0, 1, 2].map(k => Math.floor((Math.min(PX[a + k], PX[b + k], PX[c + k]) - reach) / cell));
+    const hi = [0, 1, 2].map(k => Math.floor((Math.max(PX[a + k], PX[b + k], PX[c + k]) + reach) / cell));
+    for (let x = lo[0]; x <= hi[0]; x++) for (let y = lo[1]; y <= hi[1]; y++) for (let z = lo[2]; z <= hi[2]; z++) {
+      const k = key(x, y, z); let l = grid.get(k); if (!l) grid.set(k, (l = [])); l.push(t);
+    }
+  }
+  // is cloth particle q inside the layers? (nearest drawn layer vertex within 5 cm, behind its tangent plane)
+  const lg = new Map(), lc = 0.05;
+  layers.forEach((L, li) => { for (let i = 0; i < L.count; i++) { if (!L.ok[i]) continue; const k = key(Math.floor(L.pos[3 * i] / lc), Math.floor(L.pos[3 * i + 1] / lc), Math.floor(L.pos[3 * i + 2] / lc)); let l = lg.get(k); if (!l) lg.set(k, (l = [])); l.push(li, i); } });
+  const inside = q => {
+    const px = PX[3 * q], py = PX[3 * q + 1], pz = PX[3 * q + 2], cx = Math.floor(px / lc), cy = Math.floor(py / lc), cz = Math.floor(pz / lc);
+    let bd = lc * lc, sd = 1;
+    for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (let c = -1; c <= 1; c++) {
+      const l = lg.get(key(cx + a, cy + b, cz + c)); if (!l) continue;
+      for (let j = 0; j < l.length; j += 2) {
+        const L = layers[l[j]], i = l[j + 1], dx = px - L.pos[3 * i], dy = py - L.pos[3 * i + 1], dz = pz - L.pos[3 * i + 2], d2 = dx * dx + dy * dy + dz * dz;
+        if (d2 < bd) { bd = d2; sd = dx * L.nrm[3 * i] + dy * L.nrm[3 * i + 1] + dz * L.nrm[3 * i + 2]; }
+      }
+    }
+    return sd < -tol;
+  };
+  const out = {};
+  for (const L of layers) {
+    let n = 0, worst = 0, through = 0, throughMm = 0;
+    const P = L.pos;
+    if (cover) L.covered = new Uint8Array(L.count);
+    for (let i = 0; i < L.count; i++) {
+      if (!L.ok[i] || (!cover && L.covered && !L.covered[i])) continue;
+      const px = P[3 * i], py = P[3 * i + 1], pz = P[3 * i + 2];
+      const l = grid.get(key(Math.floor(px / cell), Math.floor(py / cell), Math.floor(pz / cell)));
+      if (!l) continue;
+      let best = Infinity, sd = 0, bt_ = -1;
+      for (const t of l) {
+        const a = 3 * tris[t], b = 3 * tris[t + 1], c = 3 * tris[t + 2];
+        const ux = PX[b] - PX[a], uy = PX[b + 1] - PX[a + 1], uz = PX[b + 2] - PX[a + 2];
+        const vx = PX[c] - PX[a], vy = PX[c + 1] - PX[a + 1], vz = PX[c + 2] - PX[a + 2];
+        const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx, nl = Math.hypot(nx, ny, nz);
+        if (nl < 1e-12) continue;
+        const wx = px - PX[a], wy = py - PX[a + 1], wz = pz - PX[a + 2];
+        const s = (wx * nx + wy * ny + wz * nz) / nl;
+        if (Math.abs(s) > reach || Math.abs(s) >= best) continue;
+        // barycentric of the projection
+        const uu = ux * ux + uy * uy + uz * uz, uv = ux * vx + uy * vy + uz * vz, vv = vx * vx + vy * vy + vz * vz;
+        const wu = wx * ux + wy * uy + wz * uz, wv = wx * vx + wy * vy + wz * vz, den = uv * uv - uu * vv;
+        const bs = (uv * wv - vv * wu) / den, bt = (uv * wu - uu * wv) / den;
+        if (bs < 0 || bt < 0 || bs + bt > 1) continue;
+        best = Math.abs(s); sd = s * tris[t + 3]; bt_ = t;
+      }
+      if (cover) { if (best < Infinity) L.covered[i] = 1; continue; }
+      if (best < Infinity && sd > tol) {
+        n++; worst = Math.max(worst, sd);
+        // "through": a particle of the covering triangle is itself inside the layers (the layer really pokes
+        // through the fabric). Otherwise the panel lies behind the limb (it left through the front opening).
+        const thr = inside(tris[bt_]) || inside(tris[bt_ + 1]) || inside(tris[bt_ + 2]);
+        if (thr) { through++; throughMm = Math.max(throughMm, sd); }
+        where?.push([L.id, +px.toFixed(3), +py.toFixed(3), +pz.toFixed(3), +(sd * 1000).toFixed(0), thr ? 'T' : 'b']);
+      }
+    }
+    out[L.id] = { n, mm: +(worst * 1000).toFixed(1), through, throughMm: +(throughMm * 1000).toFixed(1) };
+  }
+  return out;
+}
+export const TOL_LAYER = 0.002;
+
 const pct = (a, q) => { if (!a.length) return 0; const s = [...a].sort((x, y) => x - y); return s[Math.min(s.length - 1, Math.floor(q * s.length))]; };
 
 /**
@@ -249,8 +416,17 @@ export function runTimeline(D, garmentIds, values = {}, opt = {}) {
   const ch = createCharacter(D, values);
   const defs = clothColliderDefs(D.colliders);
   const caps = new Float32Array(defs.length * 7);
-  const sims = garmentIds.map(id => createGarmentSim(D, id, ch, over[id] || over));
+  // collide with the lower layers that are worn (opt.under), unless opt.layerCollide === false (metric only)
+  // (an array: collide only with those of them); footwear is not collided with, as in the runtime (collidesAsLayer)
+  const collideUnder = opt.under && opt.layerCollide !== false ? opt.under.filter(u => (Array.isArray(opt.layerCollide)
+    ? opt.layerCollide.includes(u) : collidesAsLayer(D.catalog.items.find(i => i.id === u)))) : [];
+  const sims = garmentIds.map(id => createGarmentSim(D, id, ch, over[id] || over, collideUnder));
   const bs = bodySkin(D, ch);
+  // opt.under: lower layers worn under the (single) cloth garment -> visible-layer penetration metric
+  const layerSets = opt.under ? (() => {
+    const L = layerSurfaces(D, ch, garmentIds[0], opt.under);
+    return { update: () => L.map(l => l.update()) };
+  })() : null;
   const dt = 1 / hz;
   const n0 = Math.round(preroll * hz), n1 = Math.round(duration * hz);
   const M = Object.fromEntries(garmentIds.map(id => [id, { stretch: [], bodyPen: 0, bodyPenMm: 0, skinPen: 0, skinPenMm: 0, skinStretch: [], floorBelow: 0, crossed: 0,
@@ -265,14 +441,22 @@ export function runTimeline(D, garmentIds, values = {}, opt = {}) {
     ch.update();
     const f = frameInputs(D, ch, defs, caps, { wind, t });
     const measured = t >= 0;
-    let bodyFn = null;
+    if (layerSets && i === -n0) {
+      // which layer vertices the (skinned) garment covers in the first idle frame: only these can "poke through"
+      const s = sims[0];
+      s.tris = clothTris(D, s.id, s.model);
+      pokeThrough(layerSets.update(), drawnParticles(D, s.id, s, ch, null), s.tris, { cover: true, reach: 0.06 });
+    }
+    let bodyFn = null, layers = null;
     if (measured && i % measureEvery === 0) {
       skinPositions(bs.pos, bs.base, D.body.skinIndex, D.body.skinWeight, ch.skinMats);
       skinNormals(bs.nrm, D.body.normals, D.body.skinIndex, D.body.skinWeight, ch.skinMats);
       bodyFn = bodyGrid(bs.pos);
+      if (layerSets) layers = layerSets.update();
     }
     for (const s of sims) {
       f.anchors = s.anchorsNow(); f.limit = s.limit;
+      f.layer = s.layerNow();
       const t0 = performance.now();
       s.solver.step(f);
       const m = M[s.id];
@@ -334,6 +518,22 @@ export function runTimeline(D, garmentIds, values = {}, opt = {}) {
           }
           m.skinPen = Math.max(m.skinPen, spen); m.skinPenMm = Math.max(m.skinPenMm, sworst * 1000);
         }
+        if (layers) {
+          s.tris ??= clothTris(D, s.id, s.model);
+          const add = (key, r) => {
+            for (const [lid, v] of Object.entries(r)) {
+              const o = (m[key] ??= {})[lid] ??= { n: 0, mm: 0, through: 0, throughMm: 0, byClip: {}, throughByClip: {} };
+              o.n = Math.max(o.n, v.n); o.mm = Math.max(o.mm, v.mm);
+              o.through = Math.max(o.through, v.through); o.throughMm = Math.max(o.throughMm, v.throughMm);
+              o.byClip[cur] = Math.max(o.byClip[cur] || 0, v.n);
+              o.throughByClip[cur] = Math.max(o.throughByClip[cur] || 0, v.through);
+            }
+          };
+          const where = opt.pokeWhere ? [] : null;
+          add('layer', pokeThrough(layers, drawnParticles(D, s.id, s, ch, x), s.tris, { where }));
+          if (where?.length) (m.pokeWhere ??= []).push(...where.map(w => [+t.toFixed(2), cur, ...w]));
+          add('layerSkin', pokeThrough(layers, drawnParticles(D, s.id, s, ch, null), s.tris));
+        }
       }
     }
     if (onFrame) onFrame({ i, t, clip: cur, ch, sims, f });
@@ -350,6 +550,7 @@ export function runTimeline(D, garmentIds, values = {}, opt = {}) {
       hemRise: +m.hemRise.toFixed(3), hemTrail: +m.hemTrail.toFixed(3), hemMinY: +m.hemMinY.toFixed(3),
       msPerStep: +(m.ms / m.steps).toFixed(3), steps: s.solver.steps, resets: s.solver.resets,
       hash: hashFloats(s.solver.positions()), ...(m.penWhere ? { penWhere: m.penWhere } : {}),
+      ...(m.layer ? { layer: m.layer, layerSkin: m.layerSkin } : {}), ...(m.pokeWhere ? { pokeWhere: m.pokeWhere } : {}),
     };
   }
   return out;
@@ -361,12 +562,13 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const bodies = (opt('--bodies') || Object.keys(BODIES).join(',')).split(',');
   const seconds = +(opt('--seconds') || DURATION);
   const wind = +(opt('--wind') || 0);
+  const under = opt('--under');
   const D = loadData();
   const ids = args.length ? args : D.catalog.items.filter(i => i.cloth).map(i => i.id);
   for (const b of bodies) {
     for (const id of ids) {
       const t0 = performance.now();
-      const r = runTimeline(D, [id], BODIES[b], { duration: seconds, wind })[id];
+      const r = runTimeline(D, [id], BODIES[b], { duration: seconds, wind, under: under ? under.split(',').filter(u => u !== id) : undefined })[id];
       console.log(`CLOTH ${id.padEnd(10)} ${b.padEnd(8)} ${JSON.stringify(r)} (${((performance.now() - t0) / 1000).toFixed(1)} s)`);
     }
   }

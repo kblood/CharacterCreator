@@ -9,7 +9,7 @@
 import * as THREE from 'three';
 import { characterMeshes, bindToSkeleton } from './character.js';
 
-import { wearRules, resolveOutfit, hiddenZoneMask, coveringZoneMask, filterIndex } from './clothing_rules.js';
+import { wearRules, resolveOutfit, hiddenZoneMask, coveringZoneMask, filterIndex, collidesAsLayer } from './clothing_rules.js';
 
 export { wearRules, resolveOutfit, hiddenZoneMask, coveringZoneMask, filterIndex };
 
@@ -76,6 +76,8 @@ export function createClothing(opts) {
       if (r.missing.length) throw new Error(`${it.file}: bones missing in the body skeleton`);
       m.frustumCulled = false; m.castShadow = true; m.receiveShadow = true; m.visible = false;
       m.userData.ccClothing = id;
+      m.userData.ccLayer = it.layer ?? 0;             // cloth runtime: garments with a lower layer are collided with
+      m.userData.ccLayerCollide = collidesAsLayer(it);  // ... unless footwear (clothing_rules.js)
       for (const mat of [].concat(m.material)) {
         const mi = mat.userData?.ccMask?.index;
         const tex = mi !== undefined ? await g.parser.getDependency('texture', mi).catch(() => null) : null;

@@ -7,6 +7,7 @@ import { loadData, runTimeline, BODIES, createCharacter, createGarmentSim, frame
 import { createSolver, clothParams, advance, hashFloats } from '../web/cloth/solver.js';
 import { buildClothModel } from '../web/cloth/model.js';
 import { clothColliderDefs } from '../web/cloth/colliders.js';
+import { collidesAsLayer } from '../web/clothing_rules.js';
 
 const D = loadData();
 const report = (name, v, tol) => console.log(`# ${name}: ${JSON.stringify(v)}  (tolerance ${tol})`);
@@ -108,6 +109,29 @@ for (const b of COAT_BODIES) {
   });
 }
 
+// Visible-layer penetration (tools/cloth_sim.mjs pokeThrough): jeans / T-shirt / skin showing through the coat
+// fabric. "through" = a covered layer vertex lies > 2 mm outside a coat triangle that itself has a particle inside
+// the layers (the blue holes in the knee / hem during walk and run). Cloth off (skinned coat) is the reference.
+for (const b of COAT_BODIES) {
+  test(`long coat over T-shirt + jeans, ${b}: no layer pokes through the coat in walk / run`, () => {
+    const r = runTimeline(D, ['trenchcoat'], BODIES[b], { measureEvery: 6, under: ['tshirt', 'jeans'] }).trenchcoat;
+    const v = {}, sum = o => Object.values(o).reduce((a, x) => a + x.through, 0);
+    for (const [id, x] of Object.entries(r.layer)) v[id] = { walk: x.throughByClip.walk ?? 0, run: x.throughByClip.run ?? 0, mm: x.throughMm };
+    report(`coat layers ${b}`, { ...v, clothOff: sum(r.layerSkin), stretchP99: r.stretchP99, bodyPen: r.bodyPen },
+      'per layer walk/run through <= 1 and <= 15 mm, total < cloth off, p99 <= 1.65, pen <= 6');
+    for (const x of Object.values(v)) assert.ok(x.walk <= 1 && x.run <= 1 && x.mm <= 15);
+    assert.ok(sum(r.layer) < sum(r.layerSkin));
+    assert.ok(r.stretchP99 <= 1.65 && r.bodyPen <= 6);
+    assert.equal(r.crossed, 0);
+  });
+}
+
+test('footwear is not a collision layer, trousers / shirts / skirts are', () => {
+  const byId = id => D.catalog.items.find(i => i.id === id);
+  assert.equal(collidesAsLayer(byId('shoes')), false);
+  for (const id of ['tshirt', 'jeans', 'skirt']) assert.equal(collidesAsLayer(byId(id)), true, id);
+});
+
 for (const b of ['neutral', 'short', 'child', 'female']) {
   test(`skirt, ${b}: same system, less stretch than the skinned skirt`, () => {
     const r = runTimeline(D, ['skirt'], BODIES[b], { measureEvery: 6 }).skirt;
@@ -119,9 +143,9 @@ for (const b of ['neutral', 'short', 'child', 'female']) {
   });
 }
 
-test('worker (worker_threads) and main thread give bit-identical results', async () => {
+for (const under of [[], ['tshirt', 'jeans']]) test(`worker (worker_threads) and main thread give bit-identical results${under.length ? ', with lower layers' : ''}`, async () => {
   const ch = createCharacter(D, { height: 0.5 });
-  const s = createGarmentSim(D, 'trenchcoat', ch);
+  const s = createGarmentSim(D, 'trenchcoat', ch, {}, under);
   const defs = clothColliderDefs(D.colliders), caps = new Float32Array(defs.length * 7);
   const restX = new Float32Array(s.model.sim.count * 3);
   s.reps.forEach((v, k) => restX.set(s.base.subarray(3 * v, 3 * v + 3), 3 * k));
@@ -132,20 +156,21 @@ test('worker (worker_threads) and main thread give bit-identical results', async
   w.on('message', m => { if (m.type === 'done') { replies.push(m); wake?.(); } });
   w.postMessage({ type: 'init', key: 'c', sim: s.model.sim, restX, params: s.params });
   ch.animator.play('run', { fade: 0 });
-  let lastA = null, lastC = null, localHash = '';
+  let lastA = null, lastC = null, lastL = null, localHash = '';
   for (let i = 0; i < 40; i++) {
     ch.animator.update(1 / 60); ch.update();
     const f = frameInputs(D, ch, defs, caps, { wind: 0.5, t: i / 60 });
-    const A1 = Float32Array.from(s.anchorsNow());
-    const job = { n: 1 + (i % 3), A0: lastA, A1, C0: lastC, C1: Float32Array.from(caps), floorY: 0, lateral: f.lateral, air: f.air,
-      limit: s.limit, reset: i === 0, settle: i === 0 ? 5 : 0 };
+    const A1 = Float32Array.from(s.anchorsNow()), L = s.layerNow(), L1 = L ? Float32Array.from(L) : undefined;
+    const job = { n: 1 + (i % 3), A0: lastA, A1, C0: lastC, C1: Float32Array.from(caps), L0: lastL ?? undefined, L1, floorY: 0, lateral: f.lateral,
+      air: f.air, limit: s.limit, reset: i === 0, settle: i === 0 ? 5 : 0 };
     localHash = hashFloats(advance(local, job));
     w.postMessage({ type: 'job', key: 'c', seq: i, job });
-    lastA = A1; lastC = job.C1;
+    lastA = A1; lastC = job.C1; lastL = L1;
   }
   while (replies.length < 40) await new Promise(r => { wake = r; });
   await w.terminate();
   const remoteHash = hashFloats(replies[39].x);
-  report('worker vs sync hash', [remoteHash, localHash], 'equal');
+  if (under.length) assert.ok(lastL.length > 0);   // the layers really took part
+  report(`worker vs sync hash${under.length ? ' (layers)' : ''}`, [remoteHash, localHash], 'equal');
   assert.equal(remoteHash, localHash);
 });

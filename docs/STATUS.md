@@ -201,8 +201,19 @@
   2.0 ms/frame. Re-measured with the standing collar + lapels (all pinned, same 860 particles): worker 0.54
   ms/frame main thread + 1.44 ms/step, sync 1.98 ms/frame (before: 0.55 / 1.46, 1.98); node 1.42–1.56 ms/step;
   stretch p99 1.22–1.61, 0–3 particles inside a capsule (unchanged).
-- Not verified: mobile, browsers other than headless Chrome, hour-long runs, coat vs T-shirt/jeans layer
-  collision (the cloth collides with body capsules only).
+- Lower layers (2026-09-30): the cloth also collides with the worn garments under it (`web/cloth/layers.js`,
+  footwear excluded). This fixes the blue jeans / T-shirt holes through the coat's knee and back hem in walk and
+  run. The cause: the jeans lie up to 37–49 mm outside the skin-fitted capsules, beyond the coat's 20 mm
+  thickness.
+  - Jeans / T-shirt / skin through the coat (tee + jeans, 8 bodies): 134 → 0.
+  - Stretch p99 1.26–1.65; heavy is +0.05, the other changes are within the chaotic noise band.
+  - 1–6 particles inside a capsule.
+  - Cost: worker 0.76 ms/frame main thread + 1.73 ms/step, sync 2.34 ms/frame.
+  - Details: [CLOTH_RUNTIME.md](CLOTH_RUNTIME.md#lower-layers-cloth-vs-the-garments-underneath).
+- Not verified:
+  - mobile, browsers other than headless Chrome, hour-long runs;
+  - a simulated skirt under the coat is a layer in its skinned pose only;
+  - bare skin and feet are not a layer.
 
 ## Open issues
 - Macro morphs outside the 16 corrective pairs (and 3-way combinations) are still linear.
@@ -210,7 +221,7 @@
 
 ## TODO (scope v1)
 - Jaw bone / mouth expressions (teeth/tongue are rigid on the head).
-- Clothing: cloth vs lower garment layers; a dress (occupies top+bottom, rules exist); more garments.
+- Clothing: cloth vs a simulated (not skinned) lower cloth layer; a dress (occupies top+bottom, rules exist); more garments.
 - More clips (jump, wave, crouch, ...) as new `CLIPS` entries; retarget test of the baked GLB in other engines.
 - Hair: second alpha-blended card layer for a soft hairline; hair physics; CC0 beard if one turns up.
 - Engine ports of `character.js` (Unity/Godot/Unreal) reading the same GLB + joints sidecar.

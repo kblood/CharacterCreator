@@ -15,6 +15,7 @@ import { createSolver, clothParams, advance } from './solver.js';
 import { morphBase, skinPositions, skinNormals, triNormals } from './skin.js';
 import { clothColliderDefs, evalColliders, limitFlags } from './colliders.js';
 import { windVelocity } from './wind.js';
+import { createLayerSet, selectLayerVertices } from './layers.js';
 
 const HZ = 60, MAX_STEPS = 4, SETTLE = 20, STATS_EVERY = 30;
 
@@ -166,13 +167,42 @@ export function createClothRuntime(opts) {
     return [e[12], e[13], e[14]];
   }
 
-  function skinMats(g) {
-    const m = g.mesh, sk = m.skeleton;
+  function skinMats(g) { skinMatsOf(g.mesh, g.mats); }
+  function skinMatsOf(m, out) {
+    const sk = m.skeleton;
     _pre.copy(m.matrixWorld).multiply(m.bindMatrixInverse);
     for (let i = 0; i < sk.bones.length; i++) {
       _m.multiplyMatrices(sk.bones[i].matrixWorld, sk.boneInverses[i]).premultiply(_pre).multiply(m.bindMatrix);
-      g.mats.set(_m.elements, 16 * i);
+      out.set(_m.elements, 16 * i);
     }
+    return out;
+  }
+
+  // Lower layers (web/cloth/layers.js): the worn garments with a lower catalog layer (userData.ccLayer) than g,
+  // except footwear (userData.ccLayerCollide false, clothing_rules.js collidesAsLayer). Their vertices near g's
+  // free particles (bind space) become collision points, rebuilt when that set changes. At most LAYER_PARTS
+  // garments are collided with (solver.js); more are not worn at once in the catalog.
+  function syncLayers(g, meshes) {
+    const my = g.mesh.userData.ccLayer ?? 0;
+    const lower = meshes.filter(m => m !== g.mesh && m.isSkinnedMesh && m.visible && m.userData.ccClothing != null
+      && (m.userData.ccLayer ?? 0) < my && m.userData.ccLayerCollide !== false && m.geometry.getAttribute('normal'));
+    const key = lower.map(m => m.uuid).join(',');
+    if (g.layers && g.layers.key === key) return g.layers;
+    if (!g.freeBind) {
+      const fb = [];
+      for (let p = 0; p < g.model.particleCount; p++) if (g.model.pin[p] < PIN_FIXED) { const v = g.model.rep[p]; fb.push(g.positions[3 * v], g.positions[3 * v + 1], g.positions[3 * v + 2]); }
+      g.freeBind = Float32Array.from(fb);
+    }
+    const parts = lower.map(m => {
+      const geo = m.geometry, positions = readAttr(geo.getAttribute('position'));
+      return { positions, normals: readAttr(geo.getAttribute('normal')), skinIndex: readAttr(geo.getAttribute('skinIndex'), Uint16Array),
+        skinWeight: readAttr(geo.getAttribute('skinWeight')), targets: (geo.morphAttributes.position || []).map(a => readAttr(a)),
+        list: selectLayerVertices(positions, g.freeBind) };
+    });
+    const set = lower.length ? createLayerSet(parts) : null;
+    g.layers = { key, meshes: lower, set, mats: lower.map(m => new Float32Array(16 * m.skeleton.bones.length)) };
+    g.lastL = null; g.needReset = true;
+    return g.layers;
   }
 
   function writeProxy(g) {
@@ -253,9 +283,11 @@ export function createClothRuntime(opts) {
       g.reps.forEach((v, s) => { g.A[3 * s] = g.skin[3 * v]; g.A[3 * s + 1] = g.skin[3 * v + 1]; g.A[3 * s + 2] = g.skin[3 * v + 2]; });
       const wv = windVelocity(st.wind * g.params.wind, st.time);
       const air = [wv[0] - speed * fwd[0], wv[1] - speed * fwd[1], wv[2] - speed * fwd[2]];
+      const lay = syncLayers(g, meshes);
+      const L = lay.set ? lay.set.update(k => skinMatsOf(lay.meshes[k], lay.mats[k]), k => lay.meshes[k].morphTargetInfluences) : null;
       const reset = g.needReset;
       const job = { n: reset ? Math.max(n, 0) : n, A0: reset ? null : g.lastA, A1: g.A, C0: reset ? null : g.lastC, C1: caps,
-        floorY: 0, lateral: lat, air, limit: g.limit, reset, settle: reset ? SETTLE : 0 };
+        L0: reset ? null : g.lastL, L1: L, floorY: 0, lateral: lat, air, limit: g.limit, reset, settle: reset ? SETTLE : 0 };
       if (!ready) { g.X = null; }
       else if (!g.remote) {
         if (n > 0 || reset) {
@@ -263,7 +295,7 @@ export function createClothRuntime(opts) {
           g.X = advance(g.solver, job);
           if (n) { solveMs += performance.now() - s0; perf.solve.push((performance.now() - s0) / Math.max(1, n + job.settle)); }
           g.Aref = Float32Array.from(g.A);
-          g.lastA = Float32Array.from(g.A); g.lastC = Float32Array.from(caps);
+          g.lastA = Float32Array.from(g.A); g.lastC = Float32Array.from(caps); g.lastL = L ? Float32Array.from(L) : null;
           g.steps = g.solver.steps; g.resets = g.solver.resets;
           if (statsNow) g.stats = { stretch: g.solver.stretch(), pen: g.solver.penetrations(caps, 0, 0.002, g.limit) };
         }
@@ -274,11 +306,11 @@ export function createClothRuntime(opts) {
         else if (!g.inFlight && (g.owed > 0 || reset)) {
           job.n = g.owed;
           g.seq++;
-          worker.postMessage({ type: 'job', key: g.key, seq: g.seq, job: { ...job, A1: Float32Array.from(g.A), C1: Float32Array.from(caps) },
+          worker.postMessage({ type: 'job', key: g.key, seq: g.seq, job: { ...job, A1: Float32Array.from(g.A), C1: Float32Array.from(caps), L1: L ? Float32Array.from(L) : null },
             stats: statsNow || g.statsDue > 0 });
           g.statsDue = statsNow ? 0 : g.statsDue;
           g.inFlight = true; g.sentAt = performance.now(); g.owed = 0; g.needReset = false;
-          g.lastA = Float32Array.from(g.A); g.lastC = Float32Array.from(caps);
+          g.lastA = Float32Array.from(g.A); g.lastC = Float32Array.from(caps); g.lastL = L ? Float32Array.from(L) : null;
           if (reset) { g.X = null; g.Aref = null; }
         } else if (statsNow) g.statsDue = 1;
       }
@@ -317,6 +349,7 @@ export function createClothRuntime(opts) {
           stretchMax: g.stats ? +g.stats.stretch.max.toFixed(3) : null,
           penetrations: g.stats ? g.stats.pen.count : null, penetrationMm: g.stats ? g.stats.pen.worstMm : null,
           belowFloor: g.stats ? g.stats.pen.belowFloor : null,
+          layers: g.layers ? g.layers.meshes.map(m => m.userData.ccClothing) : [], layerPoints: g.layers?.set?.count ?? 0,
         })),
       };
     },

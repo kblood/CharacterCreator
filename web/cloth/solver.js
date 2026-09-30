@@ -14,12 +14,14 @@
 // Deterministic: fixed iteration order, float64 JS math on Float32Array storage.
 import { restLengths, mirrorRest } from './model.js';
 import { triNormals } from './skin.js';
+import { LAYER_STRIDE, LAYER_PARTS } from './layers.js';
 
 export const DEFAULTS = {
   hz: 60, substeps: 8, maxSteps: 4,
   stretch: 0.95, compress: 0.55, bend: 0.35, bendVertical: 0.6,
   damping: 0.12, gravityScale: 1, wind: 0.3, friction: 0.3, thickness: 0.01, maxDistance: 0.3,
   drag: 0.6, dragNormal: 3.0, floorFriction: 0.6, mirrorGap: 0.003, teleport: 0.3, tetherSlack: 0.04, bendFloor: 3, limitSlack: 0.02, limit: 'arms,hips',
+  layerThickness: 0.012, layerDepth: 0.04, layerReach: 0.05, layerSided: true,
 };
 
 /** stiffness 0..1 -> XPBD compliance (m/N at unit mass): 1e-3 (limp) .. 1e-9 (rigid), log-linear. */
@@ -34,7 +36,7 @@ export function clothParams(extras = {}, over = {}) {
   p.stretch = pick('stretch', st.stretch);
   p.bend = pick('bend', st.bend);
   p.bendVertical = pick('bendVertical', e.bendVertical ?? st.bend);
-  for (const k of ['maxDistance', 'damping', 'gravityScale', 'wind', 'friction', 'thickness']) p[k] = pick(k, e[k]);
+  for (const k of ['maxDistance', 'damping', 'gravityScale', 'wind', 'friction', 'thickness', 'layerThickness']) p[k] = pick(k, e[k]);
   p.limit = typeof e.limit === 'string' ? e.limit : DEFAULTS.limit;
   return { ...p, ...over };
 }
@@ -54,6 +56,10 @@ export function createSolver(sim, restX, params) {
   const cand = new Int16Array(N * MAXC), ncand = new Uint8Array(N);
   const hit = new Uint8Array(N), cn = new Float32Array(N * 3), cv = new Float32Array(N * 3);
   const tSrc = new Int32Array(N).fill(-1), tLen = new Float32Array(N);
+  // lower-layer collision (web/cloth/layers.js): nearest layer point per free particle, found once per step
+  const lc = new Int32Array(N * LAYER_PARTS).fill(-1);
+  const HB = 4096, lHead = new Int32Array(HB);
+  let lNext = new Int32Array(0), L0 = null;
   let edgeRest, bendRest, mirRest, C0 = null, capsNow = new Float32Array(0), capVel = new Float32Array(0);
   let started = false, steps = 0, resets = 0;
   const E = sim.edges, B = sim.bends, BV = sim.bendVertical, M = sim.mirrors;
@@ -94,7 +100,41 @@ export function createSolver(sim, restX, params) {
 
   function reset(anchors) {
     x.set(anchors); A0.set(anchors); A1.set(anchors); v.fill(0);
-    started = true; C0 = null; resets++;
+    started = true; C0 = null; L0 = null; resets++;
+  }
+
+  // nearest layer point of every free particle, one per layer part (garment), within layerReach (grid of
+  // layerReach cells). L = [x, y, z, nx, ny, nz, part]* (LAYER_STRIDE floats, layers.js).
+  const lKey = (x, y, z) => ((Math.imul(x, 73856093) ^ Math.imul(y, 19349663) ^ Math.imul(z, 83492791)) >>> 0) & (HB - 1);
+  const lBest = new Float64Array(LAYER_PARTS);
+  let nParts = 0;   // parts present in this step's layer points (<= LAYER_PARTS)
+  function layerCandidates(L) {
+    const S = LAYER_STRIDE, M = L.length / S, cell = prm.layerReach, R2 = cell * cell;
+    if (lNext.length < M) lNext = new Int32Array(M);
+    lHead.fill(-1);
+    nParts = 0;
+    for (let j = 0; j < M; j++) nParts = Math.max(nParts, Math.min(LAYER_PARTS, L[S * j + 6] + 1));
+    for (let j = 0; j < M; j++) {
+      const k = lKey(Math.floor(L[S * j] / cell), Math.floor(L[S * j + 1] / cell), Math.floor(L[S * j + 2] / cell));
+      lNext[j] = lHead[k]; lHead[k] = j;
+    }
+    for (let i = 0; i < N; i++) {
+      const lo = LAYER_PARTS * i;
+      for (let p = 0; p < LAYER_PARTS; p++) { lc[lo + p] = -1; lBest[p] = R2; }
+      if (!w[i]) continue;
+      const o = 3 * i, px = x[o], py = x[o + 1], pz = x[o + 2];
+      // cell = reach: the reach sphere overlaps at most 2 cells per axis (the own one + the nearer neighbour)
+      const fx = px / cell, fy = py / cell, fz = pz / cell, cx = Math.floor(fx), cy = Math.floor(fy), cz = Math.floor(fz);
+      const sx = fx - cx < 0.5 ? -1 : 1, sy = fy - cy < 0.5 ? -1 : 1, sz = fz - cz < 0.5 ? -1 : 1;
+      for (let a = 0; a < 2; a++) for (let b = 0; b < 2; b++) for (let c = 0; c < 2; c++) {
+        for (let j = lHead[lKey(cx + a * sx, cy + b * sy, cz + c * sz)]; j >= 0; j = lNext[j]) {
+          const q = S * j, p = L[q + 6];
+          if (p >= LAYER_PARTS) continue;
+          const d2 = (L[q] - px) ** 2 + (L[q + 1] - py) ** 2 + (L[q + 2] - pz) ** 2;
+          if (d2 < lBest[p]) { lBest[p] = d2; lc[lo + p] = j; }
+        }
+      }
+    }
   }
 
   function candidates(caps, dt) {
@@ -172,6 +212,12 @@ export function createSolver(sim, restX, params) {
     if (capsNow.length !== f.caps.length) { capsNow = new Float32Array(f.caps.length); capVel = new Float32Array(f.caps.length); }
     for (let j = 0; j < f.caps.length; j++) capVel[j] = (f.caps[j] - C0[j]) / dt;
     candidates(prm.collide === false ? new Float32Array(0) : f.caps, dt);
+    const LY = f.layer && f.layer.length && prm.collide !== false ? f.layer : null;
+    if (LY) {
+      if (!L0 || L0.length !== LY.length) L0 = Float32Array.from(LY);
+      layerCandidates(LY);
+    }
+    const thL = prm.layerThickness, depthL = prm.layerDepth, sided = prm.layerSided;
     triNormals(nrm, x, sim.tris);
     const g = -9.81 * prm.gravityScale;
     const [airx, airy, airz] = f.air || [0, 0, 0];
@@ -261,6 +307,30 @@ export function createSolver(sim, restX, params) {
           cv[o + 1] = capVel[c + 1] + t * (capVel[c + 4] - capVel[c + 1]);
           cv[o + 2] = capVel[c + 2] + t * (capVel[c + 5] - capVel[c + 2]);
         }
+        // lower layers: stay on the outer side of the nearest point's tangent plane (+ layerThickness), for the
+        // nearest point of every layer part (garment) separately, so one garment (shoes) can't hide another (jeans).
+        // Points deeper than layerDepth behind the plane are ignored (the particle is past a thin edge, not inside).
+        if (LY) for (let p = 0; p < nParts; p++) {
+          const j = lc[LAYER_PARTS * i + p];
+          if (j < 0) continue;
+          const b = LAYER_STRIDE * j;
+          const qx = L0[b] + (LY[b] - L0[b]) * u, qy = L0[b + 1] + (LY[b + 1] - L0[b + 1]) * u, qz = L0[b + 2] + (LY[b + 2] - L0[b + 2]) * u;
+          const nx = LY[b + 3], ny = LY[b + 4], nz = LY[b + 5];
+          const d = (x[o] - qx) * nx + (x[o + 1] - qy) * ny + (x[o + 2] - qz) * nz;
+          if (d < thL && d > -depthL) {
+            if (sided) {
+              // only particles that were in front of the layer at the substep start: one already behind it (past
+              // a thin edge, around the back of a kicking calf) is not yanked through to the front
+              const u0 = (s - 1) / S, pd = (prev[o] - L0[b] - (LY[b] - L0[b]) * u0) * nx + (prev[o + 1] - L0[b + 1] - (LY[b + 1] - L0[b + 1]) * u0) * ny + (prev[o + 2] - L0[b + 2] - (LY[b + 2] - L0[b + 2]) * u0) * nz;
+              if (pd < -thL) continue;
+            }
+            const k = thL - d;
+            x[o] += k * nx; x[o + 1] += k * ny; x[o + 2] += k * nz;
+            cn[o] = nx; cn[o + 1] = ny; cn[o + 2] = nz;
+            cv[o] = (LY[b] - L0[b]) / dt; cv[o + 1] = (LY[b + 1] - L0[b + 1]) / dt; cv[o + 2] = (LY[b + 2] - L0[b + 2]) / dt;
+            hit[i] = 1;
+          }
+        }
         if (x[o + 1] < floor) { x[o + 1] = floor; hit[i] |= 2; }
       }
       separate();   // again after the collisions (a leg capsule may have pushed one panel across the other)
@@ -283,6 +353,7 @@ export function createSolver(sim, restX, params) {
       }
     }
     C0.set(f.caps);
+    if (LY) L0.set(LY);
     steps++;
     // NaN guard
     for (let i = 0; i < 3 * N; i += 97) if (!Number.isFinite(x[i])) { reset(f.anchors); break; }
@@ -353,29 +424,33 @@ export function hashFloats(a) {
 /**
  * Runs job.n fixed steps (the same code path on the main thread and in web/cloth/worker.js). The skinned targets
  * and capsules move linearly from where the previous job ended (A0, C0) to this job's frame (A1, C1):
- *   job = { n, A0, A1, C0, C1, floorY, lateral, air: [x,y,z], limit, reset?, settle? }
+ *   job = { n, A0, A1, C0, C1, L0?, L1?, floorY, lateral, air: [x,y,z], limit, reset?, settle? }
+ * L0/L1: lower-layer collision points [x,y,z,nx,ny,nz,part]* (web/cloth/layers.js) at the previous / this frame.
  * reset: restart from A1 (outfit change, Reset, seek), then `settle` steps with the pose held (the cloth drapes
  * before it is shown). Returns the solver positions (live array).
  */
-const scratch = new WeakMap();
+const scratch = new WeakMap(), EMPTY = new Float32Array(0);
 export function advance(solver, job) {
   let s = scratch.get(solver);
-  if (!s || s.A.length !== job.A1.length || s.C.length !== job.C1.length) {
-    s = { A: new Float32Array(job.A1.length), C: new Float32Array(job.C1.length) };
+  const L1 = job.L1 || EMPTY;
+  if (!s || s.A.length !== job.A1.length || s.C.length !== job.C1.length || s.L.length !== L1.length) {
+    s = { A: new Float32Array(job.A1.length), C: new Float32Array(job.C1.length), L: new Float32Array(L1.length) };
     scratch.set(solver, s);
   }
-  const f = { anchors: s.A, caps: s.C, floorY: job.floorY ?? 0, lateral: job.lateral, air: job.air, limit: job.limit };
+  const f = { anchors: s.A, caps: s.C, floorY: job.floorY ?? 0, lateral: job.lateral, air: job.air, limit: job.limit, layer: s.L };
   if (job.reset) {
     solver.reset(job.A1);
-    s.A.set(job.A1); s.C.set(job.C1);
+    s.A.set(job.A1); s.C.set(job.C1); s.L.set(L1);
     for (let k = 0; k < (job.settle | 0); k++) solver.step(f);
   }
   const n = job.n | 0;
   for (let k = 1; k <= n; k++) {
     const u = k / n;
     const A0 = job.A0 || job.A1, C0 = job.C0 && job.C0.length === job.C1.length ? job.C0 : job.C1;
+    const LA = job.L0 && job.L0.length === L1.length ? job.L0 : L1;
     for (let i = 0; i < s.A.length; i++) s.A[i] = A0[i] + (job.A1[i] - A0[i]) * u;
     for (let i = 0; i < s.C.length; i++) s.C[i] = C0[i] + (job.C1[i] - C0[i]) * u;
+    for (let i = 0; i < s.L.length; i++) s.L[i] = LA[i] + (L1[i] - LA[i]) * u;
     solver.step(f);
   }
   return solver.positions();
