@@ -1,12 +1,12 @@
-# Cloth-ready data (no solver)
+# Cloth data
 
 The garments are skinned meshes that already follow sliders and animation without simulation. For the loose
-parts (skirt, trench coat skirt) the build also writes the data a cloth solver needs. **This project ships no
-solver.** The data is engine-agnostic: plain glTF attributes and extras, plus one JSON sidecar. The choice of
-solver is covered in `docs/CLOTH_SOLVER_REPORT.md` and `experiments/cloth/`, which are separate work.
+parts (skirt, the long coat's skirt) the build also writes the data a cloth solver needs. The viewer's own
+solver (`web/cloth/`, [CLOTH_RUNTIME.md](CLOTH_RUNTIME.md)) reads exactly this data; other engines can use it
+the same way. It is engine-agnostic: plain glTF attributes and extras, plus one JSON sidecar.
 
 Producers: `blender/cc_clothing.py` (`cloth_weights_and_pin`, `cloth_extras`) and `tools/make_colliders.mjs`.
-Checks: `tests/clothing.test.mjs` (pin mask, extras, colliders).
+Checks: `tests/clothing.test.mjs` (pin mask, extras, colliders), `tests/cloth.test.mjs` (the simulation).
 
 Units are metres, in the glTF Y-up bind pose of `output/base_body.glb`. The garment GLBs use the same frame
 and the same 53 joints.
@@ -20,8 +20,8 @@ and the same 53 joints.
 
   | garment | pin = 1 above | pin = 0 below | free / pinned / total verts |
   |---|---|---|---|
-  | skirt | pelvis + 3 cm | mid thigh | 109 / 143 / 395 |
-  | trenchcoat | spine_01, the waist (shoulders, sleeves and collar are always 1) | hip joint − 14 cm (about the jacket hem) | 349 / 1690 / 2380 |
+  | skirt | pelvis + 3 cm | mid thigh | 108 / 145 / 408 |
+  | trenchcoat (long) | spine_02 − 2 cm, just under the belt (jacket, sleeves, collar and belt are always 1) | hip joint − 6 cm | 638 / 1904 / 2727 |
 
 - **Deviation from a COLOR_0 mask.** Many engines read pin masks from vertex colours. The mask is stored as a
   custom attribute instead, because three.js multiplies COLOR_0 into the base colour when vertex colours are
@@ -36,8 +36,12 @@ and the same 53 joints.
   w = pin * w_fitted + (1 - pin) * [ pelvis * (1 - legShare) + (thigh_l * s + thigh_r * (1 - s)) * legShare ]
   ```
 
-  Here `s` is a smoothstep across the centre line (±`shareWidth`). legShare is 0.8 for the skirt; for the coat it is 0.7 at the back and 1.0 on the front panels (`legShareFront`), blended over ±5 cm in depth, so a lifted knee does not pierce the front panels.
+  Here `s` is a smoothstep across the centre line (±`shareWidth`). legShare is 0.8 for the skirt; for the coat it
+  is 0.5 at the back and 0.8 on the front panels (`legShareFront`), blended over ±5 cm in depth.
   With a solver, the skinned position is the anchor that `maxDistance` refers to.
+- The coat's generated skirt has symmetric morph deltas: mirror pairs are averaged, and the x delta fades to 0
+  within 3 cm of the centre line. Without that, the fitted deltas crossed the two vent edges by up to 39 mm on
+  the child/female shapes.
 
 ## 2. Mesh extras `ccCloth` (also in `output/clothing.json` → `items[].cloth`)
 
@@ -49,15 +53,20 @@ and the same 53 joints.
 
 | field | meaning | skirt | coat |
 |---|---|---|---|
-| maxDistance | largest distance (m) a free vertex may move away from its skinned position. Scale it by (1 − pin) per vertex. | 0.04 | 0.25 |
-| stiffness.stretch | edge-length constraint stiffness, 0..1 | 0.95 | 0.9 |
-| stiffness.bend | bending (dihedral/skip-edge) stiffness, 0..1 | 0.3 | 0.15 |
-| damping | velocity damping per step, 0..1 | 0.12 | 0.08 |
+| maxDistance | largest distance (m) a free vertex may move away from its skinned position. Scale it by (1 − pin) per vertex. | 0.04 | 0.6 |
+| stiffness.stretch | edge-length constraint stiffness, 0..1 | 0.95 | 0.95 |
+| stiffness.bend | bending (skip-edge) stiffness, 0..1 | 0.3 | 0.35 |
+| bendVertical (optional) | bending stiffness along vertical chains (long panels) | – | 0.7 |
+| damping | velocity damping per step, 0..1 | 0.12 | 0.12 |
 | gravityScale | multiplier on the engine gravity | 1 | 1 |
 | wind | how much the garment reacts to global wind, 0..1 | 0.3 | 0.6 |
+| friction (optional) | collider friction, 0..1 | – | 0.3 |
+| thickness (optional) | collision margin (m) over capsules and floor | – | 0.02 |
+| limit (optional) | collider groups whose push-out is limited to the skinned target (section 3) | arms,hips,thighs | arms,hips |
 
-The values are starting points, not tuned against a solver. Rest lengths are the bind-pose edge lengths
-after morphs: rebuild them when sliders change.
+The values are tuned against the viewer's XPBD solver (60 Hz, 8 substeps; CLOTH_RUNTIME.md). Other solvers
+will need their own tuning. Rest lengths are the bind-pose edge lengths after morphs: rebuild them when sliders
+change.
 
 ## 3. Body colliders: `output/body_colliders.json`
 
@@ -88,6 +97,15 @@ Written by `node tools/make_colliders.mjs [output-dir]`. There are 16 shapes: 15
 Capsules are a coarse proxy (15 capsules + 1 sphere). The torso is three capsules, so breasts/belly at high
 weight are underestimated. Use the skinned body mesh (SDF or triangle collision) for tight garments.
 
+**Cloth set (`cloth.capsules`, 20 capsules).** This is the set the viewer's solver uses.
+- Radii are a quantile of the skin distances (0.35–0.85), so the capsules sit near the surface.
+- Legs and arms are split into sub-segments (`t0`..`t1` along `from` → `to`); the feet run heel to toe and the
+  hands cover the fingers.
+- The same `radiusMorphs` model applies.
+- `clothLimit` names a group (`arms`, `hips`, `thighs`). For a garment whose `ccCloth.limit` lists that group,
+  the capsule pushes a particle out no further than the particle's skinned target lies. See CLOTH_RUNTIME.md
+  for the table.
+
 ## 4. VRM / VRMC_springBone notes
 
 VRM 1.0 `VRMC_springBone` simulates **bone chains**, not vertices. To bring the skirt/coat to VRM:
@@ -112,6 +130,7 @@ Hair can use the same route (chains from the scalp). Hair has no pin data yet.
 
 ## 5. What is not done
 
-- No solver runs in the viewer. The garments are pure skinning plus morphs.
-- The values in section 2 are not validated in a simulation.
 - Per-vertex stiffness maps are not written; only per-garment values are.
+- There are no layer colliders: the cloth collides with body capsules and the floor, not with the garments
+  under it.
+- The VRM route (section 4) is not implemented.

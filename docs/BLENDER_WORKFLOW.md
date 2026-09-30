@@ -98,11 +98,16 @@ keeps both GLBs consistent. Details/gotchas (slotted actions, frame offset, no f
      away from the garment edges. Shoes keep the whole list;
   5. pin mask + pelvis/thigh weights for the free part;
   6. textures.
-- Trench coat (`extend_coat`):
-  - the CC0 jacket's hem loop is extended with rows down to knee + 6 cm, flared, with at least 5.5 cm
-    clearance over the body at every shape;
+- Long coat (`coat_skirt`):
+  - the CC0 jacket is cut at the waist (spine_02). A generated skirt runs from just under the jacket to
+    8 cm above the floor (`hem="floor+0.08"`):
+    - A-line with a slight flare and an open front that opens a little toward the hem;
+    - back vent from knee + 4 cm;
+    - clearance over the body ramps in over the top 22 cm.
+  - a 3-row belt band covers the cut;
   - the new vertices are bound to the nearest body triangle (barycentric + scaled offset) so they get all
-    morph targets;
+    morph targets. Their deltas are then symmetrised over mirror pairs, and the x delta fades out within
+    3 cm of the centre line, so the front / vent edges cannot cross at any shape;
   - UVs point at a rectangle of the texture filled with the median jacket cloth colour and a fine twill
     noise.
 - Textures: albedo is grey-normalised per region (primary / secondary) for runtime tinting, JPEG <= 1024 px;

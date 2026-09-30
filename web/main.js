@@ -4,6 +4,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import {
   SLIDERS, applySliders, applySkeleton, validateMorphs, applyTints, characterMeshes, bindToSkeleton, materialRole,
+  sliderInfluences,
 } from './character.js';
 import { createHumanoid } from './humanoid.js';
 import { createAnimator, SPEED_MIN, SPEED_MAX } from './animation/animator.js';
@@ -11,6 +12,7 @@ import { CLIPS } from './animation/clips.js';
 import { createEyeLife, applyMorphWeights } from './eyelife.js';
 import { upgradeSkin, upgradeHair, upgradeCornea, setSkinParams, hairUniforms, createHairCollider } from './materials.js';
 import { createClothing } from './clothing.js';
+import { createClothRuntime } from './cloth/runtime.js';
 
 window.__booted = true;
 const params = new URLSearchParams(location.search);
@@ -34,6 +36,7 @@ const I18N = {
     hairCollide: 'Hår undgår skuldrene',
     secClothes: 'Tøj', clothNone: 'Intet', clothPrimary: 'Farve', clothSecondary: 'Detalje',
     clothLoading: 'Indlæser tøj…', clothError: 'Kunne ikke indlæse tøjet',
+    cloth: 'Stoffysik', wind: 'Vind',
   },
   en: {
     gender: 'Gender (F ↔ M)', age: 'Age (child ↔ old)', height: 'Height', weight: 'Weight',
@@ -52,6 +55,7 @@ const I18N = {
     hairCollide: 'Hair avoids the shoulders',
     secClothes: 'Clothes', clothNone: 'None', clothPrimary: 'Colour', clothSecondary: 'Detail',
     clothLoading: 'Loading clothes…', clothError: 'Could not load the clothes',
+    cloth: 'Cloth physics', wind: 'Wind',
   },
 };
 const lang = I18N[params.get('lang')] ? params.get('lang') : 'da';
@@ -105,10 +109,13 @@ const DEFAULT_TOGGLES = {
   blink: params.has('shot') ? params.get('blink') === '1' : params.get('blink') !== '0',
   look: LOOK_MODES.includes(params.get('look')) ? params.get('look') : (params.has('shot') ? 'off' : 'camera'),
   hairCollide: params.get('hairCollide') !== '0',
+  // cloth simulation of garments with cloth data (coat, skirt): ?cloth=0 turns it off, ?wind=0..1
+  cloth: params.get('cloth') !== '0',
+  wind: Math.min(1, Math.max(0, +params.get('wind') || 0)),
 };
 const values = { ...DEFAULT_TINTS, ...DEFAULT_TOGGLES, hair: null };
 for (const s of SLIDERS) values[s.id] = 0;
-let body = null, joints = null, animator = null, humanoid = null, parts = [];
+let body = null, joints = null, animator = null, humanoid = null, parts = [], cloth = null;
 const eyeLife = createEyeLife({ blink: values.blink });
 const colliders = new Map();                   // hair mesh -> createHairCollider()
 const bodyValues = () => Object.fromEntries(SLIDERS.map(s => [s.id, values[s.id]]));
@@ -129,6 +136,10 @@ function update() {
   for (const c of colliders.values()) c.calibrate();
   hairUniforms.ccCollide.value = values.hairCollide ? 1 : 0;
   eyeLife.setBlinkEnabled(values.blink);
+  if (cloth) {
+    if (cloth.enabled !== values.cloth) cloth.setEnabled(values.cloth);
+    cloth.setWind(values.wind);
+  }
 }
 
 // Material upgrades (web/materials.js): skin SSS/pores/areola, hair gradient/hairline/collision, cornea
@@ -196,13 +207,17 @@ const hairReady = fetch('./hair.json')
 const clothingReady = fetch('./clothing.json')
   .then(r => (r.ok ? r.json() : null))
   .catch(() => null);
+// Body colliders for the cloth simulation (tools/make_colliders.mjs); without them the cloth only hits the floor.
+const collidersReady = fetch('./body_colliders.json')
+  .then(r => (r.ok ? r.json() : null))
+  .catch(() => null);
 
 const loader = new GLTFLoader();
 const clothing = createClothing({
   loader, lang, t, setStatus,
   getBody: () => body,
   addPart: m => { if (!parts.includes(m)) parts.push(m); },
-  onChange: () => update(),
+  onChange: () => { update(); cloth?.reset(); },   // outfit changed: every garment restarts from its skinned pose
 });
 setStatus(t('loading'));
 loader.load('./base_body.glb', async g => {
@@ -232,9 +247,11 @@ loader.load('./base_body.glb', async g => {
     setStatus(`${statusEl.textContent ? statusEl.textContent + '\n' : ''}${t('animError')} ${e?.message || e}`, true);
   }
   await initHair();
+  initCloth(await collidersReady);
   // ?outfit=tshirt,jeans (ids from clothing.json; ?outfit=none = nothing); default: the catalog default
   await clothing.init(clothingReady, secClothes, params.has('outfit') ? params.get('outfit') : null);
   if (params.has('view')) setView(params.get('view'));
+  buildClothUI();
   window.__ready = true;
 }, xhr => {
   if (xhr.lengthComputable) setStatus(`${t('loading')} ${Math.round(100 * xhr.loaded / xhr.total)}%`);
@@ -332,6 +349,8 @@ function setView(name) {
   return true;
 }
 window.__view = setView;
+// Test hook: free camera for close-ups, __camTo([x, y, z], [tx, ty, tz]).
+window.__camTo = (p, tg) => { cam.position.set(...p); ctl.target.set(...tg); ctl.update(); };
 
 // ---- UI ----
 const ui = document.getElementById('ui');
@@ -412,12 +431,13 @@ resetBtn.onclick = () => {
   update();
   if (hairManifest) setHair(hairManifest.default);
   clothing.reset();                            // catalog default outfit (none) + default garment colours
+  cloth?.reset();
 };
 ui.append(resetBtn);
 
 // Test hooks: window.__set('height', 1) / __set('noseWidth', -0.5) / __set('skin', '#ff0000') /
 // __set('hair', 'long01' | null) / __set('hairColor' | 'browColor' | 'eyeColor', '#rrggbb') /
-// __set('blink' | 'hairCollide', bool) / __set('look', 'off' | 'camera' | 'mouse'). __set('hair', ...) returns a promise.
+// __set('blink' | 'hairCollide' | 'cloth', bool) / __set('wind', 0..1) / __set('look', 'off' | 'camera' | 'mouse'). __set('hair', ...) returns a promise.
 // Clothing: __set('outfit', 'tshirt,jeans' | ['tshirt'] | null) / __set('wear', id) / __set('takeOff', slot) /
 // __set('clothColor', { id, primary?, secondary? }) (all return a promise); state: window.__clothingState().
 window.__set = (k, v) => {
@@ -464,7 +484,10 @@ function syncAnimUI() {
 }
 animSel.onchange = () => {
   if (!animator) return;
+  const was = animator.state().clip;
   if (animSel.value) animator.play(animSel.value); else animator.stop();
+  // clip -> clip crossfades and the cloth follows (idle -> run); to / from 'none' the pose jumps: restart the cloth
+  if (!was || !animSel.value) cloth?.reset();
   syncAnimUI();
 };
 playBtn.onclick = () => {
@@ -582,22 +605,76 @@ window.__eyes = {
 };
 let holdWeights = null;
 
+// ---- cloth (web/cloth/runtime.js) ----
+function initCloth(colliderJson) {
+  try {
+    cloth = createClothRuntime({
+      THREE, scene, colliders: colliderJson, getBody: () => body,
+      getInfluences: () => sliderInfluences(bodyValues()),
+      getRootSpeed: () => animator?.state().rootSpeed || 0,
+      useWorker: params.get('clothWorker') !== '0',
+    });
+    cloth.setEnabled(values.cloth); cloth.setWind(values.wind);
+  } catch (e) {                                  // no cloth: the garments stay plain skinned meshes
+    console.error('[viewer] cloth disabled:', e);
+    cloth = null;
+  }
+}
+// Checkbox + wind slider in the clothes section, only if a garment of the catalog has cloth data.
+function buildClothUI() {
+  if (!cloth || !clothing.catalog?.items.some(i => i.cloth)) return;
+  checkbox(secClothes, 'cloth');
+  const l = document.createElement('label'); l.textContent = t('wind');
+  const v = Object.assign(document.createElement('span'), { className: 'v', textContent: values.wind.toFixed(2) });
+  l.append(v);
+  const r = Object.assign(document.createElement('input'), { type: 'range', min: 0, max: 1, step: 0.05, value: values.wind });
+  r.setAttribute('aria-label', t('wind'));
+  r.oninput = () => { values.wind = +r.value; v.textContent = values.wind.toFixed(2); update(); };
+  inputs.wind = { input: r, show: x => { r.value = x; v.textContent = (+x).toFixed(2); } };
+  secClothes.append(l, r);
+}
+
+// One simulation frame: animator -> matrices -> eyes / hair capsules -> cloth. Manual mode (window.__cloth.manual)
+// freezes real time; window.__cloth.advance(seconds) then steps everything at exactly 1/60 s (deterministic
+// filmstrips; the cloth solves on the main thread meanwhile).
+function tick(dt) {
+  animator?.update(dt);
+  if (body) {
+    scene.updateMatrixWorld();                  // bones after the animator: gaze frame + hair capsules + cloth
+    if (holdWeights) for (const m of parts) applyMorphWeights(m, holdWeights);
+    else updateEyes(dt);
+    if (values.hairCollide) for (const [m, c] of colliders) if (m.visible) c.update();
+    cloth?.update(dt, parts);
+  }
+}
+let manual = false;
+// Test hooks: __cloth() -> stats { enabled, mode, msPerFrame, solverMsPerStep, stepsPerFrame, garments: [{ id,
+// stretchP99, penetrations, penetrationMm, steps, resets, ... }] }; __cloth.reset(); __cloth.manual(bool);
+// __cloth.advance(seconds) (manual mode: fixed 1/60 s ticks + one render).
+window.__cloth = () => cloth?.stats() ?? { enabled: false, mode: 'unavailable', garments: [] };
+window.__cloth.reset = () => cloth?.reset();
+window.__cloth.manual = on => {
+  manual = !!on;
+  cloth?.setSync(manual || params.get('clothWorker') === '0');
+  clock.getDelta();
+};
+window.__cloth.advance = seconds => {
+  const n = Math.max(0, Math.round(seconds * 60));
+  for (let i = 0; i < n; i++) tick(1 / 60);
+  renderer.render(scene, cam);
+  return n;
+};
+
 const clock = new THREE.Clock();
 let uiKey = '';
 renderer.setAnimationLoop(() => {
   ctl.update();
   const dt = clock.getDelta();
-  animator?.update(dt);
+  if (!manual) tick(dt);
   // Keep the controls in sync when the animator is driven from code (window.__anim, URL params).
   if (animator) {
     const st = animator.state(), k = `${st.clip}|${st.paused}|${st.speedScale}`;
     if (k !== uiKey) { uiKey = k; syncAnimUI(); }
-  }
-  if (body) {
-    scene.updateMatrixWorld();                  // bones after the animator: gaze frame + hair capsules
-    if (holdWeights) for (const m of parts) applyMorphWeights(m, holdWeights);
-    else updateEyes(dt);
-    if (values.hairCollide) for (const [m, c] of colliders) if (m.visible) c.update();
   }
   renderer.render(scene, cam);
 });
