@@ -9,23 +9,26 @@
 import * as THREE from 'three';
 import { characterMeshes, bindToSkeleton } from './character.js';
 
-import { wearRules, resolveOutfit, hiddenZoneMask, filterIndex } from './clothing_rules.js';
+import { wearRules, resolveOutfit, hiddenZoneMask, coveringZoneMask, filterIndex } from './clothing_rules.js';
 
-export { wearRules, resolveOutfit, hiddenZoneMask, filterIndex };
+export { wearRules, resolveOutfit, hiddenZoneMask, coveringZoneMask, filterIndex };
 
-// Secondary colour: mask texture R (ccMask) blends the texel toward texel * ccSecondary.
+// Secondary colour: mask texture R (ccMask) blends the texel toward texel * ccSecondary. Material extras
+// tint.lining (0..1, the coat): back faces (inside of the coat and of its collar) take the secondary colour too.
 function upgradeCloth(m, maskTex) {
-  const u = { ccSecondary: { value: new THREE.Color(1, 1, 1) }, ccMask: { value: maskTex } };
+  const lining = Math.min(1, Math.max(0, Number(m.userData?.tint?.lining) || 0));
+  const u = { ccSecondary: { value: new THREE.Color(1, 1, 1) }, ccMask: { value: maskTex }, ccLining: { value: lining } };
   m.userData.ccUniforms = u;
   if (maskTex) {
     maskTex.colorSpace = THREE.NoColorSpace;
     m.onBeforeCompile = sh => {
       Object.assign(sh.uniforms, u);
-      sh.fragmentShader = 'uniform vec3 ccSecondary;\nuniform sampler2D ccMask;\n' + sh.fragmentShader.replace(
+      sh.fragmentShader = 'uniform vec3 ccSecondary;\nuniform sampler2D ccMask;\nuniform float ccLining;\n' + sh.fragmentShader.replace(
         '#include <map_fragment>',
         `#include <map_fragment>
 #ifdef USE_MAP
   float ccM = texture2D( ccMask, vMapUv ).r;
+  if ( ! gl_FrontFacing ) ccM = max( ccM, ccLining );
   diffuseColor.rgb = mix( diffuseColor.rgb, sampledDiffuseColor.rgb * ccSecondary, ccM );
 #endif`);
     };
@@ -101,6 +104,16 @@ export function createClothing(opts) {
     if (!bodyIndex) bodyIndex = geo.index.array.slice();
     const arr = filterIndex(bodyIndex, attr, hiddenZoneMask(catalog, worn));
     geo.setIndex(new THREE.BufferAttribute(arr, 1));
+    // garments under a worn higher layer (T-shirt under the coat) drop the triangles it fully covers
+    // (vertex attribute _CCZONE of the garment; skinning differences would otherwise poke through)
+    for (const id of worn) {
+      for (const m of cache.get(id)?.meshes ?? []) {
+        const g = m.geometry, za = g.attributes._cczone;
+        if (!za || !g.index) continue;
+        if (!m.userData.ccIndex) m.userData.ccIndex = g.index.array.slice();
+        g.setIndex(new THREE.BufferAttribute(filterIndex(m.userData.ccIndex, za, coveringZoneMask(catalog, worn, id)), 1));
+      }
+    }
   }
 
   function syncUI() {
@@ -209,6 +222,7 @@ export function createClothing(opts) {
         bodyTriangles: body?.geometry.index ? body.geometry.index.count / 3 : null,
         bodyTrianglesFull: bodyIndex ? bodyIndex.length / 3 : (body?.geometry.index ? body.geometry.index.count / 3 : null),
         visibleMeshes: [...cache.values()].flatMap(r => r.meshes).filter(m => m.visible).map(m => m.name),
+        garmentTriangles: Object.fromEntries(worn.map(id => [id, (cache.get(id)?.meshes ?? []).reduce((n, m) => n + (m.geometry.index?.count ?? 0) / 3, 0)])),
       };
     },
     get catalog() { return catalog; },

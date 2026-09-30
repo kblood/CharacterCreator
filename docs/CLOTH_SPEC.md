@@ -21,7 +21,7 @@ and the same 53 joints.
   | garment | pin = 1 above | pin = 0 below | free / pinned / total verts |
   |---|---|---|---|
   | skirt | pelvis + 3 cm | mid thigh | 108 / 145 / 408 |
-  | trenchcoat (long) | spine_02 − 2 cm, just under the belt (jacket, sleeves, collar and belt are always 1) | hip joint − 6 cm | 638 / 1904 / 2727 |
+  | trenchcoat (long) | spine_02 − 2 cm, just under the belt (jacket, sleeves, standing collar, lapels and belt are always 1) | hip joint − 6 cm | 638 / 1761 / 2584 |
 
 - **Deviation from a COLOR_0 mask.** Many engines read pin masks from vertex colours. The mask is stored as a
   custom attribute instead, because three.js multiplies COLOR_0 into the base colour when vertex colours are
@@ -39,6 +39,15 @@ and the same 53 joints.
   Here `s` is a smoothstep across the centre line (±`shareWidth`). legShare is 0.8 for the skirt; for the coat it
   is 0.5 at the back and 0.8 on the front panels (`legShareFront`), blended over ±5 cm in depth.
   With a solver, the skinned position is the anchor that `maxDistance` refers to.
+- **The coat's standing collar and lapels are never simulated**: `_CLOTH_PIN` = 1 on all of them (the solver's
+  particle count is unchanged, 860 of which 823 free). Vertex attribute `_CCCOLLAR` = 1 marks the standing
+  collar (0 elsewhere, lapels included) so tests and other engines can find it; the viewer does not read it.
+- **Lining**: coat material extras `tint.lining` = 1: back faces (inside of the coat, the collar and the lapels)
+  take the secondary colour (web/clothing.js). An engine without back-face tinting can ignore it.
+- **Covered lower layers**: a lower garment's own `_CCZONE` vertex attribute carries the zone bit of a
+  higher-layer item that covers it (only the T-shirt, under the pinned part of the coat). While both are worn,
+  the lower garment drops the triangles whose three vertices carry a worn higher item's bit (the same rule as
+  the body zones; catalog `rules.covered`). Never under a free (simulated) part.
 - The coat's generated skirt has symmetric morph deltas: mirror pairs are averaged, and the x delta fades to 0
   within 3 cm of the centre line. Without that, the fitted deltas crossed the two vent edges by up to 39 mm on
   the child/female shapes.

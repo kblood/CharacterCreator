@@ -110,6 +110,21 @@ keeps both GLBs consistent. Details/gotchas (slotted actions, frame offset, no f
     3 cm of the centre line, so the front / vent edges cannot cross at any shape;
   - UVs point at a rectangle of the texture filled with the median jacket cloth colour and a fine twill
     noise.
+  - `coat_drop_pockets` (before the skirt): the four chest pocket pieces (UV islands of <= 60 faces in the
+    chest band) are deleted, the holes filled, poked and subdivided (30 interior vertices with inverse-distance
+    morph offsets and weights of the hole border); face flag `cc_fill` makes `tex_cloth` in-paint their
+    shadowed texels from the surrounding cloth. The CC0 collar is not kept (`keep=[1659]`).
+- Standing collar + lapels (`coat_collar`, after clearance): the path is the jacket's top boundary loop from
+  the back neck centre to the lapel break (`neck_01 - 0.245`). Collar columns (up to the gorge at 140° from the
+  back) get 4 rows + a turned-in top edge in a neck frame (height 7.2 cm back / 4.5 cm front, flare 2.4–3 cm);
+  lapel columns (notch, then a peaked lapel 7.5 cm wide tapering to 1 cm) lie on the jacket with a rim row
+  under the edge. Mirrored to the left half. Bound to body triangles below the head (SynthFit, all 60 morphs,
+  deltas symmetrised), weights from the nearest jacket vertex with the head dropped, UVs in the cloth
+  rectangle, pin 1, `_CCCOLLAR`. Then a per-shape clearance of the collar (8 mm from the body) and of the
+  lapels (2.5 mm over the jacket), and `orient_outward`.
+- `hide_lower` (items with `hides_lower`, the coat): T-shirt vertices whose ray along the normal hits a fully
+  pinned coat face within 8 cm, >= 3 cm from the coat's open edges, plus one ring, get the coat's zone bit in
+  the tee's `_CCZONE` attribute (see CLOTH_SPEC.md).
 - Textures: albedo is grey-normalised per region (primary / secondary) for runtime tinting, JPEG <= 1024 px;
   normal 512 px; mask 256 px (R = secondary weight, material extras `ccMask`).
 - Export: `export_attributes=True` for `_CLOTH_PIN` (garments) and `_CCZONE` (body); three.js sees them

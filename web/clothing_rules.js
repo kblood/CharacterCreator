@@ -35,6 +35,12 @@ export function hiddenZoneMask(catalog, ids) {
   return mask;
 }
 
+/** Bitmask of the zones of the worn items in a higher layer than item `id` (they cover parts of it). */
+export function coveringZoneMask(catalog, worn, id) {
+  const layer = catalog.items.find(i => i.id === id)?.layer ?? 0;
+  return hiddenZoneMask(catalog, worn.filter(w => (catalog.items.find(i => i.id === w)?.layer ?? 0) > layer));
+}
+
 /** Triangle index of `geometry` without the triangles whose three vertices are all hidden. */
 export function filterIndex(fullIndex, zoneAttr, mask) {
   if (!mask || !zoneAttr) return fullIndex;

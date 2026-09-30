@@ -195,6 +195,11 @@ In the browser (headless Chrome, run, coat worn):
 
 The frame time was vsync-bound (16.65 ms) with cloth on and off.
 
+Re-measured after the standing collar, lapels and pocket removal (2026-09-30): the collar and lapels are
+pinned, so the coat still has 860 simulated / 823 free particles and the table above is unchanged (node
+1.42–1.56 ms/step; stretch p99 1.215–1.607; pen 0–3). Headless Chrome, run: worker 0.54 ms/frame main thread +
+1.44 ms/step, sync 1.98 ms/frame + 1.43 ms/step (before the collar: 0.55 + 1.46, 1.98 + 1.42).
+
 ## Tests (`tests/cloth.test.mjs`, part of `node --test "tests/*.test.mjs"`)
 
 Every test prints its numbers and tolerances.
