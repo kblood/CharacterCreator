@@ -62,7 +62,7 @@
       hair GLBs (joints, bone set, morph following), unit tests of the tint/skeleton helpers.
 - [x] Headless Chrome on `build/site`: no console errors; front/side/face/eyes/mouth, all hair styles, bald,
       colour changes, 5 extreme bodies, walk/run, `?lang=en`, Reset (restores sliders, colours, default hair).
-- Not verified / known look issues: hairline alpha edge is jagged (one alpha-tested card layer); braid01 top
+- Not verified / known look issues (at that time; see the next section for what changed): hairline alpha edge is jagged (one alpha-tested card layer); braid01 top
   still a bit glossy; knees/elbows reddish from the source texture; bald scalp slightly orange; no blinking or eye
   movement (no eye bones); no hair physics (hair is skinned to head/neck/spine only, long hair can clip into
   the shoulders during run); morph fit at combined extremes is only checked per single morph; mobile / real GPU.
@@ -70,19 +70,59 @@
   three.js from the CDN on top. `deploy.ps1` also stages `base_body_anim.glb` (7.67 MB, not loaded by the
   viewer) and all hair GLBs.
 
+## Face, eyes, skin, hair, body round (2026-09-30, uncommitted)
+- [x] Face sliders: 13 bipolar sliders (nose width/length/height, jaw width, chin, cheekbones, eye size/spacing/
+      tilt, lips, mouth width, ear size, forehead) on 26 MakeHuman detail targets (`face_<stem>_decr/_incr`),
+      "Ansigt / Face" UI section, da/en labels, reset with everything else. Every part (eyes, brows, lashes,
+      teeth, tongue, all hair GLBs) carries the same targets, so hair follows e.g. forehead/ear changes
+      (drift checked in `tests/assets.test.mjs` and in screenshots). They move no joints.
+- [x] Blink: MakeHuman eyelid-closure expression units (`blink_left/right`), random interval 2-6 s (15 %
+      double blinks), 120-180 ms, own timer independent of the animation clock, dt clamped. Look-at:
+      `look_left/right/up/down` = rigid eyeball rotation morphs (30 deg yaw / 25 deg pitch at weight 1),
+      camera or mouse target, clamps 24 deg yaw / 8 deg up / 18 deg down, saccades + micro-saccades, upper lid
+      follows a downward gaze. UI: "Øjne / Eyes" section (blink checkbox, look off/camera/mouse). No bone writes
+      (`web/eyelife.js`, unit tests in `tests/face.test.mjs`).
+- [x] Skin (`web/materials.js`, onBeforeCompile on three r170): per-channel wrap lighting (fake SSS), back-light
+      transmission masked to ears/nose, flush on cheeks/nose/ears (baked), procedural pore micro-normals faded
+      out beyond ~1.2 m, specular F0 ~0.026 + roughness >= 0.56 + faint sheen (less waxy). Build-side texture
+      fixes: knees/elbows/eye-surround redness reduced, bald scalp stubble painted to skin (triangle-rasterised
+      UV masks, `blender/cc_textures.py`). Male areolas toned down by a gender-driven region mask. Iris
+      enlarged, cornea catchlight. Tint contract unchanged (see README "Colour tints").
+- [x] Hair: root-to-tip shade (`_CCHAIR` attribute), duller specular (braid01 top no longer glossy), 3 more CC0
+      styles (short04, bob01, afro01), optional shoulder/upper-back capsule push-out in the vertex shader
+      (rotations untouched, roots fixed, toggle "Hår undgår skuldrene"). Probe during run: 0 capsule
+      penetrations for long01/braid01/ponytail01 even without it (clearance >= 14 mm arms, 2-3 mm back).
+- [x] Body: 16 corrective morphs `corr_A__B` (MakeHuman sample of A+B minus the linear sum), runtime weight =
+      inf(A) x inf(B); fixes the largest interaction errors (gender x age up to 65 mm, weight x muscle 81 mm).
+      Small breasts at gender = 1: the geometry is flat; the impression came from the painted areolas of the
+      female albedo -> toned down by the mask.
+- [x] Morph deltas quantised (`KHR_mesh_quantization`, int16/int8 normalised, sparse): 60 targets in 6.97 MB
+      (was 12 targets in 7.43 MB). Initial load base + short02 = 8.07 MB. `base_body_anim.glb` 7.20 MB.
+- [x] Tests: `node --test "tests/*.test.mjs"` = 57 tests, 56 pass, 1 skipped (`THREE_DIR`).
+      `blender/tools/check_glb.py` and `tools/check_anim_glb.mjs` -> CHECK OK.
+- [x] Headless Chrome on a staged `build/site`: face sliders, blink (full/half), look directions, scalp/nape,
+      knees, eye surround, dark skin tint, all 8 styles, walk/run, Reset (sliders, tints, toggles, hair),
+      `?lang=en`, error display for an unknown hair id.
+- Reverted / not shipped: a hairline alpha fade on `_CCEDGE` (kept in the shader, default off): with one
+  alpha-tested card layer it ate temples/sideburns into a jagged, balder edge instead of softening it.
+- Not verified / still unrealistic: hairline still a hard alpha-tested edge (short02, short04, bob02); pores are
+  subtle; catchlight is small; no anisotropic hair highlight, no second blended hair layer, no hair physics; no
+  beard (the CC0 pack has none); look=mouse only unit-tested, not screenshot-tested; long-hair shoulder clipping
+  was not reproduced, so the collider is a safety net; upward gaze has no lid-raise morph (hence the 8 deg clamp);
+  correctives cover pairs only (small dark patch on the hip at combined extremes); mobile / real GPU.
+
 ## Open issues
-- Macro morphs are linearised samples (no gender x weight interaction) -> extremes combined may look off.
-- Joint offsets are linear per morph too (same limitation as the vertices).
-- Seen in screenshots: gender = 1 (+ muscle/height 1) still shows small breasts; not investigated (body morphs unchanged).
+- Macro morphs outside the 16 corrective pairs (and 3-way combinations) are still linear.
+- Joint offsets are linear per morph (correctives and face morphs move no joints).
 
 ## TODO (scope v1)
-- Face sliders (MPFB detail targets).
-- Eye bones / blinking, jaw bone (teeth/tongue are rigid on the head).
+- Jaw bone / mouth expressions (teeth/tongue are rigid on the head).
 - Clothing fitting (swappable parts fitted to the body).
 - More clips (jump, wave, crouch, ...) as new `CLIPS` entries; retarget test of the baked GLB in other engines.
-- Hair: second alpha-blended card layer or better hairline; hair physics.
+- Hair: second alpha-blended card layer for a soft hairline; hair physics; CC0 beard if one turns up.
 - Engine ports of `character.js` (Unity/Godot/Unreal) reading the same GLB + joints sidecar.
 
 ## Licensing
 MPFB code is GPL; the MakeHuman base mesh/targets/assets are CC0 -> exported GLBs are free to use. Every shipped
-asset (skin, eyes, brows, lashes, teeth, tongue, 5 hair styles) is checked for CC0 by the build; list in `LICENSE-NOTES.md`.
+asset (skin, eyes, brows, lashes, teeth, tongue, 8 hair styles) is checked for CC0 by the build; face/expression
+targets are CC0 per MakeHuman's LICENSE.md; list in `LICENSE-NOTES.md`.

@@ -16,8 +16,16 @@
 
 ## How the morph targets are made (build_base.py)
 1. Create the human at neutral macros, read evaluated vertex positions as the base.
-2. For each morph: set one macro to its extreme, read positions, reset. The delta becomes a plain shape key ("linearised" sampling, so gender x weight etc. interactions are lost).
-3. `bake_targets` + `shape_key_clear` to drop MPFB's own macro shape keys, then add ours (`Basis` + 12 morphs).
+2. For each morph: set one macro to its extreme, read positions, reset. The delta becomes a plain shape key ("linearised" sampling).
+   60 targets per mesh, in this order (`MORPH_KIND`): 12 macro; 26 face (`face_<stem>_decr/_incr`, `FACE_TARGETS`:
+   MakeHuman detail targets from MPFB's `data/targets` loaded with `TargetService.load_target(weight=1)` on the
+   neutral human, sampled, removed; sided targets load l- and r- together); 2 expression (`blink_left/right`,
+   MakeHuman eyelid-closure expression units); 4 look (`look_*`, rigid eyeball rotations about a sphere fit of each
+   sclera, 30 deg yaw / 25 deg pitch at weight 1, Eyes mesh only, zero elsewhere); 16 corrective
+   (`corr_<A>__<B>` for the pairs in `CORRECTIVE_PAIRS` = sample with both macros set minus neutral minus
+   delta(A) minus delta(B); the runtime weight is inf(A) x inf(B)). Face/expression/look/corrective morphs have
+   no joint offsets in the sidecar (they would be sub-millimetre or meaningless for bones).
+3. `bake_targets` + `shape_key_clear` to drop MPFB's own macro shape keys, then add ours (`Basis` + 60 morphs).
 4. Rig with `game_engine` **on the full mesh** (weights are indexed on the complete basemesh incl. helper geometry), *then* delete everything outside the `body` vertex group (13 380 verts remain; shape keys and weights survive bmesh deletion).
 5. Export GLB: `export_morph=True, export_skins=True, export_animations=False, export_yup=True`.
 
@@ -31,8 +39,8 @@
   no subrig), then **re-fitted by our own vectorised MHCLO fit** (`MhcloFit`): per vertex
   `sum(w_i * v_i) + offset * scale`, scale from the mhclo scale reference verts (x uses co[0], y uses co[2],
   z uses co[1]; offsets converted to Blender axes as (d0, -d2, d1)). The fit runs on the neutral basemesh and on
-  each of the 12 sampled morph meshes (incl. helper geometry, same ground shift dz) -> Basis + 12 shape keys with
-  the body's names.
+  each sampled morph mesh (incl. helper geometry, same ground shift dz) -> Basis + the same 60 shape keys as the
+  body (look morphs only move the Eyes).
   Gotcha: once our morph shape keys exist, MPFB's own fit snapshot (`from_mix`) is stale (~3-4 cm off); the
   build only prints "MPFB snapshot diff", our neutral fit agrees with MPFB to 3e-8 m on a clean human.
 - Weights: eyes/brows/lashes/teeth/tongue rigid 100 % on `head` (the `game_engine` rig has no eye/jaw bones);
@@ -43,12 +51,26 @@
   normalised per channel to grey mean k (gain = 1/k, k in 0.62..0.72); skin normal map 1024 px from the albedo's
   high-pass luminance + band-passed noise; eye 1024 px with a greyed iris; brows/lashes/hair RGBA PNG
   luminance-only with colour bled into transparent texels. Gains land in material extras `tint {gain, default}`.
+  Skin fixes in UV space (`skin_region_masks`: 3D landmarks of the neutral mesh -> per-vertex weights ->
+  `cc_textures.raster`, a barycentric triangle rasteriser, so masks have no gaps): knee/elbow/eye-surround
+  redness pulled toward the mean skin, bald-scalp stubble painted to skin, subtle cheek/nose/ear flush. A
+  512 px region mask (R = thin parts for back-light transmission, G = areola, B = flush) is embedded as an
+  extra image (`glbutil.embed_textures`) and referenced from the Skin material extras `ccRegions.index`; the
+  viewer loads it with `parser.getDependency('texture', i)`. The iris is scaled up a little (`iris_scale`).
+- Hair vertex attributes (`add_hair_length_attr`): `_CCHAIR` = distance to the head/neck skin (root-to-tip
+  gradient, collision weight), `_CCEDGE` = distance to bare skin outside the scalp mask (hairline fade, off by
+  default in the viewer).
 - Materials: the exporter cannot express alphaMode/alphaCutoff/extras reliably, so after export
   `blender/tools/glbutil.py patch_materials` rewrites them by material name. The spec is stored in
   `scene["cc_materials"]` in the .blend so `bake_clips.py` patches `base_body_anim.glb` identically.
 - Export: base GLB = armature + objects with `cc_export == "base"` (Body + face parts); each hair object
   (`cc_export == "hair"`) goes to its own `output/hair_<id>.glb` (armature included, `export_morph_normal=False`
   to save size) + `output/hair.json` (`version, default, defaultColor, styles[{id,file,label,mesh,bytes,license,source}]`).
+  8 styles: short02 (default), bob02, long01, ponytail01, braid01, short04, bob01, afro01.
+- Size: after export `glbutil.quantize_morphs` rewrites POSITION morph deltas as normalised int16 and NORMAL deltas as int8 (sparse where
+  that is smaller) and adds `KHR_mesh_quantization` to `extensionsRequired`
+  (three.js GLTFLoader supports it). 60 targets: base 6.97 MB (12 float targets used to be 7.43 MB).
+  `bake_clips.py` runs the same `embed_textures` + `quantize_morphs` on `base_body_anim.glb`.
   All files sit flat in `output/`, so the deploy staging (`output/*.glb`, `output/*.json`) picks them up.
 - Viewer side: GLTFLoader gives every skinned mesh its own Skeleton; `bindToSkeleton` in `web/character.js`
   remaps skinIndex by bone name onto the body's Skeleton so `applySkeleton` and the clips move all parts.
@@ -68,10 +90,11 @@ keeps both GLBs consistent. Details/gotchas (slotted actions, frame offset, no f
 
 ## Verify a build
 - `python blender/tools/check_glb.py`: every mesh (Body, Eyes, Eyebrows, Eyelashes, Teeth, Tongue) and every
-  hair GLB has the 12 targets and skin 0, hair joints exist in the base skeleton, sidecar == GLB bind pose.
+  hair GLB has the same 60 targets and skin 0, hair joints exist in the base skeleton, sidecar == GLB bind pose.
 - `node --test "tests/*.test.mjs"` (`tests/assets.test.mjs` checks the fitted assets numerically) and, after a
   bake, `node tools/check_anim_glb.mjs`. Note: Blender writes some morph targets as **sparse** accessors;
-  `tools/glb.mjs` handles that (a reader that ignores `sparse` sees weight/muscle as all zeros).
+  `tools/glb.mjs` handles that (a reader that ignores `sparse` sees weight/muscle as all zeros), and it
+  de-normalises the quantised int8/int16 morph accessors.
 - Render check: `webxr-test` skill (`node check.js --url=... --screenshot=...`); the page exposes `window.__ready` and `window.__set(id, value)` for scripted slider tests.
 
 ## Licensing
