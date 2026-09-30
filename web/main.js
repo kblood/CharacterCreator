@@ -8,6 +8,8 @@ import {
 import { createHumanoid } from './humanoid.js';
 import { createAnimator, SPEED_MIN, SPEED_MAX } from './animation/animator.js';
 import { CLIPS } from './animation/clips.js';
+import { createEyeLife, applyMorphWeights } from './eyelife.js';
+import { upgradeSkin, upgradeHair, upgradeCornea, setSkinParams, hairUniforms, createHairCollider } from './materials.js';
 
 window.__booted = true;
 const params = new URLSearchParams(location.search);
@@ -23,6 +25,12 @@ const I18N = {
     noBody: 'Modellen indeholder ingen skinned mesh.', missingMorphs: 'Manglende morphs:',
     anim: 'Animation', animNone: 'Ingen', clip_idle: 'Hvile', clip_walk: 'Gang', clip_run: 'Løb',
     play: 'Afspil', pause: 'Pause', speed: 'Hastighed', animError: 'Animation slået fra:',
+    secBody: 'Krop', secFace: 'Ansigt', secEyes: 'Øjne', secLooks: 'Farver og hår', secAnim: 'Animation',
+    noseWidth: 'Næsebredde', noseLength: 'Næselængde', noseHeight: 'Næsehøjde', jawWidth: 'Kæbebredde',
+    chin: 'Hage', cheekbones: 'Kindben', eyeSize: 'Øjenstørrelse', eyeSpacing: 'Øjenafstand', eyeTilt: 'Øjenhældning',
+    lips: 'Læber', mouthWidth: 'Mundbredde', earSize: 'Ørestørrelse', forehead: 'Pandehøjde',
+    blink: 'Blink', look: 'Blik', lookOff: 'Lige frem', lookCamera: 'Følg kameraet', lookMouse: 'Følg musen',
+    hairCollide: 'Hår undgår skuldrene',
   },
   en: {
     gender: 'Gender (F ↔ M)', age: 'Age (child ↔ old)', height: 'Height', weight: 'Weight',
@@ -33,6 +41,12 @@ const I18N = {
     noBody: 'The model contains no skinned mesh.', missingMorphs: 'Missing morphs:',
     anim: 'Animation', animNone: 'None', clip_idle: 'Idle', clip_walk: 'Walk', clip_run: 'Run',
     play: 'Play', pause: 'Pause', speed: 'Speed', animError: 'Animation disabled:',
+    secBody: 'Body', secFace: 'Face', secEyes: 'Eyes', secLooks: 'Colours and hair', secAnim: 'Animation',
+    noseWidth: 'Nose width', noseLength: 'Nose length', noseHeight: 'Nose height', jawWidth: 'Jaw width',
+    chin: 'Chin', cheekbones: 'Cheekbones', eyeSize: 'Eye size', eyeSpacing: 'Eye spacing', eyeTilt: 'Eye tilt',
+    lips: 'Lips', mouthWidth: 'Mouth width', earSize: 'Ear size', forehead: 'Forehead height',
+    blink: 'Blink', look: 'Gaze', lookOff: 'Straight ahead', lookCamera: 'Follow the camera', lookMouse: 'Follow the mouse',
+    hairCollide: 'Hair avoids the shoulders',
   },
 };
 const lang = I18N[params.get('lang')] ? params.get('lang') : 'da';
@@ -79,9 +93,19 @@ ground.rotation.x = -Math.PI / 2; ground.position.y = 0.001; ground.receiveShado
 // ---- state ----
 // Default tints == DEFAULTS in blender/build_base.py (also stored as glTF material extras tint.default).
 const DEFAULT_TINTS = { skin: '#c99a80', hairColor: '#3b2a1e', browColor: '#3b2a1e', eyeColor: '#4a2f19', lashes: '#1c1510' };
-const values = { ...DEFAULT_TINTS, hair: null };
+// Eye life + hair collision toggles. Screenshots (?shot) are deterministic: no blink, eyes straight ahead,
+// unless ?blink=1 / ?look=camera|mouse ask for it.
+const LOOK_MODES = ['off', 'camera', 'mouse'];
+const DEFAULT_TOGGLES = {
+  blink: params.has('shot') ? params.get('blink') === '1' : params.get('blink') !== '0',
+  look: LOOK_MODES.includes(params.get('look')) ? params.get('look') : (params.has('shot') ? 'off' : 'camera'),
+  hairCollide: params.get('hairCollide') !== '0',
+};
+const values = { ...DEFAULT_TINTS, ...DEFAULT_TOGGLES, hair: null };
 for (const s of SLIDERS) values[s.id] = 0;
 let body = null, joints = null, animator = null, humanoid = null, parts = [];
+const eyeLife = createEyeLife({ blink: values.blink });
+const colliders = new Map();                   // hair mesh -> createHairCollider()
 const bodyValues = () => Object.fromEntries(SLIDERS.map(s => [s.id, values[s.id]]));
 const tints = () => ({ skin: values.skin, hair: values.hairColor, brows: values.browColor, eyes: values.eyeColor, lashes: values.lashes });
 
@@ -95,6 +119,37 @@ function update() {
   if (joints) applySkeleton(body, joints, values);
   animator?.bodyChanged();
   applyTints(body.parent || body, tints());
+  setSkinParams({ gender: values.gender });
+  // hair collision radii are measured in the rest pose with the current morphs (never changes the rest pose)
+  for (const c of colliders.values()) c.calibrate();
+  hairUniforms.ccCollide.value = values.hairCollide ? 1 : 0;
+  eyeLife.setBlinkEnabled(values.blink);
+}
+
+// Material upgrades (web/materials.js): skin SSS/pores/areola, hair gradient/hairline/collision, cornea
+// catchlight. They replace the glTF material by a MeshPhysicalMaterial with the same maps/colour/userData,
+// so the tint helpers keep working. A failing upgrade keeps the plain glTF material.
+async function upgradeMaterials(root, parser) {
+  const jobs = [];
+  root.traverse(o => {
+    if (!o.isMesh) return;
+    const mats = [].concat(o.material);
+    mats.forEach((m, k) => {
+      if (!m) return;
+      const role = materialRole(m.name);
+      const swap = nm => { if (Array.isArray(o.material)) o.material[k] = nm; else o.material = nm; };
+      try {
+        if (role === 'skin') {
+          const ri = m.userData?.ccRegions?.index;
+          jobs.push((ri !== undefined && parser ? parser.getDependency('texture', ri) : Promise.resolve(null))
+            .catch(e => { console.warn('[viewer] skin region texture unavailable', e); return null; })
+            .then(tex => swap(upgradeSkin(m, tex))));
+        } else if (role === 'hair') swap(upgradeHair(m, o.geometry));
+        else if (m.name === 'Cornea') upgradeCornea(m);
+      } catch (e) { console.warn('[viewer] material upgrade failed for', m.name, e); }
+    });
+  });
+  await Promise.all(jobs);
 }
 
 // Render settings glTF cannot express. Alpha-masked cards (hair, brows, lashes) use alpha-to-coverage
@@ -109,7 +164,6 @@ function setupMaterials(root) {
       if (role === 'hair' || role === 'brows' || role === 'lashes') {
         m.alphaToCoverage = true; m.transparent = false; m.depthWrite = true; m.side = THREE.DoubleSide;
         if (role !== 'hair') o.castShadow = false;
-        else m.envMapIntensity = 0.6;             // soft sheen instead of a plastic highlight
       }
       if (m.name === 'Cornea') { m.envMapIntensity = 0.7; o.castShadow = false; o.receiveShadow = false; o.renderOrder = 2; }
       if (m.name === 'Eye' || m.name === 'Iris') o.castShadow = false;
@@ -145,6 +199,7 @@ loader.load('./base_body.glb', async g => {
   body.frustumCulled = false;
   parts = [body];
   for (const m of meshes) attachPart(m);
+  await upgradeMaterials(g.scene, g.parser);
   setupMaterials(g.scene);
   const missing = validateMorphs(body);
   setStatus(missing.length ? `${t('missingMorphs')} ${missing.join(', ')}` : '', missing.length > 0);
@@ -153,6 +208,7 @@ loader.load('./base_body.glb', async g => {
   window.__joints = joints;
   window.__parts = parts;
   update();                                   // first applySkeleton at rest
+  initEyeRig();                               // head rest rotation for the gaze frame (before any clip plays)
   try {
     initAnimation();                          // createHumanoid snapshots the rest rotations
   } catch (e) {                               // a rig the animator cannot use must not break the sliders
@@ -195,7 +251,13 @@ async function loadHair(id) {
     if (r.missing.length) throw new Error(`${style.file}: bones missing in the body skeleton`);
     m.frustumCulled = false;
   }
-  setupMaterials({ traverse: f => ms.forEach(m => m.traverse(f)) });
+  const group = { traverse: f => ms.forEach(m => m.traverse(f)) };
+  await upgradeMaterials(group, g.parser);
+  setupMaterials(group);
+  for (const m of ms) {
+    const c = createHairCollider(m);
+    if (c.ok && c.weightedVertices) colliders.set(m, c);
+  }
   hairCache.set(id, ms);
   return ms;
 }
@@ -237,12 +299,16 @@ function setView(name) {
     front: [[0, 1.1, 4], [0, 0.9, 0]],
     side: [[4, 1.1, 0], [0, 0.9, 0]],
     back: [[0, 1.1, -4], [0, 0.9, 0]],
+    torso: [[0, head.y - 0.3, 1.5], [0, head.y - 0.38, 0]],
+    torsoSide: [[1.5, head.y - 0.3, 0.05], [0, head.y - 0.38, 0.05]],
+    legs: [[0, 0.55, 1.8], [0, 0.5, 0]],
     face: [[head.x, faceY + 0.02, head.z + 0.75], [head.x, faceY, head.z]],
     eyes: [[head.x + 0.05, faceY + 0.03, head.z + 0.34], [head.x + 0.02, faceY + 0.02, head.z + 0.08]],
     mouth: [[head.x + 0.06, faceY - 0.06, head.z + 0.3], [head.x, faceY - 0.08, head.z + 0.08]],
     face34: [[head.x + 0.45, faceY + 0.05, head.z + 0.6], [head.x, faceY, head.z]],
     faceSide: [[head.x + 0.75, faceY, head.z + 0.02], [head.x, faceY, head.z]],
     headBack: [[head.x - 0.35, faceY + 0.15, head.z - 0.7], [head.x, faceY - 0.05, head.z]],
+    shoulderBack: [[head.x - 0.75, head.y - 0.05, head.z - 0.9], [head.x, head.y - 0.3, head.z]],
   }[name];
   if (!V) return false;
   cam.position.set(...V[0]); ctl.target.set(...V[1]); ctl.update();
@@ -253,24 +319,57 @@ window.__view = setView;
 // ---- UI ----
 const ui = document.getElementById('ui');
 const inputs = {};
-for (const s of SLIDERS) {
+function section(key, open = true) {
+  const d = Object.assign(document.createElement('details'), { open });
+  d.dataset.section = key;
+  d.append(Object.assign(document.createElement('summary'), { textContent: t(key) }));
+  ui.append(d);
+  return d;
+}
+function slider(parent, s) {
   const l = document.createElement('label');
   l.textContent = t(s.id) === s.id ? s.label : t(s.id);
   const v = Object.assign(document.createElement('span'), { className: 'v', textContent: '0.00' });
   l.append(v);
   const r = Object.assign(document.createElement('input'), { type: 'range', min: -1, max: 1, step: 0.01, value: 0 });
   r.setAttribute('aria-label', l.firstChild.textContent);
+  r.dataset.slider = s.id;
   r.oninput = () => { values[s.id] = +r.value; v.textContent = (+r.value).toFixed(2); update(); };
   inputs[s.id] = { input: r, show: x => { r.value = x; v.textContent = (+x).toFixed(2); } };
-  ui.append(l, r);
+  parent.append(l, r);
 }
+function checkbox(parent, id) {
+  const l = Object.assign(document.createElement('label'), { className: 'check' });
+  const c = Object.assign(document.createElement('input'), { type: 'checkbox', checked: !!values[id] });
+  c.onchange = () => { values[id] = c.checked; update(); };
+  l.append(c, document.createTextNode(` ${t(id)}`));
+  inputs[id] = { input: c, show: x => { c.checked = !!x; } };
+  parent.append(l);
+}
+const secBody = section('secBody');
+for (const s of SLIDERS.filter(x => x.group !== 'face')) slider(secBody, s);
+const secFace = section('secFace', !matchMedia('(max-width:600px)').matches);
+for (const s of SLIDERS.filter(x => x.group === 'face')) slider(secFace, s);
+const secEyes = section('secEyes');
+checkbox(secEyes, 'blink');
+{
+  const l = document.createElement('label'); l.textContent = t('look');
+  const sel = document.createElement('select');
+  sel.setAttribute('aria-label', t('look'));
+  for (const m of LOOK_MODES) sel.append(new Option(t(`look${m[0].toUpperCase()}${m.slice(1)}`), m));
+  sel.value = values.look;
+  sel.onchange = () => { values.look = sel.value; };
+  inputs.look = { input: sel, show: x => { sel.value = x; } };
+  secEyes.append(l, sel);
+}
+const secLooks = section('secLooks');
 function colorInput(id, label) {
   const cl = document.createElement('label'); cl.textContent = label;
   const c = Object.assign(document.createElement('input'), { type: 'color', value: values[id] });
   c.setAttribute('aria-label', label);
   c.oninput = () => { values[id] = c.value; update(); };
   inputs[id] = { input: c, show: x => { c.value = x; } };
-  ui.append(cl, c);
+  secLooks.append(cl, c);
   return [cl, c];
 }
 colorInput('skin', t('skin'));
@@ -282,28 +381,34 @@ hairSel.setAttribute('aria-label', t('hair'));
 hairSel.append(new Option(t('hairNone'), ''));
 hairSel.onchange = () => { setHair(hairSel.value || null); };
 inputs.hair = { input: hairSel, show: x => { hairSel.value = x ?? ''; } };
-ui.append(hl, hairSel);
+secLooks.append(hl, hairSel);
 const hairUI = [hl, hairSel, ...colorInput('hairColor', t('hairColor'))];
 colorInput('browColor', t('browColor'));
+checkbox(secLooks, 'hairCollide');
+hairUI.push(secLooks.lastChild);
 
 const resetBtn = Object.assign(document.createElement('button'), { type: 'button', textContent: t('reset') });
 resetBtn.onclick = () => {
   for (const s of SLIDERS) { values[s.id] = 0; inputs[s.id].show(0); }
-  for (const [k, v] of Object.entries(DEFAULT_TINTS)) { values[k] = v; inputs[k]?.show(v); }
+  for (const [k, v] of Object.entries({ ...DEFAULT_TINTS, ...DEFAULT_TOGGLES })) { values[k] = v; inputs[k]?.show(v); }
   update();
   if (hairManifest) setHair(hairManifest.default);
 };
 ui.append(resetBtn);
 
-// Test hooks: window.__set('height', 1) / __set('skin', '#ff0000') / __set('hair', 'long01' | null) /
-// __set('hairColor' | 'browColor' | 'eyeColor', '#rrggbb'). __set('hair', ...) returns a promise.
+// Test hooks: window.__set('height', 1) / __set('noseWidth', -0.5) / __set('skin', '#ff0000') /
+// __set('hair', 'long01' | null) / __set('hairColor' | 'browColor' | 'eyeColor', '#rrggbb') /
+// __set('blink' | 'hairCollide', bool) / __set('look', 'off' | 'camera' | 'mouse'). __set('hair', ...) returns a promise.
 window.__set = (k, v) => {
   if (k === 'hair') return setHair(v);
   values[k] = v; inputs[k]?.show(v); update();
   return undefined;
 };
+window.__values = () => JSON.parse(JSON.stringify(values));
+window.__hairUniforms = hairUniforms;           // tuning/tests (gradient, hairline fade, collision capsules)
 window.__hairState = () => ({ style: values.hair, pending: !!hairPending, loaded: [...hairCache.keys()],
-  styles: hairManifest?.styles.map(s => s.id) ?? [] });
+  styles: hairManifest?.styles.map(s => s.id) ?? [],
+  collide: { enabled: values.hairCollide, colliders: [...colliders].filter(([m]) => m.visible).map(([, c]) => ({ radii: c.radii(), weighted: c.weightedVertices })) } });
 
 // ---- animation UI (clips from the registry; new clips appear automatically) ----
 const clipLabel = n => (t(`clip_${n}`) === `clip_${n}` ? n : t(`clip_${n}`));
@@ -318,7 +423,8 @@ const sv = Object.assign(document.createElement('span'), { className: 'v', textC
 sl.append(sv);
 const speedIn = Object.assign(document.createElement('input'), { type: 'range', min: SPEED_MIN, max: SPEED_MAX, step: 0.05, value: 1 });
 speedIn.setAttribute('aria-label', t('speed'));
-ui.append(al, animSel, playBtn, sl, speedIn);
+section('secAnim').append(al, animSel, playBtn, sl, speedIn);
+ui.append(resetBtn);                           // keep Reset last
 
 function syncAnimUI() {
   const st = animator?.state();
@@ -377,15 +483,92 @@ addEventListener('resize', () => {
   renderer.setSize(innerWidth, innerHeight);
   cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix();
 });
+// ---- eye life: gaze target -> head-relative yaw/pitch -> look/blink morphs on every part ----
+// The head's current rotation relative to its rest rotation is undone, so the angles are in the character's
+// rest frame (glTF: faces +Z, its left is +X): yaw > 0 = the character's left, pitch > 0 = up.
+const eyeRig = { head: null, restQ: null, eyeLocal: null, mid: null };
+function initEyeRig() {
+  const head = body.skeleton.bones.find(b => b.name === 'head');
+  // the multi-material Eyes mesh arrives as primitives "Eyes_1".."Eyes_3" (sclera / iris / cornea)
+  const eyes = parts.filter(m => /^Eyes(_\d+)?$/.test(m.name) || [].concat(m.material).some(x => /^(Iris|Cornea|Sclera|Eye)$/.test(x?.name || '')));
+  if (!head) return;
+  scene.updateMatrixWorld(true);
+  let mid = new THREE.Vector3(0, 1.553, 0.118);          // fallback: eye centre of the neutral body
+  if (eyes.length) {
+    const box = new THREE.Box3();
+    for (const m of eyes) { m.geometry.computeBoundingBox(); box.union(m.geometry.boundingBox.clone().applyMatrix4(m.matrixWorld)); }
+    mid = box.getCenter(new THREE.Vector3());
+  }
+  eyeRig.mid = mid.clone();
+  eyeRig.head = head;
+  eyeRig.restQ = head.getWorldQuaternion(new THREE.Quaternion());
+  eyeRig.eyeLocal = head.worldToLocal(mid.clone());
+}
+const mouseNDC = new THREE.Vector2(), ray = new THREE.Raycaster();
+let mouseIn = false;
+renderer.domElement.addEventListener('pointermove', e => {
+  const r = renderer.domElement.getBoundingClientRect();
+  mouseNDC.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+  mouseIn = true;
+});
+renderer.domElement.addEventListener('pointerleave', () => { mouseIn = false; });
+const _o = new THREE.Vector3(), _d = new THREE.Vector3(), _q = new THREE.Quaternion(), _pl = new THREE.Plane();
+let gazeOverride = null;                        // test hook: { yaw, pitch } in radians
+function gazeTarget() {
+  if (gazeOverride) return gazeOverride;
+  if (!eyeRig.head || values.look === 'off') return null;
+  eyeRig.head.localToWorld(_o.copy(eyeRig.eyeLocal));
+  if (values.look === 'camera') _d.copy(cam.position);
+  else {
+    if (!mouseIn) return null;
+    ray.setFromCamera(mouseNDC, cam);            // mouse ray hits a camera-facing plane 0.6 m in front of the eyes
+    const n = cam.getWorldDirection(new THREE.Vector3());
+    _pl.setFromNormalAndCoplanarPoint(n, _o.clone().addScaledVector(n, -0.6));
+    if (!ray.ray.intersectPlane(_pl, _d)) return null;
+  }
+  _d.sub(_o);
+  _q.copy(eyeRig.head.getWorldQuaternion(_q)).multiply(new THREE.Quaternion().copy(eyeRig.restQ).invert()).invert();
+  _d.applyQuaternion(_q);
+  return { yaw: Math.atan2(_d.x, _d.z), pitch: Math.atan2(_d.y, Math.hypot(_d.x, _d.z)) };
+}
+let lastEyeWeights = {};
+function updateEyes(dt) {
+  if (!body) return;
+  if (!eyeRig.head) initEyeRig();
+  lastEyeWeights = eyeLife.update(dt, gazeTarget());
+  for (const m of parts) applyMorphWeights(m, lastEyeWeights);
+}
+// Test hooks: __eyes.state(), .weights(), .blinkNow(), .gaze(yawDeg, pitchDeg) (snap; null = release)
+window.__eyes = {
+  state: () => ({ ...eyeLife.state(), mode: values.look, eyeCentre: eyeRig.mid?.toArray().map(v => +v.toFixed(4)) }),
+  weights: () => ({ ...lastEyeWeights }),
+  blinkNow: () => eyeLife.blinkNow(),
+  gaze: (yawDeg, pitchDeg) => {
+    gazeOverride = yawDeg == null ? null : { yaw: yawDeg * Math.PI / 180, pitch: (pitchDeg || 0) * Math.PI / 180 };
+    eyeLife.snapGaze(gazeOverride);
+    updateEyes(0);
+  },
+  // set a fixed blink weight (screenshots): __eyes.hold({ blink_left: 1, blink_right: 1 }); hold(null) releases
+  hold: w => { holdWeights = w; if (w) for (const m of parts) applyMorphWeights(m, w); },
+};
+let holdWeights = null;
+
 const clock = new THREE.Clock();
 let uiKey = '';
 renderer.setAnimationLoop(() => {
   ctl.update();
-  animator?.update(clock.getDelta());
+  const dt = clock.getDelta();
+  animator?.update(dt);
   // Keep the controls in sync when the animator is driven from code (window.__anim, URL params).
   if (animator) {
     const st = animator.state(), k = `${st.clip}|${st.paused}|${st.speedScale}`;
     if (k !== uiKey) { uiKey = k; syncAnimUI(); }
+  }
+  if (body) {
+    scene.updateMatrixWorld();                  // bones after the animator: gaze frame + hair capsules
+    if (holdWeights) for (const m of parts) applyMorphWeights(m, holdWeights);
+    else updateEyes(dt);
+    if (values.hairCollide) for (const [m, c] of colliders) if (m.visible) c.update();
   }
   renderer.render(scene, cam);
 });

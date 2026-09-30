@@ -23,17 +23,26 @@ const mean = ps => ps.reduce((s, p) => add(s, p, 1 / ps.length), [0, 0, 0]);
 const allVerts = part => part.prims.flatMap(p => p.pos);
 const allTargets = (part, t) => part.prims.flatMap(p => p.targets[t]);
 
-test('base GLB: Body + 5 face parts, one skin (53 joints), identical 12 morph target names', () => {
+// Morph targets (blender/build_base.py MORPH_KIND): 12 macro, 26 face detail, 2 blink, 4 look, 16 correctives.
+const NT = 60;
+const kind = n => (n.startsWith('face_') ? 'face' : n.startsWith('blink_') ? 'expr' : n.startsWith('look_') ? 'look'
+  : n.startsWith('corr_') ? 'corr' : 'macro');
+const own = kind2 => kind2 === 'look' || kind2 === 'expr';       // eyes / lids move on their own
+
+test('base GLB: Body + 5 face parts, one skin (53 joints), identical 60 morph target names', () => {
   assert.ok(BODY, 'node Body');
   assert.equal(G.json.skins.length, 1);
   assert.equal(jointNames(G).length, 53);
   const names = BODY.targetNames;
-  assert.equal(names.length, 12);
+  assert.equal(names.length, NT);
+  const count = k => names.filter(n => kind(n) === k).length;
+  assert.deepEqual([count('macro'), count('face'), count('expr'), count('look'), count('corr')], [12, 26, 2, 4, 16]);
+  assert.ok(G.json.extensionsRequired?.includes('KHR_mesh_quantization'), 'quantized morph deltas');
   for (const n of FACE) {
     assert.ok(P[n], `node ${n}`);
     assert.equal(P[n].nodeDef.skin, 0, `${n} skinned with skin 0`);
     assert.deepEqual(P[n].targetNames, names, `${n} target names`);
-    for (const p of P[n].prims) assert.equal(p.targets.length, 12, `${n} targets per primitive`);
+    for (const p of P[n].prims) assert.equal(p.targets.length, NT, `${n} targets per primitive`);
   }
   // body stays the first mesh (older tools used meshes[0])
   assert.equal(G.json.nodes[G.json.nodes.findIndex(n => n.name === 'Body')].mesh, 0);
@@ -60,6 +69,7 @@ function followCheck(part, r, label) {
   assert.ok(near.length > 20, `${label}: body vertices near the part (${near.length})`);
   const worst = [];
   BODY.targetNames.forEach((m, t) => {
+    if (own(kind(m))) return;                                     // tested separately below
     const dPart = mean(allTargets(part, t));
     const dBody = mean(near.map(i => BODY.prims[0].targets[t][i]));
     const err = dist(dPart, dBody), mag = Math.hypot(...dBody);
@@ -79,13 +89,42 @@ test('teeth/tongue stay behind the lips, eyes behind the brow ridge, at every mo
   const nearBody = (c, r) => bpos.map((p, i) => [p, i]).filter(([p]) => dist(p, c) < r).map(([, i]) => i);
   const mouth = nearBody(mean(allVerts(P.Teeth)), 0.045);
   const eyeC = mean(allVerts(P.Eyes)), brow = nearBody(eyeC, 0.06);
-  for (let t = -1; t < 12; t++) {
+  for (let t = -1; t < NT; t++) {
+    if (t >= 0 && own(kind(BODY.targetNames[t]))) continue;
     const at = (part) => part.prims.flatMap(p => p.pos.map((v, i) => (t < 0 ? v : add(v, p.targets[t][i]))));
     const bodyAt = idx => idx.map(i => (t < 0 ? bpos[i] : add(bpos[i], BODY.prims[0].targets[t][i])));
     const m = t < 0 ? 'neutral' : BODY.targetNames[t];
     assert.ok(front(at(P.Teeth)) < front(bodyAt(mouth)) - 0.002, `${m}: teeth in front of the lips`);
     assert.ok(front(at(P.Tongue)) < front(at(P.Teeth)), `${m}: tongue in front of the teeth`);
     assert.ok(front(at(P.Eyes)) < front(bodyAt(brow)), `${m}: eyes in front of the brow/nose region`);
+  }
+});
+
+test('blink morphs close the lids of one side; look morphs rotate only the eyeballs', () => {
+  const ti = n => BODY.targetNames.indexOf(n);
+  const bodyD = t => BODY.prims[0].targets[t];
+  const eyeC = mean(allVerts(P.Eyes));
+  for (const [n, side] of [['blink_left', 1], ['blink_right', -1]]) {
+    const d = bodyD(ti(n)), pos = BODY.prims[0].pos;
+    let best = 0, at = null;
+    d.forEach((v, i) => { const m = Math.hypot(...v); if (m > best) { best = m; at = pos[i]; } });
+    assert.ok(best > 0.005 && best < 0.02, `${n}: lid moves ${(best * 1000).toFixed(1)} mm`);
+    assert.ok(Math.sign(at[0] - eyeC[0]) === side, `${n}: moving lid on the character's ${side > 0 ? 'left (+X)' : 'right (-X)'}`);
+    assert.ok(dist(at, eyeC) < 0.06, `${n}: near the eyes`);
+    const lash = Math.max(...allTargets(P.Eyelashes, ti(n)).map(v => Math.hypot(...v)));
+    assert.ok(lash > 0.003, `${n}: lashes follow the lid (${(lash * 1000).toFixed(1)} mm)`);
+  }
+  for (const [n, axis, sign] of [['look_left', 0, 1], ['look_right', 0, -1], ['look_up', 1, 1], ['look_down', 1, -1]]) {
+    const t = ti(n);
+    // the front of the eyes (cornea / iris, largest z = facing +Z) moves in the look direction
+    const verts = allVerts(P.Eyes), zmax = Math.max(...verts.map(p => p[2]));
+    const front = verts.map((p, i) => [p, i]).filter(([p]) => p[2] > zmax - 0.004).map(([, i]) => i);
+    const dm = mean(front.map(i => allTargets(P.Eyes, t)[i]));
+    assert.ok(sign * dm[axis] > 0.003, `${n}: eye front moves ${JSON.stringify(dm.map(v => +v.toFixed(4)))}`);
+    for (const other of ['Body', 'Eyebrows', 'Eyelashes', 'Teeth']) {
+      const m = Math.max(...allTargets(P[other], t).map(v => Math.hypot(...v)));
+      assert.ok(m < 1e-4, `${n}: ${other} does not move (${m})`);
+    }
   }
 });
 
@@ -115,8 +154,8 @@ test('size budget: base GLB < 9 MB, base + default hair < 12 MB', () => {
   assert.ok(base + hair < 12e6, `base + hair ${base + hair}`);
 });
 
-test('hair.json: >= 4 styles, each GLB skinned to the body joints, 12 morphs, follows the head', () => {
-  assert.ok(manifest.styles.length >= 4);
+test('hair.json: >= 8 styles, each GLB skinned to the body joints, 60 morphs, follows the head', () => {
+  assert.ok(manifest.styles.length >= 8);
   assert.ok(manifest.styles.some(s => s.id === manifest.default));
   const baseJoints = new Set(jointNames(G));
   const upper = BODY.prims[0].pos.map((p, i) => [p, i]).filter(([p]) => p[1] > 1.1).map(([, i]) => i);
@@ -134,6 +173,10 @@ test('hair.json: >= 4 styles, each GLB skinned to the body joints, 12 morphs, fo
       if (p.weights[i][k] > 1e-4) assert.ok(HAIR_BONES.has(names[ji]), `${s.id}: weight on ${names[ji]}`);
     }));
     assert.equal(h.json.materials[0].alphaMode, 'MASK');
+    const mesh0 = h.json.meshes[hp.nodeDef.mesh];
+    for (const at of ['_CCHAIR', '_CCEDGE']) {
+      assert.ok(mesh0.primitives.every(p => p.attributes[at] !== undefined), `${s.id}: attribute ${at}`);
+    }
     assert.ok(h.json.materials[0].extras?.tint?.gain > 0);
     // hair moves like the skin under it: each (sampled) hair vertex vs its nearest upper-body vertex,
     // mean error <= 10 % of the mean skin displacement + 12 mm, for every morph. MHCLO fitting scales the
@@ -154,7 +197,9 @@ test('hair.json: >= 4 styles, each GLB skinned to the body joints, 12 morphs, fo
         const db = BODY.prims[0].targets[t][i];
         err += dist(ht[t][k], db) / pairs.length; mag += Math.hypot(...db) / pairs.length;
       }
-      assert.ok(err < 0.1 * mag + 0.012, `${s.id} ${m}: mean error ${(err * 1000).toFixed(1)} mm vs skin motion ${(mag * 1000).toFixed(1)} mm`);
+      // correctives are differences of combined shapes, so the MHCLO fit error of two shapes adds up: 25 %
+      const tol = (kind(m) === 'corr' ? 0.25 : 0.1) * mag + 0.012;
+      assert.ok(err < tol,`${s.id} ${m}: mean error ${(err * 1000).toFixed(1)} mm vs skin motion ${(mag * 1000).toFixed(1)} mm`);
     });
   }
 });

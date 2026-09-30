@@ -3,14 +3,39 @@
 // `scale` caps the maximum influence of a side: a number (both sides) or { neg, pos } (default 1).
 // Morphs are linear offsets baked at the macro extremes, so e.g. height_tall at 1.0 is ~+0.7 m;
 // scaling the positive height side to 0.45 keeps the tallest setting around +0.3 m.
+// group 'body': MakeHuman macro morphs; group 'face': MakeHuman detail targets (face_<stem>_decr / _incr,
+// blender/build_base.py FACE_TARGETS). Face morphs are carried by every part (eyes, brows, lashes, teeth,
+// hair), so e.g. the hair follows a longer forehead or larger ears. They move no joints.
 export const SLIDERS = [
-  { id: 'gender',      label: 'Køn (K ↔ M)',           neg: 'gender_female',        pos: 'gender_male' },
-  { id: 'age',         label: 'Alder (barn ↔ gammel)', neg: 'age_child',            pos: 'age_old' },
-  { id: 'height',      label: 'Højde',                 neg: 'height_short',         pos: 'height_tall', scale: { pos: 0.45 } },
-  { id: 'weight',      label: 'Vægt',                  neg: 'weight_min',           pos: 'weight_max' },
-  { id: 'muscle',      label: 'Muskler',               neg: 'muscle_min',           pos: 'muscle_max' },
-  { id: 'proportions', label: 'Proportioner',          neg: 'proportions_uncommon', pos: 'proportions_ideal' },
+  { id: 'gender',      group: 'body', label: 'Køn (K ↔ M)',           neg: 'gender_female',        pos: 'gender_male' },
+  { id: 'age',         group: 'body', label: 'Alder (barn ↔ gammel)', neg: 'age_child',            pos: 'age_old' },
+  { id: 'height',      group: 'body', label: 'Højde',                 neg: 'height_short',         pos: 'height_tall', scale: { pos: 0.45 } },
+  { id: 'weight',      group: 'body', label: 'Vægt',                  neg: 'weight_min',           pos: 'weight_max' },
+  { id: 'muscle',      group: 'body', label: 'Muskler',               neg: 'muscle_min',           pos: 'muscle_max' },
+  { id: 'proportions', group: 'body', label: 'Proportioner',          neg: 'proportions_uncommon', pos: 'proportions_ideal' },
+  ...[
+    ['noseWidth', 'nose_width', 'Næsebredde'], ['noseLength', 'nose_length', 'Næselængde'],
+    ['noseHeight', 'nose_height', 'Næsehøjde'], ['jawWidth', 'jaw_width', 'Kæbebredde'],
+    ['chin', 'chin', 'Hage'], ['cheekbones', 'cheekbones', 'Kindben'],
+    ['eyeSize', 'eye_size', 'Øjenstørrelse', 0.7], ['eyeSpacing', 'eye_spacing', 'Øjenafstand'],
+    ['eyeTilt', 'eye_tilt', 'Øjenhældning'], ['lips', 'lips', 'Læber'],
+    ['mouthWidth', 'mouth_width', 'Mundbredde'], ['earSize', 'ear_size', 'Ørestørrelse'],
+    ['forehead', 'forehead', 'Pande', 0.6],
+  ].map(([id, stem, label, scale]) => ({ id, group: 'face', label, neg: `face_${stem}_decr`, pos: `face_${stem}_incr`, ...(scale ? { scale } : {}) })),
 ];
+export const FACE_SLIDERS = SLIDERS.filter(s => s.group === 'face');
+
+// Corrective morphs (blender/build_base.py CORRECTIVE_PAIRS): corr_<A>__<B> = what the real MakeHuman
+// combination A+B adds on top of the linear sum of A and B. Runtime weight = influence(A) * influence(B),
+// which is exact at the corners and bilinear in between (MakeHuman itself blends its macro targets
+// multi-linearly, so this is the same model). Pairs: gender x age, weight x muscle, gender x muscle,
+// gender x weight (height and proportions interact little and are left linear).
+const CORR_AXES = [['gender', 'age'], ['weight', 'muscle'], ['gender', 'muscle'], ['gender', 'weight']];
+const sliderById = Object.fromEntries(SLIDERS.map(s => [s.id, s]));
+export const CORRECTIVES = CORR_AXES.flatMap(([a, b]) => {
+  const A = sliderById[a], B = sliderById[b];
+  return [A.neg, A.pos].flatMap(ma => [B.neg, B.pos].map(mb => ({ name: `corr_${ma}__${mb}`, a: ma, b: mb })));
+});
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 function sideScale(s, side) {
@@ -20,7 +45,8 @@ function sideScale(s, side) {
   return sc[side] ?? 1;
 }
 
-/** Slider values -> { morphName: influence } for every morph owned by a slider (inactive side = 0). */
+/** Slider values -> { morphName: influence } for every morph owned by a slider (inactive side = 0),
+ *  plus the corrective morphs (product of their two parts). */
 export function sliderInfluences(values) {
   const out = {};
   for (const s of SLIDERS) {
@@ -28,10 +54,11 @@ export function sliderInfluences(values) {
     out[s.neg] = v < 0 ? -v * sideScale(s, 'neg') : 0;
     out[s.pos] = v > 0 ? v * sideScale(s, 'pos') : 0;
   }
+  for (const c of CORRECTIVES) out[c.name] = out[c.a] * out[c.b];
   return out;
 }
 
-/** Returns (and warns once about) the slider morph names missing from the mesh. */
+/** Returns (and warns once about) the slider morph names missing from the mesh (correctives are optional). */
 export function validateMorphs(mesh) {
   const dict = mesh?.morphTargetDictionary || {};
   const missing = [];
@@ -41,14 +68,18 @@ export function validateMorphs(mesh) {
 }
 
 const warnedMorphs = new Set();
-/** Sets only the influences of morphs owned by SLIDERS; other morph targets are left untouched. */
+const optionalMorph = n => n.startsWith('corr_');
+/** Sets only the influences of morphs owned by SLIDERS (and the correctives); other morph targets
+ *  (blink, look) are left untouched. */
 export function applySliders(mesh, values) {
   const idx = mesh.morphTargetDictionary, inf = mesh.morphTargetInfluences;
   if (!idx || !inf) { console.warn('[character] mesh has no morph targets'); return; }
   for (const [name, w] of Object.entries(sliderInfluences(values))) {
     const i = idx[name];
     if (i === undefined) {
-      if (!warnedMorphs.has(name)) { warnedMorphs.add(name); console.warn(`[character] unknown morph "${name}" ignored`); }
+      if (!optionalMorph(name) && !warnedMorphs.has(name)) {
+        warnedMorphs.add(name); console.warn(`[character] unknown morph "${name}" ignored`);
+      }
       continue;
     }
     inf[i] = w;
