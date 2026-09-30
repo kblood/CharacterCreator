@@ -21,6 +21,11 @@
 4. Rig with `game_engine` **on the full mesh** (weights are indexed on the complete basemesh incl. helper geometry), *then* delete everything outside the `body` vertex group (13 380 verts remain; shape keys and weights survive bmesh deletion).
 5. Export GLB: `export_morph=True, export_skins=True, export_animations=False, export_yup=True`.
 
+Animation bake (`blender/bake_clips.py`, separate step): opens a fresh `.blend` from `build_base.py --blend`, keys
+`output/animations/*.json` as one action per clip (rotations + a Root translation only) and exports
+`output/base_body_anim.glb`. Details/gotchas (slotted actions, frame offset, no forced sampling) in
+`docs/ANIMATION_PLAN.md` section 4 D; gate with `node tools/check_anim_glb.mjs`.
+
 ## Gotchas
 - `create_human(feet_on_ground=True)` is required, otherwise the figure floats/sinks relative to the origin (I had it off first: feet ended below the grid).
 - MPFB scale factor 0.1 gives metres; `height_tall` is +0.7 m at full influence, so `web/character.js` caps that side with `scale: { pos: 0.45 }` (~+0.3 m). Keep the morph itself unscaled in the GLB.

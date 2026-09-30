@@ -25,6 +25,19 @@
 - [x] Integration check (headless Chrome, local `build/site`): no console errors, 12 morphs / 53 bones loaded,
       `height=1` -> influence 0.45, head bone +0.30 m, skinned mesh top +0.32 m; reset restores bind pose exactly.
 
+## Animation (idle / walk / run), 2026-09-30
+- [x] Own procedural clips (`web/animation/clips.js`) on canonical joint names (`web/humanoid.js`, `web/animation/`),
+      rotation deltas vs. rest only; leg IK adapts stride/tempo/pelvis to the current body. Viewer UI: clip select,
+      play/pause, speed 0.25..2. Contracts: `docs/ANIMATION_PLAN.md`.
+- [x] Tests: `node --test "tests/*.test.mjs"` = 37 tests, 36 pass, 1 skipped (three.js test, needs `THREE_DIR`).
+- [x] Baked: `node tools/sample_clips.mjs` -> `output/animations/*.json` (60 fps); `blender/bake_clips.py` ->
+      `output/base_body_anim.glb` (4.67 MB, neutral body); `node tools/check_anim_glb.mjs` -> CHECK OK.
+- [x] Headless Chrome on `build/site`: no console errors; feet no sink/float/slide on 8 extreme bodies (tolerances
+      in the plan).
+- Not verified: motion quality over time / side view (run knee bend may look "sitting"), sliding right after a speed
+  change mid-step, mobile / real GPU, playback of the baked GLB in Blender/Unity/Godot.
+- Open: `deploy.ps1` stages `base_body_anim.glb` too (+4.67 MB) and not `output/animations/*.json` - decide before deploy.
+
 ## Open issues
 - Macro morphs are linearised samples (no gender x weight interaction) -> extremes combined may look off.
 - Joint offsets are linear per morph too (same limitation as the vertices).
@@ -33,7 +46,7 @@
 - Face sliders (MPFB detail targets), eyes/teeth/eyebrows.
 - Hair: swappable meshes + hair colour.
 - Clothing fitting (swappable parts fitted to the body).
-- Animation retarget test (Mixamo/KayKit clips on the `game_engine` rig, with morphs + skeleton offsets applied).
+- More clips (jump, wave, crouch, ...) as new `CLIPS` entries; retarget test of the baked GLB in other engines.
 - Skin texture (currently flat baseColor).
 - Engine ports of `character.js` (Unity/Godot/Unreal) reading the same GLB + joints sidecar.
 

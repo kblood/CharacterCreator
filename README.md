@@ -15,6 +15,7 @@ Live viewer: https://dionysus.dk/webxr/charactercreator/
 | Skeleton follows body morphs (so animation does not distort) | **Done** - `output/base_body.joints.json` sidecar + `applySkeleton()` in `web/character.js`. |
 | Skin colour (runtime material baseColor) | **Done** - flat colour; no skin texture yet. |
 | Standard humanoid rig | **Done** - MPFB `game_engine` rig (53 bones). Retarget test with Mixamo/KayKit clips: **planned**. |
+| Animation: idle, walk, run | **Done** - own procedural clips on canonical (VRM-style) joint names, rotations only, adapt to the current body (leg IK keeps feet planted). Baked to `output/animations/*.json` and `output/base_body_anim.glb`. See [docs/ANIMATION_PLAN.md](docs/ANIMATION_PLAN.md). |
 | Face sliders, eyes/teeth/eyebrows | Planned |
 | Hair: swappable meshes + hair colour | Planned |
 | Clothing: swappable parts fitted to the body | Planned |
@@ -26,10 +27,12 @@ Details and the running TODO list: [docs/STATUS.md](docs/STATUS.md).
 
 | Path | Contents |
 |---|---|
-| `blender/` | bpy build scripts (`build_base.py`; helpers in `blender/tools/`) |
-| `output/` | built assets: `base_body.glb`, `base_body.joints.json` (committed) |
-| `web/` | Three.js viewer + slider UI; `character.js` is the engine-agnostic slider -> morph/skeleton mapping |
-| `docs/` | `BLENDER_WORKFLOW.md` (how the build works, gotchas), `STATUS.md` |
+| `blender/` | bpy build scripts (`build_base.py`, `bake_clips.py`; helpers in `blender/tools/`) |
+| `output/` | built assets: `base_body.glb`, `base_body.joints.json`, `base_body_anim.glb` (body + baked clips), `animations/*.json` |
+| `web/` | Three.js viewer + slider UI; `character.js` is the engine-agnostic slider -> morph/skeleton mapping; `humanoid.js` + `animation/` = canonical skeleton, clips, animator |
+| `tools/` | node scripts: `sample_clips.mjs` (clips -> JSON), `check_anim_glb.mjs` (validates the baked GLB) |
+| `tests/` | `node --test` unit tests |
+| `docs/` | `BLENDER_WORKFLOW.md` (how the build works, gotchas), `STATUS.md`, `ANIMATION_PLAN.md` (pose convention, contracts) |
 | `build/` | generated, git-ignored: local staging site `build/site/` |
 
 ## Build the assets
@@ -53,7 +56,21 @@ python -m http.server -d build\site 8000    # open http://localhost:8000/
 ```
 
 The page needs HTTP (not `file://`) because it loads the GLB and ES modules. For scripted tests it exposes
-`window.__ready` and `window.__set(id, value)`.
+`window.__ready` and `window.__set(id, value)`, plus `window.__anim` / `window.__animProbe()` and the URL
+params `?anim=walk&animT=0.3&animSpeed=1.5` (animT = seek + pause).
+
+## Tests and baking the animations
+
+```powershell
+node --test "tests/*.test.mjs"              # Node 24; quotes needed. One three.js test is skipped unless THREE_DIR points at a three package
+node tools/sample_clips.mjs                 # clips -> output/animations/*.json (60 fps default)
+# fresh .blend of the base body into a scratch folder (never into output/), then bake:
+C:\Tools\Blender\blender.exe -b --python blender\build_base.py -- <scratch>\base_body.glb --blend <scratch>\base_body.blend
+C:\Tools\Blender\blender.exe -b --python blender\bake_clips.py -- --blend <scratch>\base_body.blend
+node tools/check_anim_glb.mjs               # must end with CHECK OK
+```
+
+Re-run `sample_clips.mjs` + bake whenever `web/animation/clips.js` changes.
 
 ## License
 
