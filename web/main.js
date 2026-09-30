@@ -10,6 +10,7 @@ import { createAnimator, SPEED_MIN, SPEED_MAX } from './animation/animator.js';
 import { CLIPS } from './animation/clips.js';
 import { createEyeLife, applyMorphWeights } from './eyelife.js';
 import { upgradeSkin, upgradeHair, upgradeCornea, setSkinParams, hairUniforms, createHairCollider } from './materials.js';
+import { createClothing } from './clothing.js';
 
 window.__booted = true;
 const params = new URLSearchParams(location.search);
@@ -31,6 +32,8 @@ const I18N = {
     lips: 'Læber', mouthWidth: 'Mundbredde', earSize: 'Ørestørrelse', forehead: 'Pandehøjde',
     blink: 'Blink', look: 'Blik', lookOff: 'Lige frem', lookCamera: 'Følg kameraet', lookMouse: 'Følg musen',
     hairCollide: 'Hår undgår skuldrene',
+    secClothes: 'Tøj', clothNone: 'Intet', clothPrimary: 'Farve', clothSecondary: 'Detalje',
+    clothLoading: 'Indlæser tøj…', clothError: 'Kunne ikke indlæse tøjet',
   },
   en: {
     gender: 'Gender (F ↔ M)', age: 'Age (child ↔ old)', height: 'Height', weight: 'Weight',
@@ -47,6 +50,8 @@ const I18N = {
     lips: 'Lips', mouthWidth: 'Mouth width', earSize: 'Ear size', forehead: 'Forehead height',
     blink: 'Blink', look: 'Gaze', lookOff: 'Straight ahead', lookCamera: 'Follow the camera', lookMouse: 'Follow the mouse',
     hairCollide: 'Hair avoids the shoulders',
+    secClothes: 'Clothes', clothNone: 'None', clothPrimary: 'Colour', clothSecondary: 'Detail',
+    clothLoading: 'Loading clothes…', clothError: 'Could not load the clothes',
   },
 };
 const lang = I18N[params.get('lang')] ? params.get('lang') : 'da';
@@ -187,8 +192,18 @@ const jointsReady = fetch('./base_body.joints.json')
 const hairReady = fetch('./hair.json')
   .then(r => (r.ok ? r.json() : null))
   .catch(() => null);
+// Clothing catalog is optional as well (web/clothing.js; clothing.json + clothing_<id>.glb, loaded on demand).
+const clothingReady = fetch('./clothing.json')
+  .then(r => (r.ok ? r.json() : null))
+  .catch(() => null);
 
 const loader = new GLTFLoader();
+const clothing = createClothing({
+  loader, lang, t, setStatus,
+  getBody: () => body,
+  addPart: m => { if (!parts.includes(m)) parts.push(m); },
+  onChange: () => update(),
+});
 setStatus(t('loading'));
 loader.load('./base_body.glb', async g => {
   scene.add(g.scene);
@@ -217,6 +232,8 @@ loader.load('./base_body.glb', async g => {
     setStatus(`${statusEl.textContent ? statusEl.textContent + '\n' : ''}${t('animError')} ${e?.message || e}`, true);
   }
   await initHair();
+  // ?outfit=tshirt,jeans (ids from clothing.json; ?outfit=none = nothing); default: the catalog default
+  await clothing.init(clothingReady, secClothes, params.has('outfit') ? params.get('outfit') : null);
   if (params.has('view')) setView(params.get('view'));
   window.__ready = true;
 }, xhr => {
@@ -386,6 +403,7 @@ const hairUI = [hl, hairSel, ...colorInput('hairColor', t('hairColor'))];
 colorInput('browColor', t('browColor'));
 checkbox(secLooks, 'hairCollide');
 hairUI.push(secLooks.lastChild);
+const secClothes = section('secClothes');      // filled by clothing.init() once clothing.json is loaded
 
 const resetBtn = Object.assign(document.createElement('button'), { type: 'button', textContent: t('reset') });
 resetBtn.onclick = () => {
@@ -393,18 +411,29 @@ resetBtn.onclick = () => {
   for (const [k, v] of Object.entries({ ...DEFAULT_TINTS, ...DEFAULT_TOGGLES })) { values[k] = v; inputs[k]?.show(v); }
   update();
   if (hairManifest) setHair(hairManifest.default);
+  clothing.reset();                            // catalog default outfit (none) + default garment colours
 };
 ui.append(resetBtn);
 
 // Test hooks: window.__set('height', 1) / __set('noseWidth', -0.5) / __set('skin', '#ff0000') /
 // __set('hair', 'long01' | null) / __set('hairColor' | 'browColor' | 'eyeColor', '#rrggbb') /
 // __set('blink' | 'hairCollide', bool) / __set('look', 'off' | 'camera' | 'mouse'). __set('hair', ...) returns a promise.
+// Clothing: __set('outfit', 'tshirt,jeans' | ['tshirt'] | null) / __set('wear', id) / __set('takeOff', slot) /
+// __set('clothColor', { id, primary?, secondary? }) (all return a promise); state: window.__clothingState().
 window.__set = (k, v) => {
   if (k === 'hair') return setHair(v);
+  if (k === 'outfit') return clothing.setOutfit(v);
+  if (k === 'wear') return clothing.wear(v);
+  if (k === 'takeOff') return clothing.takeOff(v);
+  if (k === 'clothColor') {
+    for (const w of ['primary', 'secondary']) if (v?.[w]) clothing.setColor(v.id, w, v[w]);
+    return Promise.resolve();
+  }
   values[k] = v; inputs[k]?.show(v); update();
   return undefined;
 };
 window.__values = () => JSON.parse(JSON.stringify(values));
+window.__clothingState = () => clothing.state();
 window.__hairUniforms = hairUniforms;           // tuning/tests (gradient, hairline fade, collision capsules)
 window.__hairState = () => ({ style: values.hair, pending: !!hairPending, loaded: [...hairCache.keys()],
   styles: hairManifest?.styles.map(s => s.id) ?? [],
