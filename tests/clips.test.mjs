@@ -159,6 +159,103 @@ test('locomotion is left/right symmetric: pose at t + T/2 is the mirror of pose 
   }
 });
 
+// ---- run biomechanics (docs/RUN_ANIMATION.md): flight, planting, joint ranges, speed scaling ----
+const RUN_BODIES = { ...BODIES, muscle: { muscle: 1 } };
+const runCases = function* (speeds = [1, 2]) {
+  for (const [body, values] of Object.entries(RUN_BODIES)) for (const s of speeds) {
+    const rig = RIGS[body] || rigOf(values);
+    yield { body, rig, s, ctx: makeContext(rig, { speedScale: s, body: values }) };
+  }
+};
+const DEGS = r => r / Q.DEG;
+/** Per-frame run measurements for one body/speed (left leg; the right is the mirrored half cycle). */
+function runFrames(rig, ctx, n = 240) {
+  const clip = CLIPS.run, tm = clip.timing(ctx), out = [];
+  for (let i = 0; i < n; i++) {
+    const t = (i * tm.duration) / n, p = clip.sample(t, ctx), X = fkPositions(rig.heads, p), c = clip.contacts(t, ctx);
+    const air = side => Math.min(X[`${side}Toes`][1] - rig.heads[`${side}Toes`][1], X[`${side}Foot`][1] - rig.heads[`${side}Foot`][1]);
+    const th = Q.vSub(X.leftLowerLeg, X.leftUpperLeg), tr = Q.vSub(X.neck, X.hips), tr0 = Q.vSub(rig.heads.neck, rig.heads.hips);
+    out.push({
+      t, c, root: p.root, X, airL: air('left'), airR: air('right'),
+      knee: DEGS(angleBetween(th, Q.vSub(X.leftFoot, X.leftLowerLeg))),
+      hipFlex: DEGS(Math.atan2(th[2], -th[1])),                              // + thigh forward of vertical
+      lean: DEGS(Math.atan2(tr[2], tr[1]) - Math.atan2(tr0[2], tr0[1])),
+      elbow: DEGS(angleBetween(Q.vSub(X.leftLowerArm, X.leftUpperArm), Q.vSub(X.leftHand, X.leftLowerArm))),
+    });
+  }
+  return { tm, out };
+}
+
+test('run: real flight phase, both feet clearly off the floor mid-flight', () => {
+  for (const { body, rig, ctx, s } of runCases()) {
+    const { tm, out } = runFrames(rig, ctx), tag = `run/${body}/${s}`;
+    const flight = out.filter(f => !f.c.left && !f.c.right).length / out.length;
+    assert.ok(flight >= 0.2 && flight <= 0.65, `${tag} flight share ${flight}`);
+    // mid-flight after left toe-off: phase beta + (0.5 - beta) / 2
+    const mid = CLIPS.run.sample((tm.beta + (0.5 - tm.beta) / 2) * tm.duration, ctx), X = fkPositions(rig.heads, mid);
+    for (const side of ['left', 'right']) {
+      assert.ok(X[`${side}Toes`][1] - rig.heads[`${side}Toes`][1] > 0.02 * ctx.legLength, `${tag} ${side} toes low mid-flight`);
+      assert.ok(X[`${side}Foot`][1] - rig.heads[`${side}Foot`][1] > 0.02 * ctx.legLength, `${tag} ${side} ankle low mid-flight`);
+    }
+    const airborne = out.filter(f => f.airL > 0.005 && f.airR > 0.005).length / out.length;
+    assert.ok(airborne >= (s > 1 ? 0.35 : 0.15), `${tag} visibly airborne share ${airborne}`);
+  }
+});
+
+test('run: stance foot exactly planted, no floor penetration, at 1x and 2x for every body', () => {
+  for (const { body, rig, ctx, s } of runCases()) {
+    const { tm, out } = runFrames(rig, ctx), tag = `run/${body}/${s}`;
+    let minAir = Infinity;
+    const runs = [];
+    let cur = null;
+    for (const f of [...out, ...out.map(g => ({ ...g, t: g.t + tm.duration }))]) {
+      minAir = Math.min(minAir, f.airL, f.airR);
+      if (f.c.left) {
+        assert.ok(Math.abs(f.X.leftToes[1] - rig.heads.leftToes[1]) < 5e-4, `${tag} planted ball height`);
+        (cur ||= []).push(f.X.leftToes[2] + tm.speed * f.t);
+      } else if (cur) { runs.push(cur); cur = null; }
+    }
+    assert.ok(minAir > -1e-3, `${tag} foot below floor ${minAir}`);
+    for (const r of runs) assert.ok(Math.max(...r) - Math.min(...r) < 1e-3, `${tag} stance slide ${Math.max(...r) - Math.min(...r)}`);
+  }
+});
+
+test('run: joint angles in human running ranges, not "sitting"', () => {
+  for (const { body, rig, ctx, s } of runCases()) {
+    const { tm, out } = runFrames(rig, ctx), tag = `run/${body}/${s}`;
+    const st = out.filter(f => f.c.left), sw = out.filter(f => !f.c.left);
+    const max = (a, k) => Math.max(...a.map(f => f[k])), min = (a, k) => Math.min(...a.map(f => f[k]));
+    assert.ok(st[0].knee <= 35, `${tag} knee at strike ${st[0].knee}`);
+    assert.ok(max(st, 'knee') <= 56, `${tag} stance knee flexion ${max(st, 'knee')}`);
+    assert.ok(max(st, 'knee') >= 25, `${tag} stance knee too stiff ${max(st, 'knee')}`);
+    assert.ok(max(sw, 'knee') >= 95 && max(sw, 'knee') <= 150, `${tag} swing knee ${max(sw, 'knee')} (heel recovery)`);
+    assert.ok(min(out, 'hipFlex') <= -12 && min(out, 'hipFlex') >= -35, `${tag} hip extension at toe-off ${min(out, 'hipFlex')}`);
+    assert.ok(max(out, 'hipFlex') >= 40 && max(out, 'hipFlex') <= 90, `${tag} hip flexion ${max(out, 'hipFlex')}`);
+    assert.ok(min(out, 'lean') >= 3 && max(out, 'lean') <= 17, `${tag} trunk lean ${min(out, 'lean')}..${max(out, 'lean')}`);
+    assert.ok(min(out, 'elbow') >= 60 && max(out, 'elbow') <= 120, `${tag} elbow ${min(out, 'elbow')}..${max(out, 'elbow')}`);
+    // pelvis: lowest around mid-stance, highest in flight, and never low like a crouch
+    const ys = out.map(f => f.root[1]), iMin = ys.indexOf(Math.min(...ys));
+    const ph = (iMin / out.length) % 0.5;
+    assert.ok(Math.abs(ph - tm.beta / 2) < 0.06, `${tag} pelvis low point at phase ${ph} (mid-stance ${tm.beta / 2})`);
+    assert.ok(Math.max(...ys) > -0.08 * ctx.legLength, `${tag} pelvis never rises ${Math.max(...ys)}`);
+    assert.ok(Math.min(...ys) > -0.13 * ctx.legLength, `${tag} pelvis crouch ${Math.min(...ys)}`);
+    assert.ok(Math.max(...ys) - Math.min(...ys) > 0.03 * ctx.legLength, `${tag} no vertical bob`);
+  }
+});
+
+test('run: cadence and stride grow with speed; tempo scales with the body', () => {
+  const t = s => CLIPS.run.timing(makeContext(RIGS.neutral, { speedScale: s }));
+  const cad = tm => 120 / tm.duration;
+  const [a, b, c] = [0.5, 1, 2].map(t);
+  assert.ok(cad(a) < cad(b) && cad(b) < cad(c), 'cadence rises with speed');
+  assert.ok(a.stride < b.stride && b.stride < c.stride, 'stride rises with speed');
+  assert.ok(a.beta > b.beta && b.beta > c.beta, 'contact share falls with speed');
+  assert.ok(cad(c) >= 185 && cad(c) <= 215, `fast cadence ${cad(c)}`);
+  assert.ok(c.stride / b.stride > 1.4, 'most of the speed gain comes from stride');
+  const child = CLIPS.run.timing(makeContext(RIGS.childShort)), tall = CLIPS.run.timing(makeContext(RIGS.tall));
+  assert.ok(cad(child) > cad(b) && cad(tall) < cad(b) && child.stride < b.stride && tall.stride > b.stride);
+});
+
 test('no crouching: pelvis never drops more than 15% of the leg length (any body, speed <= 2)', () => {
   for (const { name, clip, body, ctx, s } of cases()) {
     const T = clip.timing(ctx).duration;

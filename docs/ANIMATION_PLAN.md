@@ -164,11 +164,13 @@ body's own geometry and solving the angles makes no-slide/no-penetration hold by
 body, costs ~30 lines, and stays pure (bakeable). Per leg per frame:
 
 1. Foot targets (in-place frame). Phase offset 0.5 for the right leg, duty factor beta (walk ~0.62,
-   run ~0.38). Stance (s = phase/beta): toes (ball) at `rig.heads.<side>Toes` height, x = rest x +
+   run 0.32 at 1x, see `docs/RUN_ANIMATION.md`). Stance (s = phase/beta): toes (ball) at `rig.heads.<side>Toes` height, x = rest x +
    step-width offset, z moving back linearly `zc + beta*stride*(0.5 - s)` (exact speed = `speed`, so the
    foot is planted when the root moves at `speed`). Late stance: heel lift = foot rotation about the
    ball (+X plantarflex), so the ankle rises and the ball stays planted. Swing: smooth z from lift-off
-   to next strike, y = clearance * sin(pi u) (walk ~0.08 legLength, run ~0.2), pitch back to 0 at strike.
+   to next strike, y = clearance * sin(pi u) (walk ~0.08 legLength), pitch back to 0 at strike. The run
+   instead authors the swing as an ankle path (heel recovery, paw-back), centres the stance on the hip
+   joint and uses a ballistic pelvis bob (`docs/RUN_ANIMATION.md`).
 2. Pelvis: `root.y = min(bob(t), min over legs(reachY))`, `reachY` = the highest hip that keeps
    |ankle - hip| <= 0.985 (thigh + shin). Include the hips delta when computing the hip joint position.
 3. Two-bone IK: hip H, ankle target A, a = len.upperLeg, b = len.lowerLeg, d = clamp(|A-H|,
@@ -183,7 +185,9 @@ body, costs ~30 lines, and stays pure (bakeable). Per leg per frame:
 
 Tempo/stride (starting values, B tunes): walk v = speedScale * sqrt(0.2 g hipHeight) (1.30 m/s
 neutral), stride = 1.55 hipHeight * sqrt(speedScale); run v = speedScale * sqrt(1.0 g hipHeight)
-(2.9 m/s), stride = 2.4 hipHeight * sqrt(speedScale); duration = stride / v. Idle: 8 s loop, 2 breaths
+(2.9 m/s), step frequency 0.832 speedScale^0.28 sqrt(g / hipHeight) (168 spm neutral, 204 at 2x),
+stride = 2 v / step frequency, speed presets 0.25 / 1 / 2 blend jog -> fast run (`docs/RUN_ANIMATION.md`);
+duration = stride / v. Idle: 8 s loop, 2 breaths
 (chest/upperChest +X ~1.5 deg), one weight shift (root.x ~ 0.015 legLength, hips roll ~2 deg), feet
 IK-pinned to rest, arms at sides with slight sway.
 
@@ -203,6 +207,8 @@ sliderInfluences(values))` + `restGeometry`; speedScale 0.5/1/2; 120 samples per
 * feet don't cross: left toes x - right toes x >= 0.5 hipWidth;
 * idle: toes/foot within 0.005 m of rest the whole loop;
 * neutral walk speed 1.1-1.6 m/s, run 2.4-3.6 m/s, cadence walk 90-130, run 150-190 steps/min.
+* run (`docs/RUN_ANIMATION.md`, 9 bodies incl. muscle, 1x and 2x): flight phase with both feet off the
+  floor, stance slide < 1 mm, joint angles in running ranges (not sitting), cadence/stride rise with speed.
 
 ### C) `web/animation/animator.js` + `web/main.js` + `web/index.html`
 
