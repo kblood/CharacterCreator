@@ -1,4 +1,26 @@
+# staged deploy site + tarball (deploy.ps1)
 build/
-__pycache__/
-*.blend1
 
+# Blender scratch / backups (scratch normally lives outside the repo in C:\Tools\BlenderWorkTemp)
+*.blend
+*.blend1
+*.blend2
+*.blend@
+BlenderWorkTemp/
+blender/tmp/
+
+# Python
+__pycache__/
+*.pyc
+
+# OS / editor
+Thumbs.db
+desktop.ini
+.DS_Store
+.vscode/
+*.log
+
+# Deploy tooling and local agent notes: contain machine paths / server details, kept out of the repo
+deploy.ps1
+deploy.htaccess
+AGENTS.md

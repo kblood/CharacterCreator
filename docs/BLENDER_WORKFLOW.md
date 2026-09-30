@@ -23,8 +23,8 @@
 
 ## Gotchas
 - `create_human(feet_on_ground=True)` is required, otherwise the figure floats/sinks relative to the origin (I had it off first: feet ended below the grid).
-- MPFB scale factor 0.1 gives metres; `height_tall` is +0.7 m at full influence (too much, rescale).
-- The skeleton stays at bind pose when morphs are applied (glTF morphs move vertices only). Needs per-morph joint offsets applied engine-side (TODO).
+- MPFB scale factor 0.1 gives metres; `height_tall` is +0.7 m at full influence, so `web/character.js` caps that side with `scale: { pos: 0.45 }` (~+0.3 m). Keep the morph itself unscaled in the GLB.
+- glTF morphs move vertices only; the skeleton would stay at bind pose. The build therefore writes `output/base_body.joints.json` (`{"version":1,"bones":{name:[x,y,z]},"morphs":{morph:{bone:[dx,dy,dz]}}}`, glTF Y-up metres, bone names = GLB node names) and engines apply `sum(influence * offset)` to the bones (`applySkeleton` in `web/character.js`).
 - Morph target names travel in `mesh.extras.targetNames` and `morphTargetDictionary` in three.js; keep names stable, `web/character.js` depends on them.
 
 ## Verify a build

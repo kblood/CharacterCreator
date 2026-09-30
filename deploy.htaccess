@@ -1,7 +1,0 @@
-<IfModule mod_headers.c>
-  <FilesMatch "\.(js|mjs|html|json|glb)$">
-    Header set Cache-Control "no-cache, must-revalidate"
-  </FilesMatch>
-</IfModule>
-AddType model/gltf-binary .glb
-AddType model/gltf+json .gltf
