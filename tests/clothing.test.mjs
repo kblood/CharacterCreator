@@ -10,7 +10,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { jointNames } from '../tools/glb.mjs';
 import * as C from '../tools/cloth_check.mjs';
-import { wearRules, resolveOutfit, hiddenZoneMask, filterIndex } from '../web/clothing_rules.js';
+import { wearRules, resolveOutfit, hiddenZoneMask, coveringZoneMask, filterIndex } from '../web/clothing_rules.js';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const out = f => path.join(root, 'output', f);
@@ -126,7 +126,7 @@ test('morph follow: every garment moves with the skin under it (every macro extr
 
 test('penetration at every morph extreme / corrective corner: no garment inside visible skin or lower layers', () => {
   // counts of garment vertices > 2 mm inside (tools/cloth_check.mjs TOL). Seen: tee 4, jeans 2 (+2 inside the shoe tops), others 0 skin;
-  // coat vs tee+jeans up to 26 (of 2634) at weight_max+muscle_max, at the open front edges.
+  // coat vs drawn tee+jeans up to 20 (of 2584) at gender_female+weight_max, at the open front edges.
   const MAX_SKIN = 5, MAX_LAYERS = { jeans: 5, trenchcoat: 35 };
   for (const [id, under] of Object.entries(UNDER)) {
     const rows = C.morphReport(D, id, under);
@@ -140,9 +140,11 @@ test('penetration at every morph extreme / corrective corner: no garment inside 
 test('penetration in walk / run (linear blend skinning of the clip frames, neutral body)', { skip: !D.clips.walk }, () => {
   // limits = measured + margin (numbers: docs/STATUS.md). The tee side at the armpit sits inside the inner upper
   // arm when the arm swings down from the A pose (same arm-into-torso overlap as the bare body): up to ~50 verts.
+  // Coat layers = coat vertices inside the *drawn* tee (the tee triangles under the pinned coat are dropped):
+  // up to 78 (was 116 before the tee under the coat was hidden).
   const LIM = {
     shoes: { skin: 2, mm: 5, layers: 0 }, jeans: { skin: 2, mm: 5, layers: 10 }, skirt: { skin: 20, mm: 30, layers: 0 },
-    tshirt: { skin: 60, mm: 30, layers: 10 }, trenchcoat: { skin: 12, mm: 25, layers: 200, legs: 12 },
+    tshirt: { skin: 60, mm: 30, layers: 10 }, trenchcoat: { skin: 12, mm: 25, layers: 100, legs: 12 },
   };
   for (const [id, under] of Object.entries(UNDER)) {
     for (const clip of ['walk', 'run']) {
@@ -219,6 +221,10 @@ test('outfit rules: occupies / conflicts / layering / resolveOutfit / zone mask 
   assert.deepEqual(wearRules(cat, ['coat'], 'cape'), ['cape']);
   assert.deepEqual(wearRules(cat, ['cape'], 'coat'), ['coat'], 'conflicts apply in both directions');
   assert.equal(hiddenZoneMask(cat, ['dress', 'coat']), 7);
+  cat.items.forEach((it, k) => { it.layer = [2, 1, 2, 4, 5][k]; });
+  assert.equal(coveringZoneMask(cat, ['tee', 'pants', 'coat'], 'tee'), 4, 'the coat covers the tee');
+  assert.equal(coveringZoneMask(cat, ['tee', 'pants'], 'tee'), 0, 'nothing over the tee');
+  assert.equal(coveringZoneMask(cat, ['tee', 'coat'], 'coat'), 0, 'nothing over the coat');
   const idx = new Uint16Array([0, 1, 2, 1, 2, 3]), zone = { array: new Float32Array([1, 1, 3, 0]) };
   assert.deepEqual([...filterIndex(idx, zone, 1)], [1, 2, 3]);
   assert.equal(filterIndex(idx, zone, 0), idx);

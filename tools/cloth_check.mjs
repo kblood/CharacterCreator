@@ -111,17 +111,35 @@ export function grid(pos, cell = 0.02, keep = null) {
 }
 
 /** Count of `pts` more than TOL inside the surface (pos, normals), considering only surface vertices with keep[i]. */
-export function countInside(pts, pos, normals, keep = null, tol = TOL) {
+export function countInside(pts, pos, normals, keep = null, tol = TOL, drawn = null) {
+  // keep: surface vertices searched at all; drawn: the nearest surface vertex must be drawn for the point to count
+  // (a point under a hidden part of a lower garment is not visible through it)
   const near = grid(pos, 0.02, keep);
   let n = 0, worst = 0;
   const idx = [];
   pts.forEach((p, k) => {
     const i = near(p);
-    if (i < 0) return;
+    if (i < 0 || (drawn && !drawn[i])) return;
     const sd = Q.vDot(Q.vSub(p, pos[i]), normals[i]);
     if (sd < -tol) { n++; idx.push(k); worst = Math.min(worst, sd); }
   });
   return { n, worst, idx };
+}
+
+/** Vertices of lower garment `u` still drawn while `ids` are worn: a triangle is dropped when its three vertices
+ *  carry (attribute _CCZONE) a zone bit of a worn higher-layer item (web/clothing.js applyZones). */
+export function drawnMask(D, u, ids) {
+  const ug = D.garments[u], z = ug.prim.attr('_CCZONE'), idx = ug.prim.indices;
+  const layer = ug.item.layer;
+  const mask = hiddenMask(D.catalog, ids.filter(i => (D.garments[i]?.item.layer ?? 0) > layer));
+  const keep = new Array(ug.prim.pos.length).fill(!z || !mask);
+  if (!z || !mask) return keep;
+  for (let i = 0; i < idx.length; i += 3) {
+    const a = idx[i], b = idx[i + 1], c = idx[i + 2];
+    if ((z[a] & mask) && (z[b] & mask) && (z[c] & mask)) continue;
+    keep[a] = keep[b] = keep[c] = true;
+  }
+  return keep;
 }
 
 export function hiddenMask(catalog, ids) {
@@ -205,7 +223,7 @@ export function morphReport(D, id, under = []) {
     const r = { shape: s.name, skin: countInside(pts, body, bn, keep).n, layers: 0 };
     for (const u of under) {
       const ug = D.garments[u], up = morphed(ug.prim, s.w);
-      r.layers += countInside(pts, up, vertexNormals(up, ug.prim.indices)).n;
+      r.layers += countInside(pts, up, vertexNormals(up, ug.prim.indices), null, TOL, drawnMask(D, u, [id, ...under])).n;
     }
     return r;
   });
@@ -227,7 +245,7 @@ export function poseReport(D, id, clipName, under = [], count = 8) {
     let layers = 0;
     for (const u of under) {
       const ug = D.garments[u], up = skin(ug.glb, ug.prim, ug.prim.pos, world);
-      layers += countInside(pts, up, vertexNormals(up, ug.prim.indices)).n;
+      layers += countInside(pts, up, vertexNormals(up, ug.prim.indices), null, TOL, drawnMask(D, u, [id, ...under])).n;
     }
     const ratios = E.map(([a, b], k) => Q.vLen(Q.vSub(pts[a], pts[b])) / Math.max(len0[k], 1e-6)).sort((x, y) => x - y);
     // legs: garment vertices inside the (visible or not) thigh/calf skin = the coat skirt cutting into the legs
