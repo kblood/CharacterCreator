@@ -62,12 +62,19 @@ import sys
 
 import bpy
 import bmesh
+import numpy as np
 from mathutils import Vector
 from bl_ext.user_default.mpfb.services.humanservice import HumanService
 from bl_ext.user_default.mpfb.services.targetservice import TargetService
 from bl_ext.user_default.mpfb.services.locationservice import LocationService
 from bl_ext.user_default.mpfb.entities.objectproperties import HumanObjectProperties
 from bl_ext.user_default.mpfb.entities.rig import Rig
+from bl_ext.user_default.mpfb.entities.clothes.mhclo import Mhclo
+
+_HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path[:0] = [_HERE, os.path.join(_HERE, "tools")]
+import cc_textures as tex                                   # noqa: E402  blender/cc_textures.py
+from glbutil import read_glb, write_glb, patch_materials    # noqa: E402  blender/tools/glbutil.py
 
 PROJECT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RIG = "game_engine"
@@ -84,6 +91,24 @@ MACRO_MORPHS = [
 ]
 
 
+# MakeHuman system assets (all CC0, checked at build time by check_license()).
+SKIN = "young_caucasian_female"   # skin texture source (normalised to grey, tinted at runtime)
+EYE_TEX = "lightblue"             # eye texture source (iris made grey, tinted at runtime)
+BROWS, LASHES = "eyebrow001", "eyelashes01"
+# (id, UI labels). Every style becomes output/hair_<id>.glb + an entry in output/hair.json.
+HAIR_STYLES = [
+    ("short02", {"da": "Kort", "en": "Short"}),
+    ("bob02", {"da": "Page", "en": "Bob"}),
+    ("long01", {"da": "Langt", "en": "Long"}),
+    ("ponytail01", {"da": "Hestehale", "en": "Ponytail"}),
+    ("braid01", {"da": "Fletning", "en": "Braid"}),
+]
+HAIR_DEFAULT = "short02"
+HAIR_BONES = {"head", "neck_01", "spine_03", "spine_02", "clavicle_l", "clavicle_r"}  # no arm bones in hair
+# default runtime tints (sRGB hex); web/main.js uses the same values
+DEFAULTS = {"skin": "#c99a80", "hair": "#3b2a1e", "brows": "#3b2a1e", "lashes": "#1c1510", "eyes": "#4a2f19"}
+
+
 def parse_args():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
     p = argparse.ArgumentParser(prog="build_base.py")
@@ -92,9 +117,15 @@ def parse_args():
     p.add_argument("--blend", default=os.environ.get("CC_BLEND",
                    os.path.join(PROJECT, "build", "blend", "base_body.blend")))
     p.add_argument("--no-ground-fix", action="store_true")
+    p.add_argument("--assets", default=os.environ.get("CC_MH_ASSETS", os.path.join(PROJECT, "build", "mh_assets")),
+                   help="unpacked MakeHuman CC0 system assets (blender/tools/fetch_mh_assets.py)")
+    p.add_argument("--no-assets", action="store_true", help="bare body only (no eyes/brows/teeth/hair/skin texture)")
+    p.add_argument("--textures", default=os.path.join(PROJECT, "build", "textures"), help="prepared texture files")
     a = p.parse_args(argv)
     a.out = os.path.abspath(a.out)
     a.blend = os.path.abspath(a.blend)
+    a.assets = os.path.abspath(a.assets)
+    a.textures = os.path.abspath(a.textures)
     a.joints = os.path.splitext(a.out)[0] + ".joints.json"
     return a
 
@@ -177,7 +208,7 @@ base_lo, base_hi = body_extent(base)
 print("BUILD base verts", len(base), "body verts", len(body_idx), "bones fitted", len(base_heads),
       "height %.4f m" % (base_hi - base_lo))
 
-samples, offsets = {}, {}
+samples, offsets, raw = {}, {}, {}
 for key, prop, val in MACRO_MORPHS:
     set_macro(prop, val)
     c = coords()
@@ -186,6 +217,7 @@ for key, prop, val in MACRO_MORPHS:
     dz = (base_lo - lo) if not args.no_ground_fix else 0.0
     shift = Vector((0.0, 0.0, dz))
     samples[key] = [p + shift for p in c]
+    raw[key] = (np.array([tuple(p) for p in c]), dz)       # full basemesh (incl. helpers), for asset fitting
     offsets[key] = {b: heads[b] + shift - base_heads[b] for b in base_heads}
     mx = max(offsets[key].items(), key=lambda kv: kv[1].length)
     print("BUILD sample %-20s height %.4f m (%+.4f)  ground shift %+.4f  max bone offset %.4f (%s)"
@@ -237,6 +269,235 @@ lo_bone = min(bind.values(), key=lambda p: p.z).z
 assert base_lo - 0.05 < lo_bone < base_hi, "skeleton not inside the mesh (lowest head z %.3f)" % lo_bone
 assert fit_err < 1e-4, "neutral refit does not match the created rig"
 
+# ---- MakeHuman system assets (eyes, brows, lashes, teeth, tongue, hair) ---------------------------
+# Added AFTER the rig (MPFB interpolates their bone weights from the basemesh) and BEFORE the helper
+# geometry is deleted (the .mhclo vertex references also point at helper vertices, e.g. the hair helper).
+# Each asset vertex = sum(w_i * basemesh_vertex_i) + offset * (per-axis scale measured on the basemesh),
+# i.e. MPFB's ClothesService.fit_clothes_to_human. The same formula is evaluated on every morph sample,
+# so every asset carries the same 12 morph targets as the body.
+BASE_NP = np.array([tuple(p) for p in base])
+morph_names = [k for k, _, _ in MACRO_MORPHS]
+
+
+class MhcloFit:
+    """Vectorised MPFB mhclo fitting (see ClothesService.fit_clothes_to_human)."""
+
+    def __init__(self, mh):
+        n = len(mh.verts)
+        self.idx = np.array([mh.verts[i]["verts"] for i in range(n)], dtype=np.int64)
+        self.w = np.array([mh.verts[i]["weights"] for i in range(n)], dtype=np.float64)
+        self.off = np.array([tuple(mh.verts[i]["offsets"]) for i in range(n)], dtype=np.float64)
+        assert mh.x_scale and mh.y_scale and mh.z_scale, "mhclo without x/y/z_scale is not supported"
+        self.xs, self.ys, self.zs = mh.x_scale, mh.y_scale, mh.z_scale
+
+    def __call__(self, hv):
+        xs = abs(hv[self.xs[0], 0] - hv[self.xs[1], 0]) / self.xs[2]
+        ys = abs(hv[self.ys[0], 2] - hv[self.ys[1], 2]) / self.ys[2]
+        zs = abs(hv[self.zs[0], 1] - hv[self.zs[1], 1]) / self.zs[2]
+        return (self.w[:, :, None] * hv[self.idx]).sum(1) + self.off * np.array([xs, zs, ys])
+
+
+def check_license(pack_key, path):
+    """Every shipped asset must be CC0: the pack metadata AND the file header must say so."""
+    meta = PACK.get(pack_key)
+    assert meta and meta.get("license") == "CC0", \
+        "asset %s: license %s (only CC0 is shipped)" % (pack_key, meta and meta.get("license"))
+    with open(path, encoding="utf-8", errors="replace") as f:
+        head = f.read(600)
+    assert "released as CC0" in head, "asset %s: %s header does not state CC0" % (pack_key, path)
+    LICENSES.append({"asset": pack_key, "type": meta.get("type"),
+                     "file": os.path.relpath(path, args.assets).replace("\\", "/"),
+                     "license": "CC0", "author": meta.get("author"), "source": meta.get("source")})
+
+
+def set_weights(obj, allowed=None, rigid=None):
+    """rigid='head': every vertex 100 % on that bone. allowed={bones}: drop other groups, renormalise."""
+    if rigid:
+        for g in list(obj.vertex_groups):
+            obj.vertex_groups.remove(g)
+        obj.vertex_groups.new(name=rigid).add(list(range(len(obj.data.vertices))), 1.0, 'REPLACE')
+        return
+    head = obj.vertex_groups.get("head") or obj.vertex_groups.new(name="head")
+    names = {g.index: g.name for g in obj.vertex_groups}
+    for v in obj.data.vertices:
+        tot = sum(g.weight for g in v.groups if names.get(g.group) in allowed)
+        if tot <= 1e-6:
+            head.add([v.index], 1.0, 'REPLACE')
+            continue
+        for g in v.groups:
+            if names.get(g.group) in allowed:
+                g.weight = g.weight / tot
+    for g in list(obj.vertex_groups):
+        if g.name not in allowed:
+            obj.vertex_groups.remove(g)
+
+
+def add_asset(name, pack_key, rel, atype):
+    f = os.path.join(args.assets, rel)
+    check_license(pack_key, f)
+    bpy.ops.object.select_all(action='DESELECT')
+    bpy.context.view_layer.objects.active = human
+    obj = HumanService.add_mhclo_asset(f, human, asset_type=atype, subdiv_levels=0, material_type="NONE",
+                                       set_up_rigging=True, interpolate_weights=True,
+                                       import_subrig=False, import_weights=False)
+    mh = Mhclo()
+    mh.load(f)
+    fit = MhcloFit(mh)
+    neutral = fit(BASE_NP)
+    n = len(obj.data.vertices)
+    assert n == len(neutral), "%s: %d verts vs %d mhclo refs" % (name, n, len(neutral))
+    cur = np.empty(n * 3)
+    obj.data.vertices.foreach_get("co", cur)
+    # MPFB fits from a "from mix" shape-key snapshot of the basemesh, which is stale in background mode once
+    # our morph keys exist (same issue as add_builtin_rig, see below); our fit uses the true neutral vertices.
+    # (Checked separately: on a basemesh without extra shape keys both fits agree to < 1e-6 m.)
+    err = float(np.abs(cur.reshape(-1, 3) - neutral).max())
+    obj.data.vertices.foreach_set("co", neutral.ravel())
+    obj.shape_key_add(name="Basis", from_mix=False)
+    for key in morph_names:
+        hv, dz = raw[key]
+        co = fit(hv) + np.array([0.0, 0.0, dz])
+        sk = obj.shape_key_add(name=key, from_mix=False)
+        sk.slider_min, sk.slider_max = 0.0, 1.0
+        sk.data.foreach_set("co", co.ravel())
+    for md in list(obj.modifiers):
+        if md.type != 'ARMATURE':
+            obj.modifiers.remove(md)
+    obj.name = obj.data.name = name
+    obj.data.materials.clear()
+    print("BUILD asset %-16s %-12s verts %5d  faces %5d  MPFB snapshot diff %.1e m" % (name, pack_key, n, len(obj.data.polygons), err))
+    return obj
+
+
+def image_node(nt, path, non_color=False):
+    n = nt.nodes.new("ShaderNodeTexImage")
+    n.image = bpy.data.images.load(path, check_existing=True)
+    if non_color:
+        n.image.colorspace_settings.name = "Non-Color"
+    return n
+
+
+def make_material(name, tex_path=None, alpha=False, normal_path=None, color=(1, 1, 1, 1), alpha_value=None):
+    """Principled material the glTF exporter understands; factors/extras are patched after export."""
+    mat = bpy.data.materials.new(name)
+    mat.use_nodes = True
+    nt = mat.node_tree
+    b = nt.nodes["Principled BSDF"]
+    b.inputs["Base Color"].default_value = color
+    if tex_path:
+        im = image_node(nt, tex_path)
+        nt.links.new(im.outputs["Color"], b.inputs["Base Color"])
+        if alpha:
+            nt.links.new(im.outputs["Alpha"], b.inputs["Alpha"])
+    if alpha_value is not None:
+        b.inputs["Alpha"].default_value = alpha_value
+    if normal_path:
+        im = image_node(nt, normal_path, non_color=True)
+        nm = nt.nodes.new("ShaderNodeNormalMap")
+        nt.links.new(im.outputs["Color"], nm.inputs["Color"])
+        nt.links.new(nm.outputs["Normal"], b.inputs["Normal"])
+    return mat
+
+
+def tint_spec(hex_default, gain, **kw):
+    lin = tex.hex_to_lin(hex_default) * gain
+    if lin.max() > 1.0:
+        print("BUILD note: default tint %s x gain %.2f = %s > 1, clamped in baseColorFactor" % (hex_default, gain, lin))
+    d = {"baseColorFactor": [float(min(1.0, v)) for v in lin] + [1.0],
+         "extras": {"tint": {"gain": round(float(gain), 4), "default": hex_default}}}
+    d.update(kw)
+    return d
+
+
+PACK, LICENSES, MATERIALS = {}, [], {}
+face_objs, hair_objs = [], {}
+if not args.no_assets:
+    pack_json = os.path.join(args.assets, "packs", "makehuman_system_assets.json")
+    assert os.path.isfile(pack_json), ("MakeHuman assets missing in %s: run python blender/tools/fetch_mh_assets.py "
+                                       "(or pass --no-assets)" % args.assets)
+    with open(pack_json, encoding="utf-8") as f:
+        PACK = json.load(f)
+    T = args.textures
+    os.makedirs(T, exist_ok=True)
+
+    def A(*p):
+        return os.path.join(args.assets, *p)
+
+    # --- textures (see blender/cc_textures.py for the normalisation / tint contract) ---
+    check_license(SKIN, A("skins", SKIN, SKIN + ".mhmat"))
+    skin_src = A("skins", SKIN, sorted(fn for fn in os.listdir(A("skins", SKIN)) if fn.endswith(".png"))[0])
+    skin_gain, skin_mean = tex.skin_albedo(skin_src, os.path.join(T, "skin_albedo.jpg"))
+    tex.skin_normal(skin_src, os.path.join(T, "skin_normal.jpg"))
+    check_license(EYE_TEX, A("eyes", "materials", EYE_TEX + ".mhmat"))
+    iris_gain, eye_c, iris_r, ring_r = tex.eye(A("eyes", "materials", EYE_TEX + "_eye.png"), os.path.join(T, "eye.jpg"))
+    brow_gain = tex.tintable_alpha(A("eyebrows", BROWS, BROWS + ".png"), os.path.join(T, "eyebrow.png"), 512, k=0.55)
+    lash_gain = tex.tintable_alpha(A("eyelashes", LASHES, LASHES + ".png"), os.path.join(T, "eyelash.png"), 512, k=0.55)
+    tex.plain(A("teeth", "teeth_base", "teeth.png"), os.path.join(T, "teeth.jpg"), 512)
+    tex.plain(A("tongue", "tongue01", "tongue01_diffuse.png"), os.path.join(T, "tongue.jpg"), 512)
+    print("BUILD textures skin gain %.3f (mean lin %s) iris gain %.3f eye centres %s brow %.3f lash %.3f"
+          % (skin_gain, np.round(skin_mean, 3).tolist(), iris_gain, np.round(eye_c, 4).tolist(), brow_gain, lash_gain))
+
+    # --- face assets ---
+    eyes = add_asset("Eyes", "high-poly", "eyes/high-poly/high-poly.mhclo", "Eyes")
+    brows = add_asset("Eyebrows", BROWS, "eyebrows/%s/%s.mhclo" % (BROWS, BROWS), "Eyebrows")
+    lashes = add_asset("Eyelashes", LASHES, "eyelashes/%s/%s.mhclo" % (LASHES, LASHES), "Eyelashes")
+    teeth = add_asset("Teeth", "teeth_base", "teeth/teeth_base/teeth_base.mhclo", "Teeth")
+    tongue = add_asset("Tongue", "tongue01", "tongue/tongue01/tongue01.mhclo", "Tongue")
+    face_objs = [eyes, brows, lashes, teeth, tongue]
+    for o in face_objs:                       # rigid on the head: no neck bone may pull them apart
+        set_weights(o, rigid="head")
+
+    # eye: split faces into sclera (0) / iris (1, runtime tint) / cornea (2, transparent) by UV
+    eyes.data.materials.append(make_material("Eye", os.path.join(T, "eye.jpg")))
+    eyes.data.materials.append(make_material("Iris", os.path.join(T, "eye.jpg")))
+    eyes.data.materials.append(make_material("Cornea", alpha_value=0.1))
+    uvl = eyes.data.uv_layers[0].data
+    counts = [0, 0, 0]
+    for poly in eyes.data.polygons:
+        uvs = [uvl[li].uv for li in poly.loop_indices]
+        cu = sum(u.x for u in uvs) / len(uvs)
+        cv = sum(u.y for u in uvs) / len(uvs)
+        if cu > 0.8 and cv < 0.2:              # MakeHuman eye UV: the cornea shell maps to the empty corner
+            poly.material_index = 2
+        elif all(min(float(np.hypot(u.x - c[0], u.y - c[1])) for c in eye_c) <= iris_r + 18 / 1024 for u in uvs):
+            poly.material_index = 1            # all corners inside the iris incl. the dark limbal ring
+        else:
+            poly.material_index = 0
+        counts[poly.material_index] += 1
+    print("BUILD eye faces sclera/iris/cornea", counts)
+    brows.data.materials.append(make_material("Eyebrow", os.path.join(T, "eyebrow.png"), alpha=True))
+    lashes.data.materials.append(make_material("Eyelash", os.path.join(T, "eyelash.png"), alpha=True))
+    teeth.data.materials.append(make_material("Teeth", os.path.join(T, "teeth.jpg")))
+    tongue.data.materials.append(make_material("Tongue", os.path.join(T, "tongue.jpg")))
+
+    MATERIALS.update({
+        "Skin": tint_spec(DEFAULTS["skin"], skin_gain, roughness=0.52, metallic=0.0, normalScale=0.6, doubleSided=True),
+        "Eye": {"roughness": 0.25, "metallic": 0.0, "doubleSided": False},
+        "Iris": tint_spec(DEFAULTS["eyes"], iris_gain, roughness=0.3, metallic=0.0, doubleSided=False),
+        "Cornea": {"baseColorFactor": [1, 1, 1, 0.08], "alphaMode": "BLEND", "roughness": 0.03, "metallic": 0.0},
+        "Eyebrow": tint_spec(DEFAULTS["brows"], brow_gain, alphaMode="MASK", alphaCutoff=0.3, roughness=0.6,
+                             metallic=0.0, doubleSided=True),
+        "Eyelash": tint_spec(DEFAULTS["lashes"], lash_gain, alphaMode="MASK", alphaCutoff=0.3, roughness=0.6,
+                             metallic=0.0, doubleSided=True),
+        "Teeth": {"roughness": 0.25, "metallic": 0.0},
+        "Tongue": {"roughness": 0.35, "metallic": 0.0},
+    })
+
+    # --- hair styles: one object each, exported to their own GLB below ---
+    for hid, labels in HAIR_STYLES:
+        o = add_asset("Hair_" + hid, hid, "hair/%s/%s.mhclo" % (hid, hid), "Hair")
+        set_weights(o, allowed=HAIR_BONES)
+        src = sorted(fn for fn in os.listdir(A("hair", hid)) if fn.endswith("_diffuse.png"))[0]
+        gain = tex.tintable_alpha(A("hair", hid, src), os.path.join(T, "hair_%s.png" % hid), 1024, k=0.5)
+        o.data.materials.append(make_material("Hair_" + hid, os.path.join(T, "hair_%s.png" % hid), alpha=True))
+        MATERIALS["Hair_" + hid] = tint_spec(DEFAULTS["hair"], gain, alphaMode="MASK", alphaCutoff=0.35,
+                                            roughness=0.62, metallic=0.0, doubleSided=True)
+        hair_objs[hid] = o
+    for o in face_objs:
+        o["cc_export"] = "base"
+    for o in hair_objs.values():
+        o["cc_export"] = "hair"
+
 # strip helper geometry: keep only the 'body' vertex group
 bpy.ops.object.select_all(action='DESELECT')
 human.select_set(True); bpy.context.view_layer.objects.active = human
@@ -251,17 +512,55 @@ bpy.ops.mesh.delete(type='VERT')
 bpy.ops.object.mode_set(mode='OBJECT')
 print("BUILD final verts", len(human.data.vertices))
 
-# simple PBR skin material (baseColor tinted at runtime)
-mat = bpy.data.materials.new("Skin"); mat.use_nodes = True
-b = mat.node_tree.nodes["Principled BSDF"]
-b.inputs["Base Color"].default_value = (0.8, 0.6, 0.5, 1); b.inputs["Roughness"].default_value = 0.6
+# skin material: MakeHuman CC0 skin texture, normalised for runtime tinting (see blender/cc_textures.py)
+if args.no_assets:
+    mat = bpy.data.materials.new("Skin"); mat.use_nodes = True
+    b = mat.node_tree.nodes["Principled BSDF"]
+    b.inputs["Base Color"].default_value = (0.8, 0.6, 0.5, 1); b.inputs["Roughness"].default_value = 0.6
+else:
+    mat = make_material("Skin", os.path.join(args.textures, "skin_albedo.jpg"),
+                        normal_path=os.path.join(args.textures, "skin_normal.jpg"))
 human.data.materials.clear(); human.data.materials.append(mat)
 human.name = "Body"; rig.name = "Armature"
+human["cc_export"] = "base"
 
-bpy.ops.object.select_all(action='DESELECT')
-for o in (human, rig): o.select_set(True)
-bpy.ops.export_scene.gltf(filepath=args.out, export_format='GLB', use_selection=True,
-    export_morph=True, export_skins=True, export_animations=False, export_apply=False, export_yup=True)
+GLTF_OPTS = dict(export_format='GLB', use_selection=True, export_morph=True, export_skins=True,
+                 export_animations=False, export_apply=False, export_yup=True, export_image_format='AUTO')
+
+
+def export(path, objs, **kw):
+    bpy.ops.object.select_all(action='DESELECT')
+    for o in objs:
+        o.select_set(True)
+    bpy.context.view_layer.objects.active = rig
+    bpy.ops.export_scene.gltf(filepath=path, **dict(GLTF_OPTS, **kw))
+    g, b = read_glb(path)
+    patched = patch_materials(g, MATERIALS)
+    write_glb(path, g, b)
+    print("BUILD exported %s  %d bytes  meshes %s  materials patched %s"
+          % (os.path.basename(path), os.path.getsize(path), [m["name"] for m in g.get("meshes", [])], patched))
+
+
+# base GLB: body + face assets (+ rig). Hair is exported separately (one small GLB per style, loaded on demand).
+export(args.out, [human, rig] + face_objs)
+
+out_dir = os.path.dirname(args.out)
+if hair_objs:
+    manifest = {"version": 1, "default": HAIR_DEFAULT, "defaultColor": DEFAULTS["hair"], "styles": []}
+    for hid, labels in HAIR_STYLES:
+        fn = "hair_%s.glb" % hid
+        # hair morph normals are not worth the bytes (cards; the base normals are fine)
+        export(os.path.join(out_dir, fn), [hair_objs[hid], rig], export_morph_normal=False)
+        manifest["styles"].append({"id": hid, "file": fn, "label": labels, "mesh": "Hair_" + hid,
+                                   "bytes": os.path.getsize(os.path.join(out_dir, fn)),
+                                   "license": "CC0", "source": "MakeHuman system assets: hair/" + hid})
+    with open(os.path.join(out_dir, "hair.json"), "w", encoding="utf-8") as f:
+        json.dump(manifest, f, indent=1)
+    print("BUILD hair manifest", [s["id"] for s in manifest["styles"]])
+if LICENSES:
+    with open(os.path.join(os.path.dirname(args.blend), "asset_licenses.json"), "w", encoding="utf-8") as f:
+        json.dump(LICENSES, f, indent=1)
+    print("BUILD licenses verified (CC0):", ", ".join(l["asset"] for l in LICENSES))
 
 # offsets are vectors, so only the rotation part of the armature matrix applies
 rot = mw.to_3x3()
@@ -275,5 +574,6 @@ with open(args.joints, "w", encoding="utf-8") as f:
     json.dump(sidecar, f, separators=(",", ":"))
 print("BUILD joints", args.joints, len(sidecar["bones"]), "bones", len(sidecar["morphs"]), "morphs")
 
+bpy.context.scene["cc_materials"] = json.dumps(MATERIALS)   # bake_clips.py applies the same glTF material patch
 bpy.ops.wm.save_as_mainfile(filepath=args.blend)
 print("BUILD done", args.out)

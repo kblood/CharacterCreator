@@ -1,5 +1,6 @@
 """Bake the sampled humanoid clips (output/animations/*.json) onto the MPFB armature and export
-output/base_body_anim.glb = the base body (mesh, 12 morphs, skin) + one glTF animation per clip.
+output/base_body_anim.glb = the base body (Body + eye/brow/lash/teeth/tongue meshes, 12 morphs each, materials)
++ one glTF animation per clip. Hair is not included (separate hair_<id>.glb files).
 Contract: docs/ANIMATION_PLAN.md section 4 D.
 
 Run (project root, PowerShell), after `node tools/sample_clips.mjs`:
@@ -63,9 +64,16 @@ arm = bpy.data.objects.get("Armature")
 body = bpy.data.objects.get("Body")
 assert arm and arm.type == 'ARMATURE', "no object 'Armature' in the .blend"
 assert body and body.type == 'MESH', "no mesh 'Body' in the .blend"
-for o in list(bpy.data.objects):          # the .blend should hold only these two; keep the export identical
-    if o not in (arm, body):
-        print("BAKE note: extra object in .blend (not exported):", o.name)
+# export exactly what build_base.py put into base_body.glb: objects tagged cc_export == "base" (Body + eyes,
+# eyebrows, eyelashes, teeth, tongue). Hair ("hair") lives in its own GLBs and is not exported here.
+# Older .blend files without the tag: Body only.
+parts = [o for o in bpy.data.objects if o.type == 'MESH' and o.get("cc_export") == "base"] or [body]
+if body not in parts:
+    parts.insert(0, body)
+for o in list(bpy.data.objects):
+    if o is not arm and o not in parts:
+        print("BAKE note: object in .blend not exported:", o.name)
+print("BAKE meshes", [o.name for o in parts])
 
 with open(os.path.join(args.anim_dir, "index.json"), encoding="utf-8") as f:
     index = json.load(f)
@@ -167,7 +175,7 @@ scene.frame_set(0)
 
 os.makedirs(os.path.dirname(args.out), exist_ok=True)
 bpy.ops.object.select_all(action='DESELECT')
-for o in (body, arm):
+for o in parts + [arm]:
     o.select_set(True)
 bpy.context.view_layer.objects.active = arm
 bpy.ops.export_scene.gltf(
@@ -179,7 +187,7 @@ bpy.ops.export_scene.gltf(
     export_optimize_animation_size=False, export_optimize_animation_keep_anim_armature=True,
     export_reset_pose_bones=True, export_anim_slide_to_zero=True, export_negative_frame='SLIDE',
     export_morph_animation=False, export_bake_animation=False, export_anim_single_armature=True,
-    export_def_bones=False, export_leaf_bone=False, export_rest_position_armature=True)
+    export_def_bones=False, export_leaf_bone=False, export_rest_position_armature=True, export_image_format='AUTO')
 
 
 def align_rotation_signs(path):
@@ -217,5 +225,14 @@ def align_rotation_signs(path):
 
 
 print("BAKE sign-aligned %d rotation keys" % align_rotation_signs(args.out))
+
+# same glTF material patch as base_body.glb (factors, alpha modes, tint extras); build_base.py stores it in the .blend
+spec = json.loads(scene.get("cc_materials", "{}"))
+if spec:
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "tools"))
+    from glbutil import read_glb, write_glb, patch_materials
+    g, b = read_glb(args.out)
+    print("BAKE materials patched", patch_materials(g, spec))
+    write_glb(args.out, g, b)
 print("BAKE exported", args.out, "%d bytes" % os.path.getsize(args.out))
 print("BAKE done (the .blend is not saved)")

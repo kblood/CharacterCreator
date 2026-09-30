@@ -40,11 +40,49 @@ def main():
     nodes = gj["nodes"]
     ok = True
 
-    mesh = gj["meshes"][0]
+    body = next((n for n in nodes if n.get("name") == "Body" and "mesh" in n), None)
+    mesh = gj["meshes"][body["mesh"] if body else 0]
     names = mesh.get("extras", {}).get("targetNames", [])
     print("CHECK morph targets", len(mesh["primitives"][0].get("targets", [])), names)
     skin = gj["skins"][0]
     print("CHECK skin joints", len(skin["joints"]))
+    base_joints = {nodes[j]["name"] for j in skin["joints"]}
+
+    def check_meshes(g, label):
+        good = True
+        for n in g["nodes"]:
+            if "mesh" not in n:
+                continue
+            m = g["meshes"][n["mesh"]]
+            tn = m.get("extras", {}).get("targetNames", [])
+            nt = [len(p.get("targets", [])) for p in m["primitives"]]
+            mats = [g["materials"][p["material"]]["name"] for p in m["primitives"] if "material" in p]
+            fine = tn == names and all(k == len(names) for k in nt) and n.get("skin") == 0
+            good &= fine
+            print("CHECK %s %-12s %s targets %s materials %s" % (label, n["name"], "ok  " if fine else "FAIL", nt, mats))
+        return good
+
+    ok &= check_meshes(gj, "mesh")
+    # separate hair GLBs listed in hair.json next to the base GLB
+    manifest = os.path.join(os.path.dirname(glb), "hair.json")
+    if os.path.isfile(manifest):
+        hj = json.load(open(manifest, encoding="utf-8"))
+        for s in hj["styles"]:
+            p = os.path.join(os.path.dirname(glb), s["file"])
+            if not os.path.isfile(p):
+                ok = False
+                print("CHECK FAIL hair file missing", s["file"])
+                continue
+            with open(p, "rb") as f:
+                hd = f.read()
+            hl, _ = struct.unpack_from("<II", hd, 12)
+            hg = json.loads(hd[20:20 + hl])
+            hjoints = {hg["nodes"][j]["name"] for j in hg["skins"][0]["joints"]}
+            if not hjoints <= base_joints:
+                ok = False
+                print("CHECK FAIL hair %s joints not in base: %s" % (s["id"], sorted(hjoints - base_joints)))
+            ok &= check_meshes(hg, "hair " + s["id"])
+            print("CHECK hair %-10s %8d bytes (%s)" % (s["id"], len(hd), s.get("license")))
 
     parent = {c: i for i, n in enumerate(nodes) for c in n.get("children", [])}
 

@@ -1,0 +1,67 @@
+{
+ "version": 1,
+ "default": "short02",
+ "defaultColor": "#3b2a1e",
+ "styles": [
+  {
+   "id": "short02",
+   "file": "hair_short02.glb",
+   "label": {
+    "da": "Kort",
+    "en": "Short"
+   },
+   "mesh": "Hair_short02",
+   "bytes": 1034792,
+   "license": "CC0",
+   "source": "MakeHuman system assets: hair/short02"
+  },
+  {
+   "id": "bob02",
+   "file": "hair_bob02.glb",
+   "label": {
+    "da": "Page",
+    "en": "Bob"
+   },
+   "mesh": "Hair_bob02",
+   "bytes": 891448,
+   "license": "CC0",
+   "source": "MakeHuman system assets: hair/bob02"
+  },
+  {
+   "id": "long01",
+   "file": "hair_long01.glb",
+   "label": {
+    "da": "Langt",
+    "en": "Long"
+   },
+   "mesh": "Hair_long01",
+   "bytes": 1281560,
+   "license": "CC0",
+   "source": "MakeHuman system assets: hair/long01"
+  },
+  {
+   "id": "ponytail01",
+   "file": "hair_ponytail01.glb",
+   "label": {
+    "da": "Hestehale",
+    "en": "Ponytail"
+   },
+   "mesh": "Hair_ponytail01",
+   "bytes": 1650040,
+   "license": "CC0",
+   "source": "MakeHuman system assets: hair/ponytail01"
+  },
+  {
+   "id": "braid01",
+   "file": "hair_braid01.glb",
+   "label": {
+    "da": "Fletning",
+    "en": "Braid"
+   },
+   "mesh": "Hair_braid01",
+   "bytes": 1430424,
+   "license": "CC0",
+   "source": "MakeHuman system assets: hair/braid01"
+  }
+ ]
+}
