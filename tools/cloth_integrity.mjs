@@ -22,6 +22,7 @@
 //        [--wind 0..1] [--cloth 0] [--json [file]] [--quiet] [--timeline default|moves]
 //   --timeline moves: the extra clips instead of idle/walk/run (TIMELINES.moves: strafe left/right, walk backward,
 //   a jump with its automatic return to idle, idle_fidget); optional, not part of the default matrix.
+//   --timeline land: the airborne 'fall' loop and the 'land' one-shot (TIMELINES.land).
 // Exit code 1 when any case is above its threshold (CONFIG.thresholds). tests/integrity.test.mjs runs a reduced
 // matrix. docs/CLOTH_RUNTIME.md "Integrity harness" describes the numbers.
 import fs from 'node:fs';
@@ -53,6 +54,15 @@ export const CONFIG = {
     'shirt+skirt': ['shirt', 'skirt'],
     'hoodie+skirt': ['hoodie', 'skirt'],
     'shirt+jeans+coat': ['shirt', 'jeans', 'trenchcoat'],
+    // second garment batch (dress, jacket, boots); the jacket conflicts with hoodie / coat / dress, the dress with the
+    // coat (tested as 'dress+coat' before the conflict: 13 failing cases on 9 bodies), boots = shoes slot
+    'dress+shoes': ['dress', 'shoes'],
+    'dress+boots': ['dress', 'boots'],
+    'jacket+tee+jeans+shoes': ['tshirt', 'jeans', 'shoes', 'jacket'],
+    'jacket+shirt+shorts+boots': ['shirt', 'shorts', 'boots', 'jacket'],
+    'boots+jeans': ['jeans', 'boots'],
+    'boots+shorts': ['shorts', 'boots'],
+    'boots+skirt': ['skirt', 'boots'],
   },
   // every outfit is worn over the default underwear of the body's sex (like the viewer: web/clothing_rules.js
   // outfitWithUnderwear; female = gender < 0), unless the outfit lists an underwear item; false = no underwear
@@ -82,7 +92,8 @@ export const CONFIG = {
   selfGap: 0.01,         // m, the vertex's own surface occludes it only beyond this distance
   // garments whose mesh holds an inner part: connected components (welded) with <= maxVerts vertices become a
   // separate surface `id` just inside the garment (layer + layerOffset), e.g. the socks inside the shoes
-  split: { shoes: [{ id: 'socks', maxVerts: 400, layerOffset: -0.5 }] },
+  split: { shoes: [{ id: 'socks', maxVerts: 400, layerOffset: -0.5 }],
+    boots: [{ id: 'shaft', maxVerts: 400, layerOffset: -0.5 }] },     // the boot shaft (shoes03's sock) in the boot
   // A case (outfit x body x clip x pair) FAILS when, for poke or sink, the max per-frame vertex count > n AND the
   // deepest vertex > mm. The first matching rule wins (fields: outfit, body, clip, pair = 'outer:inner'; missing
   // = any). Default: at most 2 stray vertices, or any number shallower than 5 mm (a z-fight, not a hole).
@@ -393,6 +404,11 @@ export const TIMELINES = {
     timeline: [[-1, 'preroll', 'idle'], [0, 'idle', 'idle'], [1, 'strafe_left', 'strafe_left'], [3, 'strafe_right', 'strafe_right'],
       [5, 'walk_back', 'walk_back'], [7.5, 'idle', 'idle'], [8.5, 'jump', 'jump'], [11, 'idle_fidget', 'idle_fidget']],
     duration: 18.5,             // idle_fidget runs 7.5 s: shoulder roll + the forearm raise (3.2-7.4 s)
+  },
+  // the airborne loop at the jump apex, then 'land' (one-shot 1.06 s: touch-down, deep absorb, stand up; then idle)
+  land: {
+    timeline: [[-1, 'preroll', 'idle'], [0, 'idle', 'idle'], [1, 'fall', 'fall'], [2.5, 'land', 'land'], [4.5, 'idle', 'idle']],
+    duration: 6,
   },
 };
 

@@ -33,6 +33,7 @@ colour slots, license). Pipeline per garment (in layer order, inner garments fir
     attribute of lower garments they cover (hide_lower), and the viewer drops those garment triangles too.
 """
 import json
+import math
 import os
 import re
 
@@ -48,6 +49,7 @@ PUSH = 0.0015        # m, uniform outward push along the nearest body normal
 EPS_BODY = 0.003     # m, minimum garment - skin clearance at every sampled shape
 EPS_LAYER = 0.003    # m, minimum clearance over a garment of a lower layer
 FIX_RANGE = 0.03     # m, vertices deeper than this inside a collider are assumed to be mis-associated (not moved)
+WRAP_BODY_REACH = 0.01  # m, spec wrap_body: deepest skin poke through a garment face that wrap() fixes
 
 SLOTS = ["underwear", "bra", "top", "bottom", "shoes", "outerwear"]
 UNDERWEAR_SLOTS = ["underwear", "bra"]
@@ -169,13 +171,68 @@ GARMENTS = [
                   pocket_bottom=0.15, pocket_open_low=0.035),
          source_part="long-sleeve top of male_casualsuit02, loosened 6 mm; hood (lying down) generated, rib bands "
                      "and kangaroo pocket painted by this project"),
+    # --- added 2026-10-01, second batch (after the hoodie: zone bits keep their numbers) ---------------------------
+    # Dress (route C): the short-sleeve fitted top of female_casualsuit01 is the bodice (MHCLO-bound, so it follows the
+    # breast morphs and dyn_breast_* like the T-shirt), cut at the waist; coat_skirt (closed=True: a tube, no front
+    # opening, no vent) generates an A-line knee-length skirt from the waist and a belt over the seam. Only the skirt is
+    # cloth (pinned over the hips like the skirt). Slot top, occupies top + bottom (OCCUPIES), layer 3: it replaces
+    # every top and bottom and is worn under the coat / jacket. Not in the coat skirt envelope (coat_envelope): the coat
+    # is fitted over it by the clearance pass only, so the coat's skirt keeps its shape for every other outfit.
+    dict(id="dress", slot="top", layer=3, pack="female_casualsuit01", keep=[1311], zone="dress",
+         label={"da": "Kjole", "en": "Dress"}, primary="#7a2434", secondary="#221c1e", roughness=0.8,
+         # zone_near 0.05: the skin under the loose skirt top (3 cm clearance) must be hidden, else the dress
+         # vertices there count as layered over drawn skin and the hands hanging at the hips "sink" them
+         # (cloth_integrity dress:body, female walk 7 verts / 29 mm); with it 0 failing cases on 9 bodies
+         zone_tris=True, zone_near=0.05, coat_envelope=False, zone_near_pinned=(0.2, 0.10),
+         coat=dict(cut="spine_02-0.02", hem="knee+0.05", closed=True, row=0.04, columns=36, top_overlap=0.02,
+                   tuck=0.003, clearance=0.03, clearance_ramp=0.15, flare=0.15, max_slope=0.3, open_deg=0.0,
+                   open_width_deg=70.0, belt=0.04, belt_offset=0.004, uv=(0.01, 0.70, 0.01, 0.55),
+                   belt_uv=(0.73, 0.99, 0.02, 0.12), what="knee-length A-line skirt below the waist and belt"),
+         tex=dict(style="dress", piping=0.006, hem_stitch=0.012, buckle=(0.022, 0.016)),
+         # clearance_ramp 0.15 (full clearance just below the belt: the hard thighUp capsule caps stick out of the hip
+         # sides, a skirt top closer than that was pushed out against its pins, stretch p99 up to 1.9); limitSlack
+         # 0.008 (default 0.02): the hands at the sides push the nearly pinned rows less (short body p99 1.88 -> 1.56);
+         # legShare 0.6 + legShareFront 0.8 (0.8 all round: skinned stretch p99 3.6, sim p99 > 2 on short / child);
+         # pinTop / pinBottom lower (pelvis-0.04 / hip-0.18) let the thighs poke the pinned front: 43 failing cases
+         cloth=dict(pinTop="pelvis+0.03", pinBottom="hip-0.12", legShare=0.6, legShareFront=0.8, shareWidth=0.06,
+                    maxDistance=0.25, stretch=0.95, bend=0.3, bendVertical=0.6, damping=0.12, gravityScale=1.0,
+                    wind=0.4, friction=0.3, thickness=0.012, limit="arms,hips", limitSlack=0.008,
+                    limitSlackPinned=0.006),
+         source_part="short-sleeve top of female_casualsuit01 as the bodice, cut at the waist; knee-length skirt and "
+                     "belt generated, piping and buckle painted by this project"),
+    # Jacket: the hip-length padded jacket of male_casualsuit05 (the coat's source, uncut) with its collar / lapels
+    # (277, secondary colour), without the shirt front inside it: open front, worn over the T-shirt / shirt / dress.
+    # Layer 4 (outerwear): fitted over every lower layer it can be worn with; skinned, no cloth (the hem ends at the
+    # hips, nothing to swing). Conflicts with the hoodie (the hood lying on the upper back fills the jacket's collar
+    # space; fitting over it would bulk the jacket for every outfit), the coat (same slot) and the dress (its
+    # simulated skirt under the skinned jacket hem: 33 failing integrity cases on 9 bodies).
+    # inflate 8 mm: the front corners sank into the jeans / shorts in the female run (3 verts, 11 mm); zone_near 0.07:
+    # skin under the loose hem (hand sink); hide_grow 2: the T-shirt armpit (upper-arm weights) came out through the
+    # jacket's side in the jump (4 verts, 17 mm, tall).
+    dict(id="jacket", slot="outerwear", layer=4, pack="male_casualsuit05", keep=[1659, 277], zone="jacket",
+         label={"da": "Jakke", "en": "Jacket"}, primary="#8a7350", secondary="#4a3526",
+         secondary_from="small_components", roughness=0.85, lining=1.0, hides_lower=True, sim_layer_gap=0.018,
+         zone_tris=True, zone_near=0.07, inflate=0.008, hide_grow=2,
+         source_part="jacket of male_casualsuit05 with its collar and lapels (the shirt front inside it removed)"),
+    # Boots: shoes03 (shoe + calf-high sock) as a mid-calf boot: the sock is the leather shaft (secondary colour,
+    # small_components), reweighted to the shoe and kept inside it like shoes01's sock (sock_weights / keep_inside).
+    # Layer 1 like the shoes (same slot): the jeans / skirt / dress / coat are fitted over the shaft (jeans worn OVER
+    # the boot, not tucked in: the jeans legs are skinned, a tucked hem would need its own reshaping).
+    dict(id="boots", slot="shoes", layer=1, pack="shoes03", keep=[759, 759, 144, 144], zone="boots", closed=True,
+         label={"da": "Støvler", "en": "Boots"}, primary="#3b2a1e", secondary="#2a1f17",
+         secondary_from="small_components", roughness=0.6, sole=dict(top=0.004, floor=-0.001), dissolve_flat=1.0,
+         sec_leather=True, wrap_body=True, zone_fill=True,
+         source_part="shoes03 (shoes + calf-high socks as the boot shaft; the strap buckles removed)"),
 ]
-# occupies: slots an item fills (default: its own slot). A dress would be slot "top", occupies ["top", "bottom"],
+# occupies: slots an item fills (default: its own slot). The dress is slot "top", occupies ["top", "bottom"],
 # layer 3 -> it sits under the coat (layer 4). conflicts: item ids removed when this item is put on.
-OCCUPIES = {}
+OCCUPIES = {"dress": ["top", "bottom"]}
 # hoodie x trench coat: the coat's standing collar (8 mm from the neck) and the hood lying around the neck occupy the
 # same space, and fitting the coat over the hood would make the coat bulky for every other outfit.
-CONFLICTS = {"hoodie": ["trenchcoat"]}
+# dress x trench coat: the coat is built before the dress (GARMENTS order keeps the zone bits), so neither its
+# clearance pass nor its skirt envelope (coat_envelope) knows the dress; worn together (tools/cloth_integrity.mjs,
+# 9 bodies, full timeline): 13 failing cases, the dress skirt 22-30 mm through the coat skirt in walk / jump.
+CONFLICTS = {"hoodie": ["trenchcoat"], "jacket": ["trenchcoat", "hoodie", "dress"], "dress": ["trenchcoat"]}
 HIDES_EXTRA = {}
 # catalog "defaultUnderwear": worn by default per sex (web/clothing_rules.js defaultUnderwear)
 DEFAULT_UNDERWEAR = {"male": ["briefs"], "female": ["panties", "bra"]}
@@ -500,6 +557,10 @@ class Clothing:
             dv = dv[np.array([keep[kd.find(B.BASE_ARR[i])[1]] for i in dv], bool)]
         self.delete_unkept(obj, keep, small)
         rec = dict(obj=obj, spec=g, bit=self.zone_bit(g))
+        if g.get("dissolve_flat"):
+            rec["dissolve"] = self.dissolve_flat(obj, g["dissolve_flat"])
+        if g.get("sole"):
+            rec["sole"] = self.sole_squash(obj, g["sole"])
         if g.get("secondary_from") == "small_components" and g.get("closed"):
             rec["socks"] = self.sock_weights(obj)
         if g.get("cut"):
@@ -516,6 +577,8 @@ class Clothing:
             rec["ext"] = self.coat_skirt(obj, g, fit)
         self.orient_outward(obj)
         self.clearance(obj, g, rec)
+        if g.get("coat", {}).get("closed"):
+            rec["ext"]["beltClamp"] = self.belt_clamp(obj, rec["ext"])
         if g.get("coat", {}).get("collar"):
             rec["ext"]["collar"] = self.coat_collar(obj, g, fit, rec)
             self.orient_outward(obj)
@@ -523,7 +586,19 @@ class Clothing:
             rec["hood"] = self.hood_down(obj, g, fit, rec)
             self.orient_outward(obj)
         if not g.get("closed"):          # a shoe encloses the foot: keep its whole delete list
-            dv = self.covered(obj, dv, tris=bool(g.get("flare") or g.get("zone_tris")), near=g.get("zone_near", 0.02))
+            dv = self.covered(obj, dv, tris=bool(g.get("flare") or g.get("zone_tris")), near=g.get("zone_near", 0.02),
+                              fill=g.get("zone_fill", False),
+                              near_hi=((self.z_of(g["cloth"]["pinTop"]) - g["zone_near_pinned"][0], g["zone_near_pinned"][1])
+                                       if g.get("zone_near_pinned") else None))
+        elif g.get("zone_fill"):
+            dv = self.fill_lone(obj, dv)
+        if not g.get("closed"):
+            # no hidden skin above the garment's top: the jacket zone reached 5 cm above its collar (the ray from
+            # the underside of the jaw meets the collar within `reach`), a hole under the jaw showed the mouth
+            # interior; the dress zone reached 3.4 cm above its neckline
+            ztop = mesh_arrays(obj)[0][:, 2].max() + 0.005
+            dv = np.asarray(dv, np.int64)
+            dv = dv[self.B.BASE_ARR[dv, 2] <= ztop]
         bit = rec["bit"]
         self.zone_bits[g["zone"]] = bit
         self.body_zone[dv] |= bit
@@ -1079,16 +1154,29 @@ class Clothing:
                     continue
                 z[v.index] = rec["bit"]
             # grow one ring: the boundary vertices of the covered region still carry drawn triangles, which is where
-            # the specks were; the extra ring must itself lie under the coat
-            grow = set()
-            for e in lo.edges:
-                a, b = e.vertices
-                if z[a] and not z[b] and hit[b]:
-                    grow.add(b)
-                elif z[b] and not z[a] and hit[a]:
-                    grow.add(a)
-            for i in grow:
-                z[i] = rec["bit"]
+            # the specks were; the extra ring must itself lie under the coat. hide_grow (jacket: 2): more rings, for
+            # the T-shirt's armpit, whose upper-arm weights carry it out through the jacket's side in the jump; its
+            # normal points down along the side, so the ray misses the jacket: for those rings a vertex also counts
+            # as under the jacket when the nearest jacket surface (<= 3 cm) faces away from it (it lies behind it)
+            under = hit.copy()
+            if g.get("hide_grow", 1) > 1:
+                for v in lo.vertices:
+                    if under[v.index]:
+                        continue
+                    loc, nrm, fi, dist = bvh.find_nearest(Vector(lc[v.index]), 0.03)
+                    if loc is not None and (Vector(lc[v.index]) - loc).dot(nrm) < 0 and kd.find(loc)[2] >= edge:
+                        under[v.index] = True
+            for ring in range(g.get("hide_grow", 1)):
+                grow = set()
+                ok = hit if ring == 0 else under
+                for e in lo.edges:
+                    a, b = e.vertices
+                    if z[a] and not z[b] and ok[b]:
+                        grow.add(b)
+                    elif z[b] and not z[a] and ok[a]:
+                        grow.add(a)
+                for i in grow:
+                    z[i] = rec["bit"]
             if not z.any() and "_CCZONE" not in lo.attributes:
                 continue
             if "_CCZONE" in lo.attributes:
@@ -1102,7 +1190,7 @@ class Clothing:
         rec["hidesLower"] = out
         print("BUILD cloth %s hides covered vertices of the lower layers: %s" % (g["id"], out))
 
-    def covered(self, obj, dv, reach=0.2, near=0.02, edge=0.035, tris=False):
+    def covered(self, obj, dv, reach=0.2, near=0.02, edge=0.035, tris=False, fill=False, near_hi=None):
         """Body vertices the fitted garment hides (its body zone):
         - of the MakeHuman delete_verts (made for the complete suit) only those the garment really covers: a ray from
           the body vertex along its normal must hit the garment within `reach` m (drops skin just above a waistband /
@@ -1132,9 +1220,18 @@ class Clothing:
             if i in dvs:
                 continue
             p = Vector(B.BASE_ARR[i])
-            loc = bvh.find_nearest(p, near)[0]
-            if loc is None or not hit(i):
-                continue
+            if near_hi is None:
+                loc = bvh.find_nearest(p, near)[0]
+                if loc is None or not hit(i):
+                    continue
+            else:
+                # near_hi = (z, near2): skin whose ray meets the garment at or above z (the pinned top of a cloth
+                # skirt) is hidden within near2 m
+                h = bvh.ray_cast(Vector(B.BASE_ARR[i]), Vector(me.vertices[i].normal), reach)
+                if h[0] is None:
+                    continue
+                if bvh.find_nearest(p, near_hi[1] if h[0].z >= near_hi[0] else near)[0] is None:
+                    continue
             if bnd and kd.find(p)[2] < edge:
                 continue
             extra.append(i)
@@ -1158,10 +1255,42 @@ class Clothing:
             if drop:
                 print("BUILD cloth %s zone: %d skin verts of triangles whose centre is not covered stay drawn"
                       % (obj.name, len(drop)))
+        if fill:
+            out = set(self.fill_lone(obj, np.array(sorted(out), dtype=np.int64)).tolist())
         out = np.array(sorted(out), dtype=np.int64)
         print("BUILD cloth %s zone: %d of %d delete_verts covered along the skin normal, + %d covered skin verts -> %d"
               % (obj.name, int(ok.sum()), len(dv), len(extra), len(out)))
         return out
+
+    def fill_lone(self, obj, dv):
+        """Spec zone_fill: a skin vertex left drawn with every edge neighbour in the zone joins it. Such a lone vertex
+        (not in the MakeHuman delete list of shoes03, or its ray slipped between two faces) keeps a fan of skin
+        drawn deep inside the garment: the boots' instep vertex came 20..30 mm through the boot in walk / run
+        (tools/cloth_integrity.mjs boots:body), and the clearance check measured boot vertices 27 mm away against
+        that vertex's plane (4..22 'inside' at the inner arch, all 5..8 mm OUTSIDE the true skin)."""
+        B = self.B
+        out = set(np.asarray(dv).tolist())
+        nb = {}
+        for e in B.human.data.edges:
+            a, b = e.vertices
+            nb.setdefault(a, []).append(b)
+            nb.setdefault(b, []).append(a)
+        # islands of up to 8 drawn verts enclosed by the zone (the boots' instep hole is two verts)
+        add, seen = set(), set()
+        for s in {j for i in out for j in nb.get(i, ()) if j not in out and j < B.N_BODY}:
+            if s in seen:
+                continue
+            comp, stack = {s}, [s]
+            while stack and len(comp) <= 8:
+                for j in nb.get(stack.pop(), ()):
+                    if j not in out and j not in comp:
+                        comp.add(j)
+                        stack.append(j)
+            seen |= comp
+            if len(comp) <= 8 and not stack and all(j < B.N_BODY for j in comp):
+                add |= comp
+        print("BUILD cloth %s zone: %d drawn skin verts in islands of <= 8 inside the zone hidden" % (obj.name, len(add)))
+        return np.array(sorted(out | add), dtype=np.int64)
 
     def delete_unkept(self, obj, keep, small):
         """Drop the suit parts we do not use (shape keys and weights survive the bmesh round trip).
@@ -1458,21 +1587,28 @@ class Clothing:
             hit = bvhJ.ray_cast(Vector((0.0, cy, z)) + d * R0, -d, R0)
             return None if hit[0] is None else R0 - hit[3]
 
-        # front edges: jacket boundary vertices just above the belt line, in front of the body, near x = 0
-        bmj = bmesh.new()
-        bmj.from_mesh(me)
-        bnd = np.array(sorted({v.index for e in bmj.edges if e.is_boundary for v in e.verts}), dtype=np.int64)
-        bmj.free()
-        bnd = bnd[(roots[bnd] == jr) & (co[bnd, 2] > z_cut) & (co[bnd, 2] < z_cut + 0.12) & (co[bnd, 1] < cy - 0.05)
-                  & (np.abs(co[bnd, 0]) < 0.12)]
-        alpha0 = float(np.median(np.arctan2(np.abs(co[bnd, 0]), cy - co[bnd, 1]))) if len(bnd) else np.radians(8)
+        # closed (the dress): a tube without a front opening; column M is column 0 again (one UV seam at the front
+        # centre, no duplicated vertices), no vent unless ex['vent'] is given
+        closed = bool(ex.get("closed"))
+        if closed:
+            alpha0 = 0.0
+        else:
+            # front edges: jacket boundary vertices just above the belt line, in front of the body, near x = 0
+            bmj = bmesh.new()
+            bmj.from_mesh(me)
+            bnd = np.array(sorted({v.index for e in bmj.edges if e.is_boundary for v in e.verts}), dtype=np.int64)
+            bmj.free()
+            bnd = bnd[(roots[bnd] == jr) & (co[bnd, 2] > z_cut) & (co[bnd, 2] < z_cut + 0.12) & (co[bnd, 1] < cy - 0.05)
+                      & (np.abs(co[bnd, 0]) < 0.12)]
+            alpha0 = float(np.median(np.arctan2(np.abs(co[bnd, 0]), cy - co[bnd, 1]))) if len(bnd) else np.radians(8)
         M = int(ex["columns"]) // 2 * 2
+        MC = M if closed else M + 1                       # distinct columns
         alphas = alpha0 + (2 * np.pi - 2 * alpha0) * np.arange(M + 1) / M
         z_top = z_cut + ex["top_overlap"]
         z_hem = self.z_of(ex["hem"])
         R = int(np.ceil((z_top - z_hem) / ex["row"]))
         zs = z_top - (z_top - z_hem) * np.arange(R + 1) / R
-        z_vent = self.z_of(ex["vent"])
+        z_vent = self.z_of(ex["vent"]) if ex.get("vent") else None
         # envelope = body + every lower-layer garment (the skirt's hem would otherwise leave a step in the coat)
         P = np.concatenate([B.BASE_ARR[:B.N_BODY]] + [get_shapes(r["obj"])["Basis"] for r in self.done.values()
                                                       if r["spec"]["layer"] < g["layer"] and not r["spec"].get("gen")
@@ -1523,12 +1659,12 @@ class Clothing:
             radius[k] = r
             r_prev = r
         # back vent: rows strictly below the first row at or under z_vent get a second back-centre vertex
-        kv = int(np.argmax(zs <= z_vent))
+        kv = int(np.argmax(zs <= z_vent)) if z_vent is not None else R
         vent_rows = list(range(kv + 1, R + 1))
         mid = M // 2
         vent_pos = grid_pos[vent_rows, mid].copy()
-        grid_pos[vent_rows, mid, 0] += ex["vent_gap"] / 2      # left edge (x > 0 = character's left)
-        vent_pos[:, 0] -= ex["vent_gap"] / 2                   # right edge
+        grid_pos[vent_rows, mid, 0] += ex.get("vent_gap", 0.0) / 2      # left edge (x > 0 = character's left)
+        vent_pos[:, 0] -= ex.get("vent_gap", 0.0) / 2                   # right edge
 
         # belt: 3 rows around the belt line, over the jacket and the skirt
         def skirt_r(j, z):
@@ -1541,8 +1677,8 @@ class Clothing:
                 r = max(rj or 0.0, skirt_r(j, z) if z <= z_top else 0.0) + ex["belt_offset"]
                 belt_pos[i, j] = (r * np.sin(a), cy - r * np.cos(a), z)
 
-        skirt_list = grid_pos.reshape(-1, 3)
-        new_pos = np.concatenate([skirt_list, vent_pos, belt_pos.reshape(-1, 3)])
+        skirt_list = grid_pos[:, :MC].reshape(-1, 3)
+        new_pos = np.concatenate([skirt_list, vent_pos, belt_pos[:, :MC].reshape(-1, 3)])
         ns = len(skirt_list) + len(vent_pos)
         # binding of the new vertices to the neutral body (nearest body polygon, barycentric weights)
         nn = len(new_pos)
@@ -1596,9 +1732,12 @@ class Clothing:
             if sec:
                 v[sec] = 0
             return v
-        G = [[vnew(grid_pos[k, j], j) for j in range(M + 1)] for k in range(R + 1)]
+        G = [[vnew(grid_pos[k, j], j) for j in range(MC)] for k in range(R + 1)]
         V = {k: vnew(p, mid) for k, p in zip(vent_rows, vent_pos)}
-        BL = [[vnew(belt_pos[i, j], j) for j in range(M + 1)] for i in range(3)]
+        BL = [[vnew(belt_pos[i, j], j) for j in range(MC)] for i in range(3)]
+        if closed:                                         # the last column is the first one (closed tube)
+            for row in G + BL:
+                row.append(row[0])
         new_faces = []
 
         def quad(vs, uvs):
@@ -1624,7 +1763,7 @@ class Clothing:
                      ((bus[j], bv1 - (bv1 - bv0) * i / 2), (bus[j + 1], bv1 - (bv1 - bv0) * i / 2),
                       (bus[j + 1], bv1 - (bv1 - bv0) * (i + 1) / 2), (bus[j], bv1 - (bv1 - bv0) * (i + 1) / 2)))
         bmesh.ops.recalc_face_normals(bm, faces=new_faces)   # orient_outward decides the side afterwards
-        new_verts = [v for row in G for v in row] + [V[k] for k in vent_rows] + [v for row in BL for v in row]
+        new_verts = [v for row in G for v in row[:MC]] + [V[k] for k in vent_rows] + [v for row in BL for v in row[:MC]]
         for layer in bm.verts.layers.shape.values():        # placeholder = neutral; exact keys written below
             for v in new_verts:
                 v[layer] = v.co
@@ -1644,8 +1783,8 @@ class Clothing:
         print("BUILD coat skirt %d cols x %d rows (+%d vent) z %.3f..%.3f, hem radius %.3f..%.3f m, front edge %.1f deg, "
               "belt %d verts, uv v %.3f..%.3f"
               % (M + 1, R + 1, len(vent_rows), z_top, z_hem, radius[-1].min(), radius[-1].max(), np.degrees(alpha0),
-                 3 * (M + 1), v0, v1))
-        return dict(verts=nn, skirt=(n0, n0 + ns), belt=(n0 + ns, n), rows=R + 1, cols=M + 1, n0=n0,
+                 3 * MC, v0, v1))
+        return dict(verts=nn, skirt=(n0, n0 + ns), belt=(n0 + ns, n), rows=R + 1, cols=MC, n0=n0,
                     uv=(u0, u1, v0, v1), uv_per_m=float((u1 - u0) / arc[-1]), belt_uv=(bu0, bu1, bv0, bv1), z_cut=z_cut, hem_z=z_cut, z_hem=z_hem)
 
     # ---- trench coat: standing collar + broad lapels ---------------------------------------------------
@@ -2027,6 +2166,107 @@ class Clothing:
               % (obj.name, 1 + f["k"], 1 + f["k"] / 3, z1, z0))
         return {"k": f["k"], "top": round(z0, 4), "hem": round(z1, 4)}
 
+    def belt_clamp(self, obj, ext, margin=0.004, pad=0.006):
+        """Closed coat_skirt (the dress): the belt is placed by rays at its 36 columns only, so bodice / skirt-top
+        faces between the columns and the parts the clearance pass pushed out came through the belt as red shards
+        at the hip (screenshots, every body, cloth on and off). Every bodice / skirt vertex from 2 mm under the
+        belt's top edge down to `pad` m under its lower edge is pulled radially to `margin` m inside the belt, per
+        shape key (the belt radius interpolated by angle around each belt row's centre, then by z between the rows).
+        Vertices above the top edge stay: clamping them too (pad above) pulled the bodice under the skin there."""
+        me = obj.data
+        S = get_shapes(obj)
+        b0, b1 = ext["belt"]
+        nb = b1 - b0
+        rows = 3
+        cols = nb // rows
+        base = S["Basis"]
+        zb = base[b0:b1, 2]
+        sel = np.where((np.arange(len(base)) < b0) & (base[:, 2] <= zb.max() - 0.002) & (base[:, 2] >= zb.min() - pad))[0]
+        moved = 0
+
+        def apply(X):
+            nonlocal moved
+            Bt = X[b0:b0 + rows * cols].reshape(rows, cols, 3)
+            c = Bt[:, :, :2].mean(1)                          # row centres
+            P = X[sel]
+            zr = Bt[:, :, 2].mean(1)                          # row heights (top -> bottom)
+            rad = np.zeros((rows, len(sel)))
+            for i in range(rows):
+                d = Bt[i, :, :2] - c[i]
+                a = np.arctan2(d[:, 0], -d[:, 1])
+                o = np.argsort(a)
+                dp = P[:, :2] - c[i]
+                ap = np.arctan2(dp[:, 0], -dp[:, 1])
+                rad[i] = np.interp(ap, a[o], np.linalg.norm(d, axis=1)[o], period=2 * np.pi)
+            # z interpolation between rows (np.interp wants increasing x: bottom -> top)
+            rb = np.array([np.interp(P[k, 2], zr[::-1], rad[::-1, k]) for k in range(len(sel))])
+            cz = np.array([np.interp(P[k, 2], zr[::-1], c[::-1, 0]) for k in range(len(sel))])
+            cyz = np.array([np.interp(P[k, 2], zr[::-1], c[::-1, 1]) for k in range(len(sel))])
+            d = P[:, :2] - np.c_[cz, cyz]
+            r = np.linalg.norm(d, axis=1)
+            lim = rb - margin
+            m = r > lim
+            moved = max(moved, int(m.sum()))
+            Y = X.copy()
+            Y[sel[m], :2] = np.c_[cz, cyz][m] + d[m] * (lim[m] / np.maximum(r[m], 1e-9))[:, None]
+            return Y
+        for blk in me.shape_keys.key_blocks:
+            blk.data.foreach_set("co", apply(S[blk.name]).astype(np.float32).ravel())
+        me.vertices.foreach_set("co", apply(base).astype(np.float32).ravel())
+        me.update()
+        print("BUILD cloth %s belt clamp: %d of %d bodice / skirt-top verts pulled under the belt (max over keys)"
+              % (obj.name, moved, len(sel)))
+        return moved
+
+    def sole_squash(self, obj, s):
+        """Thick CC0 soles (shoes03, the boots) reach ~2 cm below the floor the feet stand on (z 0): every vertex below
+        s['top'] moves up so the lowest one lands on s['floor'] (z' = top - (top - z) * k, by the Basis z; the same
+        offset in every shape key, so the morph deltas are unchanged)."""
+        me = obj.data
+        S = get_shapes(obj)
+        z = S["Basis"][:, 2]
+        top, floor, zmin = s["top"], s["floor"], float(z.min())
+        if zmin >= floor:
+            return {"moved": 0}
+        k = (top - floor) / (top - zmin)
+        dz = np.where(z < top, (top - (top - z) * k) - z, 0.0)
+        for blk in me.shape_keys.key_blocks:
+            X = S[blk.name].copy()
+            X[:, 2] += dz
+            blk.data.foreach_set("co", X.astype(np.float32).ravel())
+        X = S["Basis"].copy()
+        X[:, 2] += dz
+        me.vertices.foreach_set("co", X.astype(np.float32).ravel())
+        me.update()
+        print("BUILD cloth %s sole: z %.4f..%.3f squashed to %.4f..%.3f (x%.2f), %d verts"
+              % (obj.name, zmin, top, floor, top, k, int((dz > 0).sum())))
+        return {"zMin": round(zmin, 4), "top": top, "floor": floor, "moved": int((dz > 0).sum())}
+
+    def dissolve_flat(self, obj, deg):
+        """Fewer vertices on flat regions (the boot soles: 2094 GLB vertices against the 2000 budget): bmesh
+        dissolve_limit at `deg` degrees, delimited by UV seams and materials, so only interior vertices of flat,
+        same-island patches go (their neighbours keep their positions in every shape key)."""
+        me = obj.data
+        n0 = len(me.vertices)
+        bm = bmesh.new()
+        bm.from_mesh(me)
+        bmesh.ops.dissolve_limit(bm, angle_limit=math.radians(deg), use_dissolve_boundaries=False,
+                                 verts=bm.verts[:], edges=bm.edges[:], delimit={'UV', 'MATERIAL', 'SEAM', 'SHARP'})
+        # the dissolved n-gons are triangulated here, so the fit passes (which fan-triangulate) see the triangles
+        # the GLB gets: the exporter's own split of a 6-gon on the boot shaft held a sliver that folded over at
+        # male + muscle_max, 10 mm outside the boot (tests/integrity.test.mjs 'sock triangles stay inside')
+        # Only the inner part's (cc_sec, the shaft) n-gons: triangulating the outer boot too changed the jeans'
+        # fit over it and on to the shoes (m-child walk jeans:shoes 0 -> 7 verts / 5.1 mm).
+        sl = bm.verts.layers.int.get("cc_sec")
+        if sl is not None:
+            bmesh.ops.triangulate(bm, faces=[f for f in bm.faces if len(f.verts) > 4 and all(v[sl] for v in f.verts)],
+                                  quad_method='BEAUTY', ngon_method='BEAUTY')
+        bm.to_mesh(me)
+        bm.free()
+        me.update()
+        print("BUILD cloth %s dissolve flat (%.1f deg): verts %d -> %d" % (obj.name, deg, n0, len(me.vertices)))
+        return {"deg": deg, "before": n0, "after": len(me.vertices)}
+
     def inflate(self, obj, d):
         """Loosen a tight CC0 top (hoodie): every vertex moves d m out along the nearest body normal (smoothed over the
         mesh, per welded position so seams stay closed), by the same offset in the Basis and every shape key (the
@@ -2294,6 +2534,10 @@ class Clothing:
         if rec.get("hood"):
             a_, b_ = rec["hood"]["range"]
             hood_v[a_:b_] = 1.0
+        belt_v = np.zeros(n)                                # generated belt band (coat_skirt, the dress)
+        if rec.get("ext", {}).get("belt"):
+            a_, b_ = rec["ext"]["belt"]
+            belt_v[a_:b_] = 1.0
         collar_p = np.zeros(len(polys))
         if st.get("collar_islands"):
             isl = uv_islands(me, uv)
@@ -2325,7 +2569,7 @@ class Clothing:
         w, h = max(16, int(ext[0] * s)), max(16, int(ext[1] * s))
         size = max(w, h)
         vals = np.concatenate([np.ones((T, 3, 1)), P3, hood_v[lv[tl]][..., None],
-                               np.repeat(collar_p[tpi][:, None, None], 3, 1)], -1)
+                               np.repeat(collar_p[tpi][:, None, None], 3, 1), belt_v[lv[tl]][..., None]], -1)
         m = tex.raster(tri_uv * np.array([w / size, h / size]), vals, size=size, radius=1)[:h, :w]
         cov = m[..., 0]
         cover = cov > 0.5
@@ -2333,6 +2577,7 @@ class Clothing:
         P = m[..., 1:4] / q[..., None]
         hoodT = (m[..., 4] / q) > 0.5
         collarT = (m[..., 5] / q) > 0.5
+        beltT = (m[..., 6] / q) > 0.5
         mpt = texel(s)
         ys, xs = np.where(cov > 1e-3)
         # open edges, sampled every `step` m, one class per point
@@ -2361,6 +2606,9 @@ class Clothing:
                     c = "hood"
                 elif style == "denim":
                     c = "hem" if co[L, 2].mean() < self.z_of("hip") - 0.05 else "waist"
+                elif style == "dress":                      # neckline, sleeve ends, hem; the waist seam under the belt
+                    c = ("neck" if L is top_loop else "hem" if L is low_loop
+                         else "seam" if abs(co[L, 2].mean() - rec["ext"]["z_cut"]) < 0.06 else "cuff")
                 elif absx > 0.3:
                     c = "cuff"
                 elif style == "hoodie":
@@ -2444,6 +2692,28 @@ class Clothing:
             L = L * (1 - st_ * np.maximum(line(dc, 0.004, 0.0008), line(dc, st["cuff"] - 0.004, 0.0008)))
             L = L * (1 - 0.3 * line(dc, st["cuff"], 0.0012))
             info["buttons"] = len(centres)
+        elif style == "dress":
+            # fine twill; secondary = the belt band + a piping along the neckline and the sleeve ends; stitched hem;
+            # a buckle (brighter ring) on the belt at the front centre
+            yy, xx = np.mgrid[0:h, 0:w]
+            L = 1 + 0.022 * nz + 0.012 * np.sin((xx + yy) * 2 * np.pi / 3.0)
+            pip = np.maximum(aa(Dg("neck") - st["piping"]), aa(Dg("cuff") - st["piping"]))
+            sec = np.maximum(beltT.astype(float), pip)
+            st_ = 0.22
+            dh = Dg("hem")
+            L = L * (1 - st_ * line(dh, st["hem_stitch"], 0.0008)) * (1 - 0.12 * aa(dh - 0.0015))
+            L = L * (1 - st_ * line(Dg("neck"), st["piping"] + 0.003, 0.0008))
+            L = L * (1 - st_ * line(Dg("cuff"), st["piping"] + 0.003, 0.0008))
+            L = L * (1 - 0.25 * line(Dg("seam"), 0.003, 0.0008) * beltT)
+            cy = float(self.heads["pelvis"][1])
+            zc_ = rec["ext"]["z_cut"]
+            bx, bz = np.abs(P[..., 0]), np.abs(P[..., 2] - zc_)
+            hw, hh = st["buckle"]
+            fr = (P[..., 1] < cy - 0.04) & beltT
+            box = np.maximum(bx - hw, bz - hh)                # < 0 inside the buckle rectangle
+            ring = line(box, -0.002, 0.003) * fr
+            L = L * (1 + 0.45 * ring) * (1 - 0.3 * line(box, 0.0, 0.0008) * fr)
+            info["piping"] = st["piping"]
         else:                                               # hoodie
             L = 1 + 0.03 * nz
             bands = []
@@ -2656,6 +2926,16 @@ class Clothing:
         class Colliders(list):
             pts = ()
 
+        # wrap_body (boots): the skin near the garment is wrapped like a closed lower garment (wrap below): the big
+        # toe came out 2-3 mm through the middle of the boot's large toe-cap faces while every boot vertex cleared
+        # the skin (tools/check_garment.mjs holes: 222 hidden toe triangles uncovered)
+        wrap_v = wrap_t = None
+        if g.get("wrap_body"):
+            bb0, bb1 = base.min(0) - 0.02, base.max(0) + 0.02
+            P0 = B.BASE_ARR[:B.N_BODY]
+            wrap_v = np.where(((P0 >= bb0) & (P0 <= bb1)).all(1))[0]
+            wrap_t = np.array([(f[0], f[k], f[k + 1]) for f in self.body_polys for k in range(1, len(f) - 1)], np.int64)
+
         def colliders(combo):
             """combo: morph keys at weight 1 (corrective corners: both macros + the corrective)."""
             body = B.BASE_ARR.copy()
@@ -2663,6 +2943,12 @@ class Clothing:
                 body = body + B.delta[k]
             cs = Colliders([(self.body_bvh(body), eps_body, None)])
             pts = []
+            if wrap_v is not None:
+                bn = vertex_normals(body[:B.N_BODY], wrap_t)
+                # reach WRAP_BODY_REACH, not FIX_RANGE: the toe sides against the squashed sole met the large sole
+                # faces 15-27 mm away and the wrap rounds pushed the toe tip of one boot up to 75 mm out (a spike
+                # through the floor at weight_max + muscle_max, 60 mm at age_old); the toe-cap pokes are 2-3 mm
+                pts.append((body[wrap_v], bn[wrap_v], WRAP_BODY_REACH))
             for lid, sh, parts, tris, eps in lower:
                 X = sh["Basis"].copy()
                 for k in combo:
@@ -2769,10 +3055,11 @@ class Clothing:
             bvh = BVHTree.FromPolygons([Vector(p) for p in X], polys)
             disp = np.zeros_like(X)
             hit = np.zeros(len(X), bool)
-            for P, N in cs.pts:
+            for P, N, *rr in cs.pts:
+                reach = rr[0] if rr else FIX_RANGE
                 for q, m in zip(P, N):
                     qv, mv = Vector(q), Vector(m)
-                    loc, nrm, fi, dist = bvh.ray_cast(qv, -mv, FIX_RANGE)
+                    loc, nrm, fi, dist = bvh.ray_cast(qv, -mv, reach)
                     if loc is None or nrm.dot(mv) < 0.3:
                         continue
                     if bvh.ray_cast(qv + mv * 1e-4, mv, FIX_RANGE)[0] is not None:
@@ -2951,7 +3238,7 @@ class Clothing:
         info = tex_cloth(B.tex, diffuse, normal, out, uv[tl],
                          np.stack([sec_v[lv[tl]], ref_v[lv[tl]], np.repeat(tri_fill[:, None], 3, 1)], -1), (lo, hi),
                          g.get("secondary_from"), fill_rect=rec.get("ext", {}).get("uv"),
-                         belt_rect=rec.get("ext", {}).get("belt_uv"))
+                         belt_rect=rec.get("ext", {}).get("belt_uv"), sec_leather=g.get("sec_leather", False))
         me.uv_layers.active.data.foreach_set("uv", ((uv - lo) / (hi - lo)).ravel())
         name = "Cloth_" + g["id"]
         me.materials.clear()
@@ -3023,9 +3310,9 @@ class Clothing:
                 item["coveredBy"] = rec.get("coveredBy", {})
             if g.get("coat"):
                 item["license"] = "CC0 source + project-original extension"
-                item["projectOriginal"] = ("long skirt below the waist and belt (%d vertices, %d rows x %d columns) "
-                                           "generated by blender/cc_clothing.py coat_skirt"
-                                           % (rec["ext"]["verts"], rec["ext"]["rows"], rec["ext"]["cols"]))
+                item["projectOriginal"] = ("%s (%d vertices, %d rows x %d columns) generated by blender/cc_clothing.py "
+                                           "coat_skirt" % (g["coat"].get("what", "long skirt below the waist and belt"),
+                                                           rec["ext"]["verts"], rec["ext"]["rows"], rec["ext"]["cols"]))
                 cl = rec["ext"].get("collar")
                 if cl:
                     item["projectOriginal"] += ("; standing collar and lapels (%d vertices, %d columns x %d rows) "
@@ -3062,7 +3349,7 @@ class Clothing:
 
 
 def tex_cloth(tex, src, normal_src, out_prefix, tri_uv, tri_sec, crop, sec_rule, fill_rect=None, belt_rect=None, k=0.5,
-              max_size=1024, normal_size=512, mask_size=256):
+              max_size=1024, normal_size=512, mask_size=256, sec_leather=False):
     """Crop + grey-normalise a MakeHuman clothing atlas for runtime tinting (tint contract of cc_textures.py:
     region mean -> k, gain = 1 / k). Primary and secondary regions are normalised separately so both take their
     colour from the tint. Returns {albedo, normal, mask, gain, sec_frac, size}. Row 0 = v 0 (Blender order)."""
@@ -3142,8 +3429,20 @@ def tex_cloth(tex, src, normal_src, out_prefix, tri_uv, tri_sec, crop, sec_rule,
         L[r0:r1, c0:c1] = 0.5 * (1 + 0.05 * nz) * np.where(stitch, 0.7, 1.0)
         cover[r0:r1, c0:c1] = True
         sec[r0:r1, c0:c1] = 1.0
-    out = np.full_like(L, k)
     sec_b = sec >= 0.5
+    leather = None
+    if sec_leather and (sec_b & cover).sum() >= 16:
+        # boots: the sock's rib knit becomes a leather shaft: the shoe's median brightness, fine low-contrast grain,
+        # faint creases across the ankle (sideways stripes in the sock's UV layout run along v) and a flat normal
+        leather = sec_b & cover
+        mu = float(np.median(L[cover & ~sec_b])) if (cover & ~sec_b).any() else float(L[leather].mean())
+        rng = np.random.default_rng(11)
+        nz = tex.blur(rng.standard_normal(L.shape), 1)
+        nz = nz / (np.std(nz) + 1e-6)
+        crease = tex.blur(rng.standard_normal(L.shape), 6)
+        crease = crease / (np.std(crease) + 1e-6)
+        L = np.where(leather, mu * (1 + 0.05 * nz + 0.06 * crease), L)
+    out = np.full_like(L, k)
     for region in (~sec_b & cover, sec_b & cover):
         if region.sum() >= 16:
             out = np.where(region, L * (k / max(float(L[region].mean()), 1e-4)), out)
@@ -3172,6 +3471,11 @@ def tex_cloth(tex, src, normal_src, out_prefix, tri_uv, tri_sec, crop, sec_rule,
             nm[inpaint[yy, xx]] = (0.5, 0.5, 1.0)
         if belt_rect is not None:
             nm[int(bv0 * nh):max(int(bv1 * nh), int(bv0 * nh) + 1), int(bu0 * nw):int(bu1 * nw)] = (0.5, 0.5, 1.0)
+        if leather is not None:
+            ih, iw = leather.shape
+            yy = (np.arange(nh) * ih // nh)[:, None]
+            xx = (np.arange(nw) * iw // nw)[None, :]
+            nm[leather[yy, xx]] = (0.5, 0.5, 1.0)
         res["normal"] = tex.save(nm, out_prefix + "_normal.jpg", quality=85)
     if sec_b.any():
         f2 = max(1, max(h, w) // mask_size)

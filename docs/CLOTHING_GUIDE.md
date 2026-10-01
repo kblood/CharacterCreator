@@ -511,7 +511,7 @@ A garment is simulated in the viewer when it has the `_CLOTH_PIN` attribute, an 
 | problem | status |
 |---|---|
 | Long hair / a braid lying on the upper back goes into a hood or a tall collar (static hair). | Partly fixed in the viewer (see "Hair over a hood or collar" below); a strand that starts right at the nape can still meet the top of the hood roll. |
-| `tests/cloth.test.mjs` "long coat over T-shirt + jeans, female" is chaotic: moving the T-shirt's vertices by ±1e-7 m (float noise of a rebuild) flips it. 5 of 8 such perturbations pass, on the old output and on the 2026-10-01 rebuild alike. Seen when it fails: the tee at the front hip through the coat in run, 1–4 vertices, 8–33 mm. | Open. Do not "fix" it by choosing a lucky build. The coat's run near the hip needs a robust margin. |
+| `tests/cloth.test.mjs` "long coat over T-shirt + jeans, female" is chaotic: moving the T-shirt's vertices by ±1e-7 m (float noise of a rebuild) flips it. 5 of 8 such perturbations pass, on the old output and on the 2026-10-01 rebuild alike. Seen when it fails: the tee at the front hip through the coat in run, 1–4 vertices, 8–33 mm. After the dress / jacket / boots build: 4 of 8 perturbations pass (the output before it: 1 of 8); unperturbed it fails (tee 4 / 24.1 mm, jeans 2 / 36.3 mm). | Open. Do not "fix" it by choosing a lucky build. The coat's run near the hip needs a robust margin. |
 
 (The coat lapel sliver that was listed here no longer occurs since the 2026-10-01 hoodie / shirt / shorts build;
 its exception was removed from `CONFIG.knownExceptions`.)
@@ -528,6 +528,25 @@ its exception was removed from `CONFIG.knownExceptions`.)
 | The flared shorts hem widened the coat skirt envelope by 2.6 mm. | `coat_envelope=False` on the shorts too. |
 | Two layer-4 items (hoodie, coat) were reported as a layering ambiguity. | The checker's "layer unique" row ignores pairs in `conflicts` (they are never worn together). |
 | Screenshots at 520 px width used the mobile layout, the panel covered the character. | Use a viewport ≥ 1000 px wide. |
+
+**Dress, jacket, boots (2026-10-01)**
+
+| problem | fix |
+|---|---|
+| A garment built later in `GARMENTS` is unknown to the earlier ones: the coat is never fitted over the dress, and its skirt envelope ignores it (dress + coat: 13 failing integrity cases, dress skirt 22–30 mm through the coat). | Declare the conflict (`CONFLICTS dress: [trenchcoat]`) unless the order can change (it cannot: zone bits are the index in `GARMENTS`). Test the pair with the full timeline, not only `quick` (quick showed 0). |
+| The lifted thigh in the jump came through the pinned top of the dress skirt (3 verts / 16–26 mm, male bodies): pinned vertices get no thigh share, and the skin there was the zone boundary. | `zone_near_pinned=(0.2, 0.10)`: skin whose ray meets the skirt above `pinTop - 0.2` m is hidden within 10 cm (the thigh front under the skirt top). `legShareFront` 1.0 alone left 3 cases and cost `check_garment` (tall: more body pokes than cloth off; short: stretch p99 mean 1.306 > 1.3), so it stays 0.8. |
+| Bodice faces came through the dress belt as red shards at the hip (all bodies, cloth on and off): the belt is placed by rays at its 36 columns only. | `belt_clamp` (closed `coat_skirt`): bodice / skirt-top vertices inside the belt's height are pulled 4 mm under it per shape key. Not above the belt's top edge: that pulled the bodice under the skin. |
+| The loose skirt top / jacket hem sits several cm off the skin, so the drawn skin under it "sank" through it when the hands hang at the hips. | `zone_near` 0.05 (dress), 0.07 (jacket). |
+| The T-shirt armpit came out through the jacket's side in the jump (4 verts / 17 mm): the ray along the normal misses the jacket in the armpit. | `hide_grow=2`: the second ring may also take vertices whose nearest jacket surface (≤ 3 cm) faces away from them. |
+| `check_garment` flagged the jacket 3.6 mm inside the T-shirt at the armpit; brute force said 4.8–5.6 mm outside. | Checker fix: `countInside` uses welded 1-rings (GLB seam splits had half a ring). Measurement accuracy, no threshold changed. |
+| shoes03's soles reach 2.2 cm under the floor; the boots were 2094 GLB vertices (budget 2000). | `sole=dict(top, floor)` squashes everything under `top` onto `floor..top` (same offset in every shape key); `dissolve_flat=1.0` (bmesh dissolve_limit, UV / material / seam delimited) -> 1952 GLB vertices. |
+| The dissolved n-gons were triangulated by the glTF exporter, not by the fit: a sliver of a 6-gon on the boot shaft folded over at male + muscle_max and stood 10 mm outside the boot (`tests/integrity.test.mjs` "sock triangles stay inside", `boots m-muscular: 2`) while `keep_inside` saw a flat fan. | `dissolve_flat` triangulates the inner part's (`cc_sec`) n-gons (> 4 vertices, BEAUTY) itself, so `keep_inside` sees the exported triangles -> 0. Same vertex count. Not the outer boot: that changed the jeans' fit (they are fitted over the boots and the shoes) and gave m-child walk jeans:shoes 7 verts / 5.1 mm. |
+| Boot toes: 215 hidden toe triangles uncovered (the big toe 2–3 mm through the middle of large toe-cap faces while every boot vertex cleared the skin). | `wrap_body=True`: the clearance pass also wraps the skin points near the garment like a closed lower layer -> 0. |
+| `wrap_body` with the full `FIX_RANGE` reach: the toe sides against the squashed sole met the large sole faces 15–27 mm away, and the repeated wrap rounds pushed the toe tip of ONE boot up to 75 mm out at weight_max + muscle_max (a spike through the floor; 60 mm at age_old). Every checker passed; only a close-up screenshot of a corrective corner showed it. | The skin points wrap with `WRAP_BODY_REACH` 0.01 m (the toe-cap pokes are 2–3 mm). Look for it: the largest per-target delta of a closed garment should be symmetric left / right. |
+| A garment zone reached up to 5 cm above the garment's top: the ray from the underside of the jaw meets the jacket collar within `reach`, and the hole under the jaw showed the mouth interior (red). The dress zone reached 3.4 cm above its neckline. | No hidden skin above the garment's highest vertex + 5 mm (open garments). |
+| A two-vertex island of skin at the instep stayed drawn inside the boot (not in shoes03's delete list): 20–30 mm "through the boot" in walk / run, and a 27 mm-away plane for the clearance check. | `zone_fill=True`: islands of ≤ 8 drawn skin vertices enclosed by the zone join it. |
+| The boot shaft (shoes03's sock) showed a ribbed knit. | `sec_leather=True`: the secondary texels get the shoe's median brightness with fine grain and a flat normal. |
+| Danish locale: PowerShell writes decimals with a comma in environment variables / interpolated strings. | Pass numbers to node / Blender as quoted literals, not through `$env:` from PowerShell arithmetic. |
 
 **Hair over a hood or collar.** Hair is static in its rest pose; `web/materials.js createHairCollider` pushes
 strands out of 3 capsules (shoulders, upper back). `calibrate(garments)` now grows the upper-back capsule to the
@@ -753,4 +772,28 @@ is pinned to the shoulders.
   8 old outfits 26 -> 21).
 - `BREAST_SUPPORT`: shirt 0.25, hoodie 0.3; `dyn_breast` carried 20.5 / 20.1 mm.
 - Walk / run (`tests/clothing.test.mjs` limits): see STATUS.md for the measured numbers and the integrity matrix.
+
+## Appendix: dress, jacket, boots (2026-10-01)
+
+Command: `node tools/check_garment.mjs dress jacket boots --bodies all` (exit 0, no known exceptions).
+
+| garment | route / source | result | ok / fail / known / skip | bytes | GLB verts / tris | hidden tris uncovered |
+|---|---|---|---|---|---|---|
+| dress | C: bodice = short-sleeve top of `female_casualsuit01` cut at the waist, plus a generated simulated skirt and belt (`coat_skirt`, closed) | OK | 64 / 0 / 0 / 0 | 737 664 | 1899 / 3304 | 0 of 3618 |
+| jacket | A: jacket + collar / lapels of `male_casualsuit05`, uncut, `inflate` 8 mm | OK | 34 / 0 / 0 / 1 | 857 976 | 2153 / 3668 | 0 of 4132 |
+| boots | A: `shoes03` (shoes + calf-high socks as the shaft), `sole` squash, `dissolve_flat` | OK | 30 / 0 / 0 / 1 | 697 144 | 1952 / 3204 | 0 of 4528 (limit 4) |
+
+- Layers / slots: dress 3, slot top, occupies top + bottom, conflicts with tshirt / shirt / hoodie / jeans / shorts / skirt and the
+  trench coat; jacket 4, outerwear, conflicts with trenchcoat / hoodie / dress; boots 1, shoes. Zone bits: dress
+  2048, jacket 4096, boots 8192.
+- Jeans are worn OVER the boot shaft (boots are layer 1, so jeans / skirt / coat are fitted over them). Tucking in
+  would need the boots fitted over the jeans for every jeans shape; over the shaft passes the harness.
+- Dress sim (`check_garment`, 9 bodies): stretch p99 1.26–1.56, mean <= 1.299, body pen <= 5 particles and below
+  cloth off everywhere, floor 0, crossed 0. `legShareFront` 0.8, `zone_near_pinned=(0.2, 0.10)`.
+- `BREAST_SUPPORT` (web/main.js): dress 0.25, jacket 0.2; `dyn_breast` carried 20.2 / 20.1 mm.
+- Integrity, new outfits on 9 bodies, failing cases (default / moves / land timelines): dress+shoes 0 / 0 / 0,
+  dress+boots 0 / 0 / 0, jacket+tee+jeans+shoes 0 / 0 / 0, jacket+shirt+shorts+boots 0 / 0 / 0, boots+jeans
+  0 / 3 / 1, boots+shorts 0 / 3 / 1, boots+skirt 0 / 1 / 0. The boots cases are the jeans / shorts pelvis on the
+  old body in jump / land (also in the outfits without boots) and the female bra in `idle_fidget`.
+- dress+coat is not an outfit (conflict, see section (g)).
 

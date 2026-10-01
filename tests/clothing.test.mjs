@@ -22,13 +22,13 @@ const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 
 // Outfits the penetration tests use: garment -> the lower layers worn under it.
 const UNDER = { shoes: [], jeans: ['shoes'], skirt: [], tshirt: ['jeans'], trenchcoat: ['tshirt', 'jeans'],
-  shorts: [], shirt: ['jeans'], hoodie: ['jeans'] };
+  shorts: [], shirt: ['jeans'], hoodie: ['jeans'], dress: [], jacket: ['tshirt', 'jeans'], boots: [] };
 // Generated underwear (layer 0, blender/cc_clothing.py add_generated) and the outer garments over its DRAWN part.
 const UNDERWEAR = ['briefs', 'panties', 'bra'];
 const OVER_UNDERWEAR = [['jeans', ['shoes', 'briefs']], ['jeans', ['shoes', 'panties']], ['skirt', ['briefs']], ['skirt', ['panties']],
   ['tshirt', ['jeans', 'bra', 'panties']], ['trenchcoat', ['bra', 'panties']], ['trenchcoat', ['briefs']],
   ['shorts', ['briefs']], ['shorts', ['panties']], ['shirt', ['shorts', 'bra', 'panties']], ['shirt', ['jeans', 'briefs']],
-  ['hoodie', ['jeans', 'bra', 'panties']], ['hoodie', ['jeans', 'briefs']]];
+  ['hoodie', ['jeans', 'bra', 'panties']], ['hoodie', ['jeans', 'briefs']], ['dress', ['bra', 'panties']], ['dress', ['briefs']]];
 
 test('catalog: slots, unique ids, files, bytes, layers, zones, colours, default outfit', () => {
   assert.deepEqual(CAT.slots, ['underwear', 'bra', 'top', 'bottom', 'shoes', 'outerwear']);
@@ -95,7 +95,9 @@ test('licences: CC0 MakeHuman system assets or project-original geometry, marked
   assert.match(ITEMS.trenchcoat.projectOriginal, /coat_skirt/);
   assert.equal(ITEMS.hoodie.license, 'CC0 source + project-original extension');
   assert.match(ITEMS.hoodie.projectOriginal, /hood_down/);
-  for (const id of ['shirt', 'shorts']) assert.equal(ITEMS[id].license, 'CC0', `${id}: plain CC0 asset`);
+  for (const id of ['shirt', 'shorts', 'jacket', 'boots']) assert.equal(ITEMS[id].license, 'CC0', `${id}: plain CC0 asset`);
+  assert.equal(ITEMS.dress.license, 'CC0 source + project-original extension');
+  assert.match(ITEMS.dress.projectOriginal, /coat_skirt/);
 });
 
 test('garment GLBs: one skinned mesh on body joints, the 92 body morph targets, tint + mask extras', () => {
@@ -122,9 +124,15 @@ test('garment GLBs: one skinned mesh on body joints, the 92 body morph targets, 
 });
 
 test('morph follow: every garment moves with the skin under it (every macro extreme + corrective corner)', () => {
-  const bpos = D.body.pos, sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+  const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+  // The padded jacket (layer 4, over T-shirt + jeans) stands mostly > 3 cm off the skin (22 % of its vertices within
+  // reach, 2026-10-01): it is checked against the surface it is fitted over (skin + T-shirt + jeans, each of which is
+  // checked against the skin here), same drift limits.
+  const OVER_LAYERS = { jacket: ['tshirt', 'jeans'] };
+  const refOf = (id, w) => [D.body, ...(OVER_LAYERS[id] ?? []).map(u => D.garments[u].prim)].flatMap(p => (w ? C.morphed(p, w) : p.pos));
   for (const [id, g] of Object.entries(D.garments)) {
     const pos = g.prim.pos, step = Math.max(1, Math.floor(pos.length / 300));
+    const bpos = refOf(id);
     const near = C.grid(bpos, 0.02);
     const pairs = [];
     let sampled = 0;
@@ -137,7 +145,7 @@ test('morph follow: every garment moves with the skin under it (every macro extr
     assert.ok(pairs.length > 0.4 * sampled, `${id}: most sampled (skinned) vertices within 3 cm of the skin`);
     for (const s of C.shapes(D.names)) {
       if (s.name === 'neutral') continue;
-      const gm = C.morphed(g.prim, s.w), bm = C.morphed(D.body, s.w);
+      const gm = C.morphed(g.prim, s.w), bm = OVER_LAYERS[id] ? refOf(id, s.w) : C.morphed(D.body, s.w);
       let err = 0, mag = 0;
       for (const [k, i] of pairs) {
         const db = sub(bm[i], bpos[i]);
@@ -176,6 +184,10 @@ test('penetration in walk / run (linear blend skinning of the clip frames, neutr
     // measured (2026-10-01): shorts skin 2 / 14.3 mm (run, inner thigh), shirt 15 / 26.7 mm and hoodie 10 / 23.7 mm
     // (the sleeve at the armpit, like the tee), layers 1
     shorts: { skin: 4, mm: 20, layers: 0, legs: 4 }, shirt: { skin: 25, mm: 30, layers: 4 }, hoodie: { skin: 20, mm: 30, layers: 4 },
+    // measured (2026-10-01, second batch): dress skin 40 / 28.9 mm, legs 2 (the skinned skirt crossing the thighs,
+    // like the skirt; cloth on, tools/cloth_integrity.mjs measures the simulated dress), jacket over tee + jeans skin
+    // 5 / 15.7 mm (sleeve at the armpit), layers 15 (walk), boots 0
+    dress: { skin: 45, mm: 30, layers: 0, legs: 4 }, jacket: { skin: 8, mm: 20, layers: 20 }, boots: { skin: 2, mm: 5, layers: 0 },
   };
   for (const [id, under] of Object.entries(UNDER)) {
     for (const clip of ['walk', 'run']) {
@@ -198,7 +210,8 @@ test('body zones: _CCZONE on the body, hidden skin is covered by the garment (no
   assert.ok(D.zone.every(z => Number.isInteger(z) && (z & ~all) === 0), 'zone values are bitmasks of known zones');
   // hidden body triangles whose outward ray hits no garment triangle within 20 cm. Shoes: the foot soles face
   // the ground under the shoe sole (never visible).
-  const MAX = { shoes: 40, tshirt: 4, jeans: 4, skirt: 0, trenchcoat: 0, briefs: 0, panties: 0, bra: 0, shorts: 0, shirt: 0, hoodie: 0 };
+  const MAX = { shoes: 40, tshirt: 4, jeans: 4, skirt: 0, trenchcoat: 0, briefs: 0, panties: 0, bra: 0, shorts: 0, shirt: 0, hoodie: 0,
+    dress: 0, jacket: 0, boots: 4 };
   for (const it of CAT.items) {
     const h = C.holes(D, [it.id]);
     assert.ok(h.hidden > 100, `${it.id}: hides skin (${h.hidden} triangles)`);

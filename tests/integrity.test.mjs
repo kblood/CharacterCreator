@@ -36,6 +36,15 @@ export const MATRIX = [
   ['shirt+skirt', 'child'],       // the simulated skirt came out through the shirt hem (fixed: sim_layer_gap)
   ['hoodie+skirt', 'child'],
   ['shirt+jeans+coat', 'female'],
+  // dress / jacket / boots (docs/CLOTHING_GUIDE.md appendix, second batch)
+  ['dress+shoes', 'female'],
+  ['dress+boots', 'short'],
+  ['dress+shoes', 'tall'],        // the lifted thigh came through the pinned skirt top in the jump (fixed: zone_near_pinned)
+  ['jacket+tee+jeans+shoes', 'heavy'],
+  ['jacket+shirt+shorts+boots', 'muscular'],
+  ['boots+jeans', 'male'],
+  ['boots+shorts', 'child'],
+  ['boots+skirt', 'female'],
 ];
 
 /**
@@ -131,18 +140,21 @@ test('integrity: sock triangles stay inside the shoe at every body (bind pose)',
     return false;
   };
   const bad = [];
-  for (const [name, sl] of Object.entries(CFG.bodies).flatMap(([k, v]) => [[k, v], ['m-' + k, { gender: 1, ...v }]])) {
-    const S = outfitSurfaces(D, createCharacter(D, sl), ['shoes'], CFG);
-    const sock = S.find(s => s.id === 'socks'), shoe = S.find(s => s.id === 'shoes');
-    let n = 0;
-    for (let t = 0; t < sock.tris.length; t += 3) {
-      const { a, b, c, P, n: nn } = tri(sock, t);
-      const o = [0, 1, 2].map(k => (P[a + k] + P[b + k] + P[c + k]) / 3);
-      if (hits(o, nn.map(x => -x), shoe, 0.03) && !hits(o, nn, shoe, 0.03)) n++;
+  // boots: the shaft (shoes03's sock) inside the boot, same rule
+  for (const [item, inner] of [['shoes', 'socks'], ['boots', 'shaft']]) {
+    for (const [name, sl] of Object.entries(CFG.bodies).flatMap(([k, v]) => [[k, v], ['m-' + k, { gender: 1, ...v }]])) {
+      const S = outfitSurfaces(D, createCharacter(D, sl), [item], CFG);
+      const sock = S.find(s => s.id === inner), shoe = S.find(s => s.id === item);
+      let n = 0;
+      for (let t = 0; t < sock.tris.length; t += 3) {
+        const { a, b, c, P, n: nn } = tri(sock, t);
+        const o = [0, 1, 2].map(k => (P[a + k] + P[b + k] + P[c + k]) / 3);
+        if (hits(o, nn.map(x => -x), shoe, 0.03) && !hits(o, nn, shoe, 0.03)) n++;
+      }
+      if (n) bad.push(`${item} ${name}: ${n}`);
     }
-    if (n) bad.push(`${name}: ${n}`);
   }
-  assert.deepEqual(bad, [], 'sock triangles outside the shoe');
+  assert.deepEqual(bad, [], 'sock / shaft triangles outside the shoe / boot');
 });
 
 // Static (bind pose, both sexes): no see-through hole where underwear is culled. The body skin under the underwear is
@@ -175,7 +187,8 @@ test('integrity: no hole through the body where covered underwear is culled (bin
   let tested = 0;
   for (const [sex, uw, gender] of [['male', ['briefs'], 1], ['female', ['panties', 'bra'], -1]]) {
     const ch = createCharacter(D, { gender });
-    for (const top of [['tshirt'], ['jeans'], ['skirt'], ['trenchcoat'], ['tshirt', 'jeans'], ['tshirt', 'skirt'], ['shoes']]) {
+    for (const top of [['tshirt'], ['jeans'], ['skirt'], ['trenchcoat'], ['tshirt', 'jeans'], ['tshirt', 'skirt'], ['shoes'],
+      ['dress'], ['tshirt', 'jeans', 'jacket'], ['shorts', 'boots']]) {
       const outfit = [...uw, ...top];
       const S = outfitSurfaces(D, ch, outfit, CFG).filter(s => s.id !== 'body');
       const all = hiddenZoneMask(D.catalog, outfit), noUw = hiddenZoneMask(D.catalog, top);

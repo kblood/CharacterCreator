@@ -26,6 +26,19 @@
 - [x] Integration check (headless Chrome, local `build/site`): no console errors, 12 morphs / 53 bones loaded,
       `height=1` -> influence 0.45, head bone +0.30 m, skinned mesh top +0.32 m; reset restores bind pose exactly.
 
+## glTF export (2026-10-01, uncommitted)
+- [x] "Export" UI section (da/en) + `window.__export(options)` -> GLB: baked or morph-target shape, rest or current pose,
+      none / all clips sampled for the current body (60 fps default; bones rotation-only, `Root` translation), texture size
+      original / 1024 / 512, part toggles, remove or keep (+ `_CCZONE`) hidden skin, optional merge into one mesh. Tints baked
+      into baseColorFactor / texture copies; `_CLOTH_PIN` + `ccCloth`, `ccJiggle`, credits from `asset_licenses.json`,
+      `extras.characterCreator` (settings). Settings JSON save/load (also from an exported GLB) and `?character=` share links.
+      Code: `web/export/` (3 new files), hooks in `web/main.js`. Details and numbers: [EXPORT.md](EXPORT.md).
+- [x] Verified (10 configurations): glTF-Validator 0 errors (only the no-TANGENT warning); three.js re-import and
+      Blender 5.2 import vs the viewer ≤ 0.001 mm per vertex; clips vs the animator 0 mm on keys, ≤ 3.4 mm between keys
+      in Blender (walk), pelvis height ≤ 0.34 mm; Blender renders looked at. `tests/export.test.mjs` (16 tests).
+- [ ] Not verified: Unity, Godot, Unreal import. Not exported: skin SSS / hair / lining shaders, live cloth and breast
+      simulation (data only), tangents (importers generate MikkTSpace).
+
 ## More clips: idle variants, walk_back, strafe, jump / fall / land (2026-10-01, uncommitted)
 - [x] 9 new clips in `web/animation/clips.js` (12 in total), details and references in
       [ANIMATION_CLIPS.md](ANIMATION_CLIPS.md): `idle_look` 10 s, `idle_breathe` 8 s, `idle_fidget` 9 s,
@@ -435,10 +448,35 @@ Tests:
   one alike. This build measures tee run 4 / 22.7 mm against the limit of ≤ 1 / 15 mm.
 - `check_glb` / `check_anim_glb`: CHECK OK.
 
+## Dress, jacket, boots (2026-10-01, uncommitted)
+Three new garments. Details, pitfalls and numbers: [CLOTHING_GUIDE.md](CLOTHING_GUIDE.md), section (g) and the
+appendix "dress, jacket, boots".
+- **dress** ('Kjole', layer 3, occupies top + bottom): the top of `female_casualsuit01` cut at the waist as the
+  bodice, plus a generated cloth-simulated skirt and belt. Conflicts with the tops, jeans / shorts / skirt, the
+  jacket and the trench coat (the coat is built before the dress and is never fitted over it: 13 failing cases).
+- **jacket** ('Jakke', layer 4, outerwear): the jacket of `male_casualsuit05` with collar, loosened 8 mm; worn over
+  T-shirt or shirt. Conflicts with trench coat, hoodie, dress.
+- **boots** ('Støvler', layer 1, shoes): `shoes03` with its calf-high socks as the shaft. Jeans are worn over the
+  shaft (jeans / skirt / coat are fitted over the boots).
+- All CC0 sources plus project geometry. Sizes: dress 0.74, jacket 0.86, boots 0.70 MB.
+- `check_garment dress jacket boots --bodies all`: exit 0 (64 / 34 / 30 ok, 0 fail).
+- `output/base_body.glb` changed (zone bits only); `base_body_anim.glb` rebaked, `check_anim_glb` CHECK OK.
+
+Integrity, full matrix (20 outfits, 9 bodies), failing cases before → after:
+- default (idle / walk / run / idle>run): 21 of 3368 → 20 of 5108; the 7 new outfits 0.
+- moves (strafe, walk_back, jump, idle variants): 54 of 5052 → 63 of 7662; new outfits 7 (boots+jeans 3,
+  boots+shorts 3, boots+skirt 1: old body pelvis in jump, female bra in `idle_fidget`). Old outfits 54 → 55:
+  tee+jeans+coat+shoes neutral jump coat:jeans 0 → 5 / 7.4 mm (the jeans are now fitted over the boots too),
+  underwear female `idle_fidget` bra:body 2 / 29.6 → 3 / 29.9 mm (the bra is now kept under dress and jacket);
+  jeans+coat 6 → 6.
+- land (fall / land): 32 of 3831 (no baseline); new outfits: boots+jeans 1, boots+shorts 1, others 0.
+
+Tests: 206, 204 pass, 1 skipped, 1 fail (the chaotic coat test below; 4 of 8 perturbations pass now, 1 of 8 before).
+
 ## Open issues
 - `tests/cloth.test.mjs` coat over T-shirt + jeans, female, is chaotic (see above) and fails on the current build.
-- Visible cloth penetrations: 21 of 3368 cases remain above threshold in the full integrity matrix (see "Hoodie,
-  long-sleeve shirt, shorts"); 2 of them are in `tests/integrity.test.mjs` `KNOWN_FAILING` (old body). Fingertips through the coat side
+- Visible cloth penetrations: 20 of 5108 cases remain above threshold in the full integrity matrix (see "Dress,
+  jacket, boots"); 2 of them are in `tests/integrity.test.mjs` `KNOWN_FAILING` (old body). Fingertips through the coat side
   in walk (hands are not a cloth layer). Coat stretch p99 in the 10 s matrix: 1.666 / 1.656 on female (the test
   threshold 1.65 is met on the test timeline).
 - Macro morphs outside the 32 corrective pairs (and 3-way combinations) are still linear.
@@ -446,7 +484,7 @@ Tests:
 
 ## TODO (scope v1)
 - Jaw bone / mouth expressions (teeth/tongue are rigid on the head).
-- Clothing: a dress (occupies top+bottom, rules exist); more garments. How to make one: [CLOTHING_GUIDE.md](CLOTHING_GUIDE.md), checked by `node tools/check_garment.mjs <id> --bodies all` (2026-10-01: all 11 garments pass, no known exceptions).
+- Clothing: more garments (dress, jacket, boots done 2026-10-01). How to make one: [CLOTHING_GUIDE.md](CLOTHING_GUIDE.md), checked by `node tools/check_garment.mjs <id> --bodies all` (2026-10-01: all 14 garments pass, no known exceptions).
 - More clips (wave, crouch, turn in place, ...) as new `CLIPS` entries (jump, strafe, walk_back, idle variants: done
   2026-10-01, see [ANIMATION_CLIPS.md](ANIMATION_CLIPS.md)); retarget test of the baked GLB in other engines.
 - Hair: second alpha-blended card layer for a soft hairline; hair physics; CC0 beard if one turns up.
@@ -456,3 +494,13 @@ Tests:
 MPFB code is GPL; the MakeHuman base mesh/targets/assets are CC0 -> exported GLBs are free to use. Every shipped
 asset (skin, eyes, brows, lashes, teeth, tongue, 8 hair styles, 6 clothing packs) is checked for CC0 by the build (the generated underwear is project-original geometry, no asset); face/expression
 targets are CC0 per MakeHuman's LICENSE.md; list in `LICENSE-NOTES.md`.
+
+## Known issues after clothing batch 2 (2026-10-01)
+
+Visual review of 10 screenshots by GPT 6 Luna (not by the clothing agent): 8 OK, 1 bad, 1 minor.
+
+- Dress + trench coat, female, crouched jump poses: skin of the bent leg shows through the skirt and the skirt gets sharp, torn-looking points. (Dress and trench coat are a conflicting pair in the outfit rules, so this may only be reachable by forcing it.)
+- Close-up of jacket shoulders/cuffs: a small red fragment under the jaw at the neck. Possibly the mouth interior; a late fix for this was only checked in scratch builds.
+- A step/bump in the dress skirt at the hips with cloth enabled, most visible on male bodies. Cause not confirmed.
+- Known red test: "long coat over T-shirt + jeans, female" (tests/cloth.test.mjs). 206 tests: 204 pass, 1 skipped, 1 fail.
+- The integrity matrix numbers in this file were measured on the second-to-last build; the final build was not re-run in full. Remaining moves cases: boots+jeans 3, boots+shorts 3, boots+skirt 1; land: boots+jeans 1, boots+shorts 1.

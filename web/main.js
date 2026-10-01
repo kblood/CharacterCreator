@@ -15,6 +15,7 @@ import { createEyeLife, applyMorphWeights } from './eyelife.js';
 import { upgradeSkin, upgradeHair, upgradeCornea, setSkinParams, hairUniforms, createHairCollider } from './materials.js';
 import { createClothing } from './clothing.js';
 import { createClothRuntime } from './cloth/runtime.js';
+import { createExporter } from './export/exporter.js';
 
 window.__booted = true;
 const params = new URLSearchParams(location.search);
@@ -263,6 +264,13 @@ loader.load('./base_body.glb', async g => {
   window.__body = body;
   window.__joints = joints;
   window.__parts = parts;
+  // glTF export + settings save / load / share (web/export/exporter.js, docs/EXPORT.md); created before the clothing
+  // hides body zones (it keeps the full body index for its 'keep hidden skin' option)
+  const exporter = createExporter({
+    lang, ui, before: resetBtn, setStatus, getBody: () => body, getParts: () => parts, values, bodyValues,
+    getHumanoid: () => humanoid, getAnimator: () => animator, clothing, getHairManifest: () => hairManifest,
+    set: (k, v) => window.__set(k, v),
+  });
   update();                                   // first applySkeleton at rest
   initEyeRig();                               // head rest rotation for the gaze frame (before any clip plays)
   initBreastRig();                            // chest rest rotation for the breast physics frame
@@ -280,6 +288,8 @@ loader.load('./base_body.glb', async g => {
   await clothing.init(clothingReady, secClothes, params.has('outfit') ? params.get('outfit') : null);
   if (params.has('view')) setView(params.get('view'));
   buildClothUI();
+  // ?character=<base64url JSON | JSON | .json URL>: restore a saved / shared character (web/export/util.js)
+  if (params.has('character')) await exporter.restoreFromUrl(params.get('character'));
   window.__ready = true;
 }, xhr => {
   if (xhr.lengthComputable) setStatus(`${t('loading')} ${Math.round(100 * xhr.loaded / xhr.total)}%`);
@@ -728,7 +738,7 @@ function buildClothUI() {
 const breast = createBreastPhysics();
 // by catalog id; every WORN item counts (worn, not drawn: the bra under a T-shirt still supports), combined as
 // 1 - prod(1 - s) (combineSupport). Support stiffens / damps the spring, shortens its travel and scales the motion.
-const BREAST_SUPPORT = { tshirt: 0.2, trenchcoat: 0.3, bra: 0.5, shirt: 0.25, hoodie: 0.3 };
+const BREAST_SUPPORT = { tshirt: 0.2, trenchcoat: 0.3, bra: 0.5, shirt: 0.25, hoodie: 0.3, dress: 0.25, jacket: 0.2 };
 const breastRig = { bone: null, restQ: null };
 const _bp = new THREE.Vector3(), _bq = new THREE.Quaternion();
 let breastWeights = zeroWeights(), breastScale = 0, breastSupport = 0, breastMs = 0, breastApplied = true;

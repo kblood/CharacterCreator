@@ -50,7 +50,7 @@ export const CONFIG = {
   zeroMorphKinds: ['expr', 'look'],   // these must not move clothes (max delta < zeroMorphTol)
   zeroMorphTol: 1e-4,
   // garments over the chest carry the dyn_breast_* motion morphs and need a BREAST_SUPPORT entry (web/main.js)
-  chestZones: ['torso', 'coat', 'bra', 'shirt', 'hoodie'],
+  chestZones: ['torso', 'coat', 'bra', 'shirt', 'hoodie', 'dress', 'jacket'],
   tint: { gainMin: 1, gainMax: 4 },
   // clearance: garment vertices > tol inside the visible skin / the drawn lower layers (tools/cloth_check.mjs)
   clearance: {
@@ -68,10 +68,11 @@ export const CONFIG = {
   // lower layers a garment is checked over (clearance, sim, integrity). Missing = every lower-layer item that
   // collides as a layer, one per slot (catalog order), the body sex's default underwear is added by integrity.
   under: { shoes: [], jeans: ['shoes'], skirt: [], tshirt: ['jeans'], trenchcoat: ['tshirt', 'jeans'],
-    shorts: [], shirt: ['jeans'], hoodie: ['jeans'] },
+    shorts: [], shirt: ['jeans'], hoodie: ['jeans'], dress: [], jacket: ['tshirt', 'jeans'], boots: [] },
   // holes: hidden body triangles not covered by the garment (C.holes); default 0
   holes: {
     shoes: { max: 40, reason: 'the foot soles face the ground under the shoe sole (never visible)' },
+    boots: { max: 4, reason: 'as shoes, the foot soles face the ground under the boot sole; measured 0 (spec wrap_body)' },
     tshirt: { max: 4, reason: 'armpit triangles hidden by the torso zone behind the sleeve opening' },
     jeans: { max: 4, reason: 'crotch / waist triangles at the zone border' },
   },
@@ -99,7 +100,8 @@ export const CONFIG = {
   quickTimeline: { timeline: [[-0.5, 'preroll', 'idle'], [0, 'idle', 'idle'], [0.5, 'walk', 'walk'], [1.7, 'run', 'run'],
     [3.2, 'idle', 'idle'], [3.8, 'idle>run', 'run']], duration: 4.6, every: 6 },
   quickSimSeconds: 10,
-  integrityOutfits: { trenchcoat: ['tshirt', 'jeans', 'shoes', 'trenchcoat'], skirt: ['tshirt', 'skirt', 'shoes'] },
+  integrityOutfits: { trenchcoat: ['tshirt', 'jeans', 'shoes', 'trenchcoat'], skirt: ['tshirt', 'skirt', 'shoes'],
+    dress: ['dress', 'shoes'], jacket: ['tshirt', 'jeans', 'shoes', 'jacket'], boots: ['tshirt', 'jeans', 'boots'] },
   // KNOWN EXCEPTIONS: measured defects of existing garments that are allowed to fail. Fields: id, check (row name
   // prefix), body (optional), detail (optional, substring of the row value), reason. Delete an entry when it is
   // fixed (the checker then reports the stale entry as FAIL). Never add one to hide a regression.

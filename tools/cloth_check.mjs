@@ -142,7 +142,7 @@ export function countInside(pts, pos, normals, keep = null, tol = TOL, drawn = n
   // 2 mm OUTSIDE the skin at concave creases (panties at weight_max: 9 flagged, all +1.9..+2.0 mm over the true
   // triangles); a real penetration is inside its nearest triangle too and still counts.
   const near = grid(pos, 0.02, keep);
-  const ring = tris ? vertexRings(pos.length, tris) : null;
+  const ring = tris ? vertexRings(pos.length, tris, pos) : null;
   let n = 0, worst = 0;
   const idx = [];
   pts.forEach((p, k) => {
@@ -155,9 +155,18 @@ export function countInside(pts, pos, normals, keep = null, tol = TOL, drawn = n
   return { n, worst, idx };
 }
 
-function vertexRings(n, tris) {
+function vertexRings(n, tris, pos) {
   const r = Array.from({ length: n }, () => []);
   for (let t = 0; t < tris.length; t += 3) for (let j = 0; j < 3; j++) r[tris[t + j]].push(t);
+  // welded 1-ring: a vertex on a UV / normal seam is split in the GLB, and its ring held only the triangles of one
+  // side, so a point over the other side was measured against the wrong (folded-away) triangle. The jacket at
+  // weight_max: 5 points flagged 3.6 mm inside the T-shirt at the armpit seam, 4.8..5.6 mm OUTSIDE its nearest
+  // triangle (brute force over all triangles).
+  if (pos) {
+    const at = new Map(), key = p => `${Math.round(p[0] * 1e5)},${Math.round(p[1] * 1e5)},${Math.round(p[2] * 1e5)}`;
+    for (let i = 0; i < n; i++) { const k = key(pos[i]); if (!at.has(k)) at.set(k, []); at.get(k).push(i); }
+    for (const l of at.values()) if (l.length > 1) { const u = [...new Set(l.flatMap(i => r[i]))]; for (const i of l) r[i] = u; }
+  }
   return r;
 }
 
