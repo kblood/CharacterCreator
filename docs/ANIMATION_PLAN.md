@@ -3,7 +3,9 @@
 Goal: our own procedural humanoid clips that are **general** (canonical joint names, not MPFB names),
 **body-adaptive** (stride, tempo, pelvis height and foot placement follow the current slider body),
 and **exportable** (baked to glTF animation clips). Clip set is deliberately `idle`, `walk`, `run`;
-the registry is open for more clips later.
+the registry is open for more clips later. (2026-10-01: idle variants, walk_back, strafe_left/right and the
+one-shot jump / fall / land were added; one-shots (`loop: false`, `next`), `timing().velocity` and the animator's
+one-shot / idle-variation rules are described in [ANIMATION_CLIPS.md](ANIMATION_CLIPS.md).)
 
 Everything below was checked against `output/base_body.glb` (53-joint `game_engine` rig) with
 `tests/canonical.test.mjs` (8 tests, all passing). Run all tests with `node --test "tests/*.test.mjs"`

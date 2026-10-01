@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import * as Q from '../web/animation/qmath.js';
 import { createHumanoid, restHeads } from '../web/humanoid.js';
 import { createAnimator } from '../web/animation/animator.js';
+import { fkPositions } from '../web/animation/canonical.js';
 import { CLIPS } from '../web/animation/clips.js';
 import { headsFromSidecar } from '../web/animation/rig.js';
 import { sliderInfluences } from '../web/character.js';
@@ -200,3 +201,151 @@ for (const [bname, values] of Object.entries(BODIES)) {
     for (const [o, r] of rest) assert.deepEqual(posArr(o), r.p, 'bone positions untouched');
   });
 }
+
+// ---- one-shots (jump), once-played loops (idle variation), velocity ----
+const oneShot = (name, T, next) => ({ ...fakeClip(name, 0, T, 0.3), loop: false, next,
+  timing: ctx => ({ duration: T / ctx.speedScale, speed: 0, stride: 0, velocity: [0, 0, 0] }) });
+const FAKE2 = { ...FAKE, hop: oneShot('hop', 1, 'idle'), look: fakeClip('look', 0, 2, 0.1),
+  side: { ...fakeClip('side', 0, 1, 0.3), timing: ctx => ({ duration: 1 / ctx.speedScale, speed: 0, stride: 0.5, velocity: [0.5 * ctx.speedScale, 0, 0] }) } };
+
+test('one-shot: plays once from 0, holds, then fades back to idle by itself; no double trigger', () => {
+  const { a } = setup(FAKE2);
+  a.play('idle', { fade: 0 }); a.update(0.5);
+  a.play('hop', { fade: 0.1 });
+  assert.equal(a.state().clip, 'hop'); assert.equal(a.state().time, 0); assert.equal(a.state().oneShot, true);
+  assert.equal(a.state().next, 'idle');
+  for (let i = 0; i < 18; i++) a.update(1 / 60);
+  const t = a.state().time;
+  a.play('hop'); assert.ok(Math.abs(a.state().time - t) < 1e-12, 'retrigger mid-jump ignored');
+  let back = null;
+  for (let i = 0; i < 120 && back == null; i++) { a.update(1 / 60); if (a.state().clip === 'idle') back = i; }
+  assert.ok(back != null, 'returned to idle');
+  // the hand-over starts fadeOut (0.25 * 1 s) before the end
+  assert.ok(Math.abs(0.3 + (back + 1) / 60 - 0.75) < 2 / 60, `hand-over at ${0.3 + (back + 1) / 60}`);
+  for (let i = 0; i < 30; i++) a.update(1 / 60);
+  assert.deepEqual(a.weights(), [{ clip: 'idle', weight: 1, target: 1 }]);
+  // seek clamps a one-shot instead of wrapping
+  a.play('hop', { fade: 0 }); a.pause(); a.seek(-1); assert.equal(a.state().phase, 0); a.seek(5); assert.equal(a.state().phase, 1);
+  // after it ends, a new play starts it again from 0
+  a.resume(); a.play('hop', { fade: 0, then: 'walk', fadeOut: 0 });
+  for (let i = 0; i < 70; i++) a.update(1 / 60);
+  assert.equal(a.state().clip, 'walk');
+});
+
+test('once: a looping clip played once returns to idle after one cycle; rootVelocity reports sideways travel', () => {
+  const { a } = setup(FAKE2);
+  a.play('idle', { fade: 0 });
+  a.play('look', { fade: 0.2, once: true });
+  for (let i = 0; i < 100; i++) a.update(1 / 60);
+  assert.equal(a.state().clip, 'look');
+  for (let i = 0; i < 40; i++) a.update(1 / 60);
+  assert.equal(a.state().clip, 'idle');
+  a.play('side', { fade: 0 });
+  assert.deepEqual(a.state().rootVelocity, [0.5, 0, 0]);
+  assert.equal(a.state().rootSpeed, 0);
+  // side has velocity -> locomotion; walk travels another way, so it joins at the phase whose feet match best
+  // (not the shared phase), and the fade still advances one shared clock
+  a.seek(0.25); a.play('walk', { fade: 0.3 });
+  const p0 = a.state().phase; a.update(1 / 60);
+  assert.ok(Math.abs(a.state().phase - p0 - (1 / 60) / 1) < 0.02);
+});
+
+test('idle variation: deterministic per seed, only from settled idle, never repeats a variant twice in a row', async () => {
+  const { createIdleVariation } = await import('../web/animation/idlevary.js');
+  const run = seed => {
+    const { a } = setup({ ...FAKE2, idle_look: fakeClip('idle_look', 0, 3, 0.1), idle_breathe: fakeClip('idle_breathe', 0, 2, 0.1), idle_fidget: fakeClip('idle_fidget', 0, 2.5, 0.1) });
+    const iv = createIdleVariation({ seed, first: 2, gap: [1, 3], fade: 0.3 });
+    a.play('idle', { fade: 0 });
+    const log = [];
+    for (let i = 0; i < 60 * 60; i++) {
+      if (i === 60 * 20) a.play('walk');                // walking: no variants
+      if (i === 60 * 30) a.play('idle');
+      a.update(1 / 60);
+      const v = iv.update(1 / 60, a);
+      if (v) log.push([i, v]);
+    }
+    return log;
+  };
+  const A = run(1), B = run(1), C = run(7);
+  assert.deepEqual(A, B);
+  assert.notDeepEqual(A, C);
+  assert.ok(A.length >= 6, `variants played ${A.length}`);
+  for (let k = 1; k < A.length; k++) assert.notEqual(A[k][1], A[k - 1][1]);
+  assert.ok(!A.some(([i]) => i >= 60 * 20 && i < 60 * 30), 'nothing while walking');
+});
+
+// ---- crossfades between the real clips: no pops ----
+// Reference: the same clips played alone (A continuing, B started at the time the crossfade gives it). A linear
+// crossfade moves a point per frame at most about 1.5 x max(own step of A, of B) + |A - B| / fade-frames, plus 8 mm
+// for the ground guard (a blend of a deep crouch with standing lifts the root a little: jump/land -> idle ~6.5 mm per
+// frame). A pop (a snap of the pelvis, a foot or the head) exceeds that. Every ordered pair of clips, fade 0.3 s,
+// neutral and short child. ANIM_REPORT=1 prints the worst cases.
+test('crossfade between any two clips: pelvis / feet / head never jump between frames', () => {
+  const names = Object.keys(CLIPS), dt = 1 / 60, fade = 0.3, nf = Math.round(fade / dt);
+  const worst = [], fails = [];
+  for (const values of [{}, { age: -1, height: -1 }]) {
+    const a = setup(CLIPS, values).a, ra = setup(CLIPS, values).a, rb = setup(CLIPS, values).a;
+    const P = x => { const X = fkPositions(x.rig.heads, x.lastPose()); return [X.hips, X.leftToes, X.rightToes, X.head]; };
+    const dist = (p, q, k) => Q.vLen(Q.vSub(p[k], q[k]));
+    for (const A of names) for (const B of names) {
+      if (A === B) continue;
+      for (const x of [a, ra, rb]) x.stop({ fade: 0 });
+      for (const x of [a, ra]) { x.play(A, { fade: 0 }); x.update(0); for (let i = 0; i < 24; i++) x.update(dt); }
+      a.play(B, { fade });
+      rb.play(B, { fade: 0 }); rb.seek(a.state().time); rb.update(0);
+      let pa = P(a), pA = P(ra), pB = P(rb);
+      const own = [0, 0, 0, 0], gap = [0, 0, 0, 0], step = [0, 0, 0, 0];
+      for (let i = 0; i < nf + 2; i++) {
+        for (const x of [a, ra, rb]) x.update(dt);
+        const qa = P(a), qA = P(ra), qB = P(rb);
+        for (let k = 0; k < 4; k++) {
+          own[k] = Math.max(own[k], dist(qA, pA, k), dist(qB, pB, k));
+          gap[k] = Math.max(gap[k], dist(qA, qB, k));
+          step[k] = Math.max(step[k], dist(qa, pa, k));
+        }
+        pa = qa; pA = qA; pB = qB;
+      }
+      for (let k = 0; k < 4; k++) {
+        const lim = 1.5 * own[k] + (1.25 * gap[k]) / nf + 0.008;
+        worst.push({ r: step[k] / lim, d: step[k], A, B, k, body: values.age ? 'child' : 'neutral' });
+        if (step[k] > lim) fails.push(`${values.age ? 'child' : 'neutral'} ${A}->${B} ${['hips', 'lToes', 'rToes', 'head'][k]} ${(step[k] * 1000).toFixed(1)} mm/frame (limit ${(lim * 1000).toFixed(1)})`);
+      }
+    }
+  }
+  if (process.env.ANIM_REPORT) {
+    const show = w => `${w.body} ${w.A}->${w.B} ${['hips', 'lToes', 'rToes', 'head'][w.k]} ${(w.d * 1000).toFixed(1)}mm/frame r${w.r.toFixed(2)}`;
+    worst.sort((x, y) => y.r - x.r); console.log('worst ratio:', worst.slice(0, 6).map(show));
+    worst.sort((x, y) => y.d - x.d); console.log('largest step:', worst.slice(0, 6).map(show));
+  }
+  assert.deepEqual(fails, []);
+});
+
+test('real jump end to end: idle -> jump -> (auto) idle, fall -> land -> (auto) idle; smooth, feet never below the floor', () => {
+  for (const values of [{}, { age: -1, height: -1 }, { weight: 1 }]) {
+    const { a } = setup(CLIPS, values), dt = 1 / 60;
+    const P = () => { const X = fkPositions(a.rig.heads, a.lastPose()); return [X.hips, X.leftToes, X.rightToes, X.head]; };
+    const floor = ['leftToes', 'rightToes', 'leftFoot', 'rightFoot'];
+    let prev = null, maxStep = 0, low = Infinity;
+    const run = n => {
+      for (let i = 0; i < n; i++) {
+        a.update(dt);
+        const X = fkPositions(a.rig.heads, a.lastPose()), p = P();
+        for (const j of floor) low = Math.min(low, X[j][1] - a.rig.heads[j][1]);
+        if (prev) maxStep = Math.max(maxStep, Q.vLen(Q.vSub(p[0], prev[0])));
+        prev = p;
+      }
+    };
+    a.play('idle', { fade: 0 }); run(30);
+    a.play('jump', { fade: 0.2 });
+    const T = a.state().duration;
+    run(Math.ceil(T / dt) + 30);
+    assert.equal(a.state().clip, 'idle');
+    assert.equal(a.state().fading, false);
+    a.play('fall', { fade: 0.3 }); run(40);
+    a.play('land', { fade: 0.15 }); run(Math.ceil(1.2 / dt) + 30);
+    assert.equal(a.state().clip, 'idle');
+    // take-off speed of a 0.24 m pelvis rise is ~2.2 m/s = 37 mm per 60 fps frame
+    assert.ok(maxStep < 0.045, `pelvis step ${maxStep}`);
+    assert.ok(low > -0.002, `foot below floor ${low}`);
+  }
+});

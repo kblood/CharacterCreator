@@ -9,7 +9,10 @@
 //
 // Output: <out>/<clip>.json per clip + <out>/index.json. Keys i = 0..n are sampled at clip time i*T/n
 // (T = timing(ctx).duration, n = max(2, round(T*fps))) and stored at time i/fps, so duration = n/fps,
-// timeScale = T/duration and the last key equals the first (seamless loop).
+// timeScale = T/duration and the last key equals the first (seamless loop). One-shot clips (loop false, e.g.
+// jump) are sampled the same way from t = 0 to T; they also carry `next` (the clip to return to) and `events`
+// (clip-time seconds of take-off / touch-down ..., scaled like the keys). rootMotion.speed / axis come from
+// timing().velocity (walk_back: axis [0,0,-1], strafe_left: [1,0,0]); the travel itself is never baked.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -65,13 +68,18 @@ export function sampleClip(clip, ctx, fps) {
   }
   const root = poses.map(p => (p.root || [0, 0, 0]).map(r6));
   const duration = n / fps;
+  const v = tm.velocity || [0, 0, tm.speed || 0], vl = Math.hypot(...v);
+  const extra = {};
+  if (clip.loop === false && clip.next) extra.next = clip.next;
+  if (tm.events) extra.events = Object.fromEntries(Object.entries(tm.events).map(([k, t]) => [k, r4(t / (T / duration))]));
   return {
     format: 'charactercreator.humanoid-clip', version: 1, name: clip.name, loop: clip.loop !== false,
     fps, frames: n, duration: r4(duration), timeScale: r6(T / duration),
     frame: 'character: +X left, +Y up, +Z forward, metres; quaternions [x,y,z,w]',
     convention: 'parent-relative rest deltas, docs/ANIMATION_PLAN.md section 1',
     body: { sliders: {}, legLength: r4(ctx.rig.legLength), hipHeight: r4(ctx.rig.hipHeight), height: r4(ctx.rig.height) },
-    rootMotion: { mode: 'in-place', speed: r4(tm.speed || 0), stride: r4(tm.stride || 0), axis: [0, 0, 1] },
+    rootMotion: { mode: 'in-place', speed: r4(vl), stride: r4(tm.stride || 0), axis: vl > 0 ? v.map(x => r6(x / vl)) : [0, 0, 1] },
+    ...extra,
     rig: 'mpfb-game_engine', boneMap: MPFB_GAME_ENGINE, rootBone: MPFB_ROOT_BONE,
     root, contacts, joints,
   };
@@ -91,7 +99,8 @@ async function main() {
     fs.writeFileSync(path.join(a.out, `${data.name}.json`), JSON.stringify(data));
     names.push(data.name);
     console.log(`SAMPLE ${data.name.padEnd(5)} frames ${data.frames} duration ${data.duration}s timeScale ${data.timeScale}` +
-      ` joints ${Object.keys(data.joints).length} speed ${data.rootMotion.speed} m/s stride ${data.rootMotion.stride} m`);
+      ` joints ${Object.keys(data.joints).length} speed ${data.rootMotion.speed} m/s axis ${data.rootMotion.axis} stride ${data.rootMotion.stride} m` +
+      (data.loop ? '' : ` one-shot -> ${data.next}`));
   }
   fs.writeFileSync(path.join(a.out, 'index.json'),
     JSON.stringify({ clips: names, boneMap: MPFB_GAME_ENGINE, rootBone: MPFB_ROOT_BONE }, null, 1));

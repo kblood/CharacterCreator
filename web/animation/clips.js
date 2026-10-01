@@ -146,12 +146,14 @@ function torso(Dh, { yaw = 0, roll = 0, pitch = 0, breath = 0, headWorld }) {
  * Left arm (parent-relative). swing: + = back (about X), out: angle of the upper arm from vertical (rad),
  * bend: elbow flexion (rad, absolute), shrug: shoulder +Z, protract: shoulder -Y.
  */
-function leftArm(rig, { swing = 0, out = 6 * DEG, bend = 15 * DEG, shrug = 0, protract = 0, wrist = 0 }) {
+function leftArm(rig, { swing = 0, out = 6 * DEG, bend = 15 * DEG, shrug = 0, protract = 0, wrist = 0, twist = 0 }) {
   const d = rig.dir.leftUpperArm;
   const restOut = Math.atan2(d[0], -d[1]);                // A-pose: ~42 deg from vertical
+  // twist: rotation about the upper arm's own rest axis (+ = internal rotation, forearm across the body)
+  const upper = qMul(rx(swing), rz(out - restOut));
   return {
     leftShoulder: qMul(ry(-protract), rz(shrug)),
-    leftUpperArm: qMul(rx(swing), rz(out - restOut)),
+    leftUpperArm: twist ? qMul(upper, qAxisAngle(d, twist)) : upper,
     leftLowerArm: qAxisAngle(rig.axes.leftLowerArm, bend - rig.restBend.leftLowerArm),
     leftHand: rx(wrist),
   };
@@ -260,13 +262,13 @@ function locomotion(P) {
       const f = E.cadence * s ** E.cadenceExp * Math.sqrt(G / hip) * (1 - 0.04 * old);    // steps per second
       const stride = (2 * speed) / f;
       const beta = Math.min(clamp(E.beta + 0.03 * heavy + 0.04 * old, E.betaMin, E.betaMax), (E.maxStance * ctx.legLength) / stride);
-      return { duration: stride / speed, speed, stride, beta };
+      return { duration: stride / speed, speed, stride, beta, velocity: [0, 0, speed] };
     }
     // Faster = shorter ground contact; stance length is capped relative to the leg so the pelvis never
     // has to crouch to keep the planted foot (cadence rises instead).
     const beta = clamp(E.beta - E.betaSlope * (s - 1), E.betaMin, E.betaMax);
     const stride = Math.min(E.strideK * hip * Math.sqrt(s) * (1 - 0.06 * old), (E.maxStance * ctx.legLength) / beta);
-    return { duration: stride / speed, speed, stride, beta };
+    return { duration: stride / speed, speed, stride, beta, velocity: [0, 0, speed] };
   }
 
   /** Stance centre of the ball (toes joint) along z: hip-relative (run) or rest-toes-relative (walk). */
@@ -304,7 +306,10 @@ function locomotion(P) {
       toeBlend = smooth(u / 0.3);
     }
     const pitch = E.toeOff * Math.sin(Math.PI * tau) ** 2 + dorsi;
-    return { toes: [x, y, z], pitch, toePitch: pitch * toeBlend, contact };
+    // bindEarlySwing (walk_back, played reversed): the just-lifted foot keeps constraining the pelvis, so in
+    // reverse the leg reaches the floor before contact instead of the pelvis snapping down at touch-down
+    const bind = contact ? undefined : E.bindEarlySwing && (p - B) / (1 - B) < E.bindEarlySwing;
+    return bind ? { toes: [x, y, z], pitch, toePitch: pitch * toeBlend, contact, bind } : { toes: [x, y, z], pitch, toePitch: pitch * toeBlend, contact };
   }
 
   /**
@@ -490,5 +495,424 @@ const idle = (() => {
   };
 })();
 
-/** Clip registry: new clips = new entries (names double as i18n keys `clip_<name>`). */
-export const CLIPS = { idle, walk, run };
+// ---------------------------------------------------------------------------------------------------
+// Shared helpers of the clips below (docs/ANIMATION_CLIPS.md): walk back, strafe, idle variants, jump.
+
+const NEUTRAL_LEG = 0.802;                 // rig.legLength of the neutral body (time scaling of the jump)
+
+/** Smooth minimum of 0 and e: always <= min(0, e), C-infinity (k = blend width in metres). */
+const softMin0 = (e, k = 0.004) => (e - Math.sqrt(e * e + k * k)) / 2;
+
+/** 1 inside [a, b] (seconds), 0 outside, smoothstep ramps of length r inside the window. */
+const bump = (s, a, b, r) => smooth((s - a) / r) * (1 - smooth((s - (b - r)) / r));
+
+/**
+ * Monotone cubic keys (Fritsch-Butland tangents, no overshoot between keys): [{u, v, m?}] -> [{u, v, m}].
+ * End tangents and keys with an explicit m keep it.
+ */
+function monotone(keys) {
+  const d = keys.slice(1).map((k, i) => (k.v - keys[i].v) / (k.u - keys[i].u));
+  return keys.map((k, i) => {
+    if (k.m != null) return k;
+    if (i === 0 || i === keys.length - 1) return { ...k, m: 0 };
+    const a = d[i - 1], b = d[i], h0 = k.u - keys[i - 1].u, h1 = keys[i + 1].u - k.u;
+    return { ...k, m: a * b <= 0 ? 0 : (3 * (h0 + h1)) / ((2 * h1 + h0) / a + (h1 + 2 * h0) / b) };
+  });
+}
+const curve = keys => { const k = monotone(keys.map(([u, v, m]) => ({ u, v, m }))); return u => hermite(k, u); };
+
+/** Both feet planted at their rest toes (IK targets). */
+const restLegs = (rig, factor = 1) => SIDES.map(side => ({
+  side, contact: 1, maxD: maxReach(rig, side, factor),
+  tgt: { toes: rig.heads[`${side}Toes`], pitch: 0, toePitch: 0, contact: 1 },
+}));
+
+/** Highest root.y that keeps every planted leg reachable for a hips delta and root x/z. */
+function plantedY(rig, Dh, root, legs) {
+  let y = Infinity;
+  for (const { side, tgt, contact, maxD } of legs) {
+    if (contact) y = Math.min(y, reachY(hipPos(rig, side, Dh, [root[0], 0, root[2]]), ankleOf(rig, side, tgt), maxD));
+  }
+  return y;
+}
+
+/** Legs for a given root (planted legs clamp root.y to their reach, a safety net), as pose joints. */
+function solveLegs(rig, Dh, root, legs) {
+  const r = [root[0], Math.min(root[1], plantedY(rig, Dh, root, legs)), root[2]];
+  const world = { hips: Dh };
+  for (const { side, tgt, maxD } of legs) Object.assign(world, solveLeg(rig, side, Dh, r, tgt, maxD));
+  return { root: r, legJoints: worldToPose(world) };
+}
+
+/** Relaxed standing arm (same as idle at a neutral breath): hanging ~6 deg off the body, elbow 16 deg. */
+const standArm = ctx => ({ swing: 0, out: (6 + 8 * Math.max(0, slider(ctx, 'weight'))) * DEG, bend: 16 * DEG, shrug: 0 });
+const addArm = (a, d) => Object.fromEntries([...new Set([...Object.keys(a), ...Object.keys(d)])].map(k => [k, (a[k] || 0) + (d[k] || 0)]));
+
+/** Loop wrapper: the same gait mirrored left <-> right (strafe right from strafe left), half a cycle later so
+ *  phase 0 is still a LEFT foot contact (the animator shares one phase between locomotion clips). */
+function mirrored(base, name) {
+  const shift = ctx => 0.5 * base.timing(ctx).duration;
+  return {
+    name, loop: true, duration: base.duration,
+    timing(ctx) { const tm = base.timing(ctx), v = tm.velocity; return { ...tm, velocity: [-v[0], v[1], v[2]] }; },
+    contacts(t, ctx) { const c = base.contacts(t + shift(ctx), ctx); return { left: c.right, right: c.left }; },
+    sample: (t, ctx) => mirrorPose(base.sample(t + shift(ctx), ctx)),
+  };
+}
+
+/**
+ * Loop wrapper: a forward gait played backwards in time (walking backwards is close to time-reversed forward
+ * walking: Thorstensson 1986, Grasso et al. 1998). Shifted so phase 0 is the LEFT foot contact (the base's
+ * left toe-off) like the forward clips: the ball touches first with the heel up, then the heel lowers.
+ */
+function reversed(base, name) {
+  const tmOf = ctx => base.timing(ctx);
+  return {
+    name, loop: true, duration: base.duration,
+    timing(ctx) { const tm = tmOf(ctx); return { ...tm, speed: -tm.speed, velocity: [0, 0, -tm.speed] }; },
+    contacts(t, ctx) {
+      const tm = tmOf(ctx), ph = phaseOf(t, tm.duration);
+      return { left: ph < tm.beta ? 1 : 0, right: wrap01(ph + 0.5) < tm.beta ? 1 : 0 };
+    },
+    sample(t, ctx) { const tm = tmOf(ctx); return base.sample(tm.beta * tm.duration - t, ctx); },
+  };
+}
+
+// ---------------------------------------------------------------------------------------------------
+// Walk backwards: a slower, shorter-strided walk (about 2/3 of the forward speed, cadence ~95 %), toe-first
+// contact (22 deg plantarflexion, heel down within ~30 % of the stance), early knee lift in the swing.
+
+const walkBackBase = locomotion({
+  name: 'walk_back',
+  froude: 0.0885, strideK: 1.05, reach: 0.995,
+  beta: 0.64, betaSlope: 0.05, betaMin: 0.58, betaMax: 0.68, maxStance: 0.9,
+  narrow: 0.45, zOffset: -0.05,
+  heelLift: 0.7, toeOff: 22 * DEG, rollEnd: 0.45, dorsi: 5 * DEG,
+  clearance: 0.085, liftSkew: -0.5, swingTangent: 0.5, bindEarlySwing: 0.35,
+  bob: 0.03, bobHighInStance: true, sway: 0.025,
+  yaw: 4 * DEG, roll: 3 * DEG, lean: 3 * DEG, counterYaw: 1.5,
+  armSwing: 12 * DEG, armLag: 0.04, armOut: 8 * DEG, elbow: 18 * DEG, elbowSwing: 10 * DEG, shoulder: 2 * DEG,
+});
+const walk_back = reversed(walkBackBase, 'walk_back');
+
+// ---------------------------------------------------------------------------------------------------
+// Strafe (sidestep / shuffle, facing forward): authored travelling toward +X (the character's LEFT), the
+// left foot leads, the right foot closes; the feet never cross. Planted feet move at exactly -velocity
+// (IK), the pelvis bobs (high in single support) and follows the feet's midpoint a little.
+
+function sidestep(P) {
+  function timing(ctx) {
+    const s = ctx.speedScale, old = Math.max(0, slider(ctx, 'age')), rig = ctx.rig;
+    const T = (P.period * Math.sqrt(ctx.hipHeight / NEUTRAL_HIP_HEIGHT) * (1 + 0.08 * old)) / s ** P.cadenceExp;
+    const restGap = rig.heads.leftToes[0] - rig.heads.rightToes[0];
+    const gap = P.gap * restGap * (1 + P.gapSpeed * (s - 1));            // mean distance of the feet (toes joints)
+    const stride = Math.min(P.strideK * ctx.legLength * s ** (1 - P.cadenceExp) * (1 - 0.15 * old),
+      2 * (gap - P.minGap * rig.hipWidth));                               // closing step keeps minGap * hipWidth
+    return { duration: T, speed: 0, stride, beta: P.beta, gap, velocity: [stride / T, 0, 0] };
+  }
+
+  function footTarget(ctx, tm, side, p) {
+    const H = ctx.rig.heads, L = ctx.legLength, S = tm.stride, B = tm.beta;
+    const xc = (side === 'left' ? 0.5 : -0.5) * tm.gap, toes = H[`${side}Toes`];
+    let x, y = toes[1], pitch, toePitch = 0, contact;
+    if (p < B) {                                                 // stance: ball planted, moving -X at the speed
+      const s = p / B;
+      contact = 1;
+      x = xc + B * S * (0.5 - s);
+      pitch = P.push * smooth((s - 0.7) / 0.3);                  // small push-off over the ball
+    } else {                                                     // swing: +X, low arc
+      const u = (p - B) / (1 - B), u2 = u * u, u3 = u2 * u;
+      contact = 0;
+      const x0 = xc - 0.5 * B * S, x1 = xc + 0.5 * B * S, m = -P.swingTangent * (1 - B) * S;
+      x = (2 * u3 - 3 * u2 + 1) * x0 + (u3 - 2 * u2 + u) * m + (-2 * u3 + 3 * u2) * x1 + (u3 - u2) * m;
+      y += P.clearance * L * Math.sin(Math.PI * (u + P.liftSkew * u * (1 - u)));
+      pitch = P.push * (1 - smooth(u / 0.3)) - P.dorsi * Math.sin(Math.PI * u) ** 2;
+      toePitch = pitch * smooth(u / 0.3);
+    }
+    return { toes: [x, y, toes[2] + P.zOffset * L], pitch, toePitch, contact };
+  }
+
+  const legsAt = (ctx, tm, phase) => SIDES.map((side, i) => {
+    const tgt = footTarget(ctx, tm, side, wrap01(phase + 0.5 * i));
+    return { side, tgt, contact: tgt.contact, bind: false, maxD: maxReach(ctx.rig, side, P.reach) };
+  });
+
+  /** Pelvis x: the low-passed midpoint of the feet (harmonics 1..3), so the hips ride between them. */
+  function swayFit(ctx, tm) {
+    const N = 120, K = 3, a = new Array(K + 1).fill(0), b = new Array(K + 1).fill(0);
+    for (let i = 0; i < N; i++) {
+      const ph = i / N, [l, r] = legsAt(ctx, tm, ph), m = 0.5 * (l.tgt.toes[0] + r.tgt.toes[0]);
+      for (let k = 1; k <= K; k++) { a[k] += (2 / N) * m * Math.cos(TAU * k * ph); b[k] += (2 / N) * m * Math.sin(TAU * k * ph); }
+    }
+    return ph => { let x = 0; for (let k = 1; k <= K; k++) x += a[k] * Math.cos(TAU * k * ph) + b[k] * Math.sin(TAU * k * ph); return P.sway * x; };
+  }
+
+  function frame(ctx, tm, sway, phase) {
+    const st = TAU * (phase - tm.beta / 2);                     // 0 at left mid-stance
+    const roll = P.roll * Math.cos(st);                         // stance-side hip up
+    const Dh = qMul(rz(roll), rx(P.lean * 0.4));
+    return { phase, roll, Dh, rootX: sway(phase), shape: Math.cos(2 * st), legs: legsAt(ctx, tm, phase) };
+  }
+
+  const prep = ctx => cached(ctx, P.name, () => {
+    const tm = timing(ctx), sway = swayFit(ctx, tm);
+    return { tm, sway, pelvis: fitPelvis(ctx, 240, ph => frame(ctx, tm, sway, ph), P.bob * ctx.legLength, true) };
+  });
+
+  function armParams(ctx, tm, p, i) {
+    const lift = p >= tm.beta ? Math.sin((Math.PI * (p - tm.beta)) / (1 - tm.beta)) : 0;   // own leg in swing
+    const base = standArm(ctx);
+    return {
+      swing: P.armSwing * Math.cos(TAU * p), out: base.out + P.armOut * lift * (i === 0 ? 1 : 0.6),
+      bend: P.elbow + 8 * DEG * lift, shrug: 1.5 * DEG * lift, wrist: 0,
+    };
+  }
+
+  return {
+    name: P.name, loop: true, duration: P.period,
+    timing: ctx => prep(ctx).tm,
+    contacts(t, ctx) {
+      const { tm } = prep(ctx), ph = phaseOf(t, tm.duration);
+      return { left: ph < tm.beta ? 1 : 0, right: wrap01(ph + 0.5) < tm.beta ? 1 : 0 };
+    },
+    sample(t, ctx) {
+      const { tm, sway, pelvis } = prep(ctx), ph = phaseOf(t, tm.duration);
+      const fr = frame(ctx, tm, sway, ph);
+      const { root, legJoints } = placeLegs(ctx, fr, pelvis);
+      const up = torso(fr.Dh, { roll: -0.8 * fr.roll + P.sideLean, pitch: P.lean * 0.6, headWorld: rx(0.25 * P.lean) });
+      const arms = bothArms(ctx.rig, armParams(ctx, tm, ph, 0), armParams(ctx, tm, wrap01(ph + 0.5), 1));
+      return { joints: { ...legJoints, ...up, ...arms }, root };
+    },
+  };
+}
+
+// Neutral 1x: 0.9 s per cycle (133 steps/min), 0.40 m per cycle, 0.45 m/s; feet 0.15 .. 0.55 m apart.
+const strafe_left = sidestep({
+  name: 'strafe_left', period: 0.9, cadenceExp: 0.5, beta: 0.6,
+  gap: 0.95, gapSpeed: 0.25, minGap: 0.7, strideK: 0.5, reach: 0.995,
+  zOffset: -0.01, clearance: 0.06, liftSkew: 0.3, swingTangent: 0.5, push: 10 * DEG, dorsi: 5 * DEG,
+  bob: 0.02, sway: 0.5, roll: 2.5 * DEG, lean: 3 * DEG, sideLean: -2 * DEG,
+  armSwing: 4 * DEG, armOut: 7 * DEG, elbow: 20 * DEG,
+});
+const strafe_right = mirrored(strafe_left, 'strafe_right');
+
+// ---------------------------------------------------------------------------------------------------
+// Idle variants: feet pinned to rest (IK), the pelvis as high as the planted feet allow (smooth), arms
+// relaxed like idle. pose(ph, ctx) -> { yaw, roll, shift (root.x, leg lengths), torso, head, arms }.
+
+function idleVariant({ name, period, pose }) {
+  const timing = ctx => ({ duration: period / ctx.speedScale, speed: 0, stride: 0, velocity: [0, 0, 0] });
+  return {
+    name, loop: true, duration: period, timing,
+    contacts: () => ({ left: 1, right: 1 }),
+    sample(t, ctx) {
+      const ph = phaseOf(t, timing(ctx).duration), p = pose(ph, ctx), { rig } = ctx;
+      const Dh = qMul(ry(p.yaw || 0), rz(p.roll || 0));
+      const legs = restLegs(rig), rootX = (p.shift || 0) * ctx.legLength;
+      const { root, legJoints } = solveLegs(rig, Dh, [rootX, softMin0(plantedY(rig, Dh, [rootX, 0, 0], legs)) - 1e-4, 0], legs);
+      const up = torso(Dh, { ...p.torso, headWorld: p.head });
+      return { joints: { ...legJoints, ...up, ...bothArms(rig, p.arms[0], p.arms[1]) }, root };
+    },
+  };
+}
+
+/** idle_look (10 s): weight onto the right leg + glance left, back, weight onto the left leg + glance right. */
+const idle_look = idleVariant({
+  name: 'idle_look', period: 10,
+  pose(ph, ctx) {
+    const s = ph * 10, breath = Math.sin(TAU * 3 * ph);                   // 3 breaths (18 / min)
+    const shift = bump(s, 5.1, 9.3, 1.0) - bump(s, 0.7, 4.8, 1.0);        // + = weight on the LEFT leg
+    const gL = bump(s, 1.5, 3.9, 0.55), gR = bump(s, 6.0, 8.4, 0.6);
+    const look = 38 * DEG * gL - 32 * DEG * gR;                           // head yaw (+ = to the left)
+    const base = standArm(ctx), roll = 4 * DEG * shift;                   // weight-bearing hip higher
+    const arm = (i, off) => addArm(base, { swing: 1.5 * DEG * Math.sin(TAU * ph + off), bend: 2 * DEG * breath,
+      out: 2 * DEG * Math.max(0, i ? shift : -shift), shrug: 0.8 * DEG * breath });
+    return {
+      yaw: 0.06 * look, roll, shift: 0.035 * shift,
+      torso: { yaw: 0.2 * look, roll: -1.3 * roll, breath: 1.2 * DEG * breath },
+      head: qMul(ry(look), qMul(rz(-3 * DEG * gR + 2 * DEG * gL), rx(2 * DEG))),
+      arms: [arm(0, 0.4), arm(1, 1.9)],
+    };
+  },
+});
+
+/** idle_breathe (8 s): two slow deep breaths (15 / min) with visible chest, shoulders and arm sway. */
+const idle_breathe = idleVariant({
+  name: 'idle_breathe', period: 8,
+  pose(ph, ctx) {
+    const b = 0.5 - 0.5 * Math.cos(TAU * 2 * ph);                         // 0 exhaled .. 1 inhaled
+    const w = Math.sin(TAU * ph), base = standArm(ctx);
+    const arm = off => addArm(base, { swing: 3.5 * DEG * Math.sin(TAU * ph + off), out: 2.5 * DEG * b, bend: 5 * DEG * b,
+      shrug: 3.5 * DEG * b, protract: -1.5 * DEG * b });
+    return {
+      yaw: 1 * DEG * Math.sin(TAU * ph + 1), roll: 1.5 * DEG * w, shift: 0.01 * w,
+      torso: { roll: -1.8 * DEG * w, breath: 3.2 * DEG * (2 * b - 1), pitch: -1 * DEG * b },
+      head: qMul(ry(2 * DEG * Math.sin(TAU * ph + 2.1)), rx(2 * DEG - 2 * DEG * b)),
+      arms: [arm(0.4), arm(1.9)],
+    };
+  },
+});
+
+/** idle_fidget (9 s): a shoulder roll, then the left forearm comes up across the body and the eyes check the hand. */
+const idle_fidget = idleVariant({
+  name: 'idle_fidget', period: 9,
+  pose(ph, ctx) {
+    const s = ph * 9, breath = Math.sin(TAU * 2 * ph), w = Math.sin(TAU * ph);
+    const k = clamp((s - 0.6) / 2.2, 0, 1), roll = Math.sin(Math.PI * k);   // shoulder roll: up+forward, up, back, down
+    const wa = bump(s, 3.2, 7.4, 0.9), look = bump(s, 3.9, 6.8, 0.5);        // left forearm raised / eyes on the wrist
+    const base = standArm(ctx);
+    const shoulders = { shrug: 7 * DEG * roll * roll, protract: 4 * DEG * Math.sin(TAU * k) };
+    const left = addArm(base, { ...shoulders, swing: -25 * DEG * wa + 1.5 * DEG * Math.sin(TAU * ph + 0.4), bend: 75 * DEG * wa + 2 * DEG * breath,
+      twist: 75 * DEG * wa, out: -3 * DEG * wa, wrist: -12 * DEG * wa });
+    const right = addArm(base, { ...shoulders, swing: 1.5 * DEG * Math.sin(TAU * ph + 1.9), bend: 2 * DEG * breath });
+    return {
+      yaw: 1.5 * DEG * look, roll: 2 * DEG * w, shift: 0.015 * w,
+      torso: { yaw: 6 * DEG * look, roll: -2.6 * DEG * w, breath: 1.2 * DEG * breath, pitch: 4 * DEG * look },
+      head: qMul(ry(4 * DEG * look), rx(2 * DEG + 30 * DEG * look)),
+      arms: [left, right],
+    };
+  },
+});
+
+// ---------------------------------------------------------------------------------------------------
+// Jump (standing countermovement jump), plus `fall` (airborne loop at the apex) and `land` (apex -> landing
+// -> standing). One plan per body: ground phases scale with sqrt(legLength) (dynamic similarity), the jump
+// height with the leg length, the flight is ballistic (g = 9.81) between the take-off and touch-down pelvis
+// heights the legs can reach. root = [0, y, z]: y = the pelvis arc (Root translation), z = hips back in the
+// crouch. Timing references: docs/ANIMATION_CLIPS.md.
+
+const JUMP = {
+  hold: 0.10, crouch: 0.45, push: 0.25, recover: 0.55, settle: 0.12,     // s for the neutral leg length
+  depth: 0.28, height: 0.30, absorb: 0.20,                               // pelvis drop / rise, leg lengths
+  takeoffPitch: 40 * DEG, landPitch: 22 * DEG, landReach: 0.98,          // ankle plantarflexion; leg reach at touch-down
+  heelRise: 0.12, heelDown: 0.07,                                        // s: heel lift before take-off / heel down after touch-down
+  hipBack: 0.35,                                                         // hips back per metre of pelvis drop
+  lean: 40 * DEG, toLean: 10 * DEG, apexLean: 4 * DEG, tdLean: 8 * DEG, landLean: 28 * DEG,
+  tuck: 0.12, tuckFwd: 0.03,                                             // ankle tuck in flight (leg lengths)
+  fallPeriod: 1.2,
+};
+
+/** Smallest foot pitch that lets a planted leg reach a pelvis at root (bisection; 0 if the flat foot reaches). */
+function pitchToReach(rig, side, Dh, root, toes, maxD) {
+  const hip0 = hipPos(rig, side, Dh, [root[0], 0, root[2]]);
+  const ok = p => reachY(hip0, ankleFor(rig, side, toes, p), maxD) >= root[1];
+  if (ok(0)) return 0;
+  let lo = 0, hi = 60 * DEG;
+  if (!ok(hi)) return hi;
+  for (let i = 0; i < 40; i++) { const m = 0.5 * (lo + hi); if (ok(m)) hi = m; else lo = m; }
+  return hi;
+}
+
+function jumpPlan(ctx) {
+  return cached(ctx, 'jump', () => {
+    const { rig } = ctx, J = JUMP, L = ctx.legLength, s = ctx.speedScale;
+    const old = Math.max(0, slider(ctx, 'age')), heavy = Math.max(0, slider(ctx, 'weight'));
+    const ts = Math.sqrt(L / NEUTRAL_LEG) * (1 + 0.15 * old);
+    const h = J.height * L * (0.75 + 0.25 * s) * (1 - 0.35 * old) * (1 - 0.2 * heavy);
+    const dC = J.depth * L * (1 - 0.25 * old), dA = J.absorb * L;
+    const Dh = lean => rx(0.45 * lean);
+    const reachAll = (lean, pitch, f) => Math.min(...SIDES.map(side => reachY(hipPos(rig, side, Dh(lean), [0, 0, 0]),
+      ankleFor(rig, side, rig.heads[`${side}Toes`], pitch), maxReach(rig, side, f))));
+    const yTo = reachAll(J.toLean, J.takeoffPitch, 1), yLand = reachAll(J.tdLean, J.landPitch, J.landReach);
+    const v0 = Math.sqrt(2 * G * h), vLand = Math.sqrt(v0 * v0 + 2 * G * (yTo - yLand)), tf = (v0 + vLand) / G;
+    const t1 = J.hold * ts, t2 = t1 + J.crouch * ts, t3 = t2 + J.push * ts, t4 = t3 + tf;
+    const t5 = t4 + (2 * (yLand + dA)) / vLand, t6 = t5 + J.recover * ts, T = t6 + J.settle * ts, tApex = t3 + v0 / G;
+    // ankle relative to the root at take-off / touch-down: the flight legs blend between the two
+    const rel = (pitch, y) => Object.fromEntries(SIDES.map(side =>
+      [side, vSub(ankleFor(rig, side, rig.heads[`${side}Toes`], pitch), [0, y, 0])]));
+    const D = 1 / DEG;
+    return {
+      ts, h, dC, dA, v0, vLand, tf, yTo, yLand, t1, t2, t3, t4, t5, t6, T, tApex,
+      relTo: rel(J.takeoffPitch, yTo), relLand: rel(J.landPitch, yLand),
+      // pelvis y: hold, smooth crouch, Hermite push ending at the take-off velocity, then the flight parabola
+      push: monotone([{ u: t2, v: -dC, m: 0 }, { u: t3, v: yTo, m: v0 }]),
+      lean: curve([[0, 0], [t1, 0], [t2, J.lean], [t3, J.toLean], [tApex, J.apexLean], [t4, J.tdLean], [t5, J.landLean], [t6, 2 * DEG], [T, 0]]),
+      z: curve([[0, 0], [t1, 0], [t2, -J.hipBack * dC], [t3, 0], [t4, 0], [t5, -J.hipBack * dA], [t6, 0], [T, 0]]),
+      swing: curve([[0, 0], [t1, 0], [t2, 50 / D], [t3, -85 / D], [tApex, -78 / D], [t4, -55 / D], [t5, -28 / D], [t6, -4 / D], [T, 0]]),
+      bend: curve([[0, 16 / D], [t1, 16 / D], [t2, 22 / D], [t3, 12 / D], [tApex, 35 / D], [t4, 25 / D], [t5, 30 / D], [t6, 18 / D], [T, 16 / D]]),
+      out: curve([[0, 0], [t1, 0], [t2, 6 / D], [t3, 20 / D], [tApex, 25 / D], [t4, 20 / D], [t5, 16 / D], [t6, 3 / D], [T, 0]]),
+      shrug: curve([[0, 0], [t1, 0], [t2, -2 / D], [t3, 8 / D], [tApex, 5 / D], [t4, 2 / D], [t5, -2 / D], [T, 0]]),
+    };
+  });
+}
+
+/** Pelvis height of the jump at time t (piecewise, C1 except at take-off / touch-down where g takes over). */
+function jumpY(P, t) {
+  if (t <= P.t1) return 0;
+  if (t <= P.t2) return -P.dC * smooth((t - P.t1) / (P.t2 - P.t1));
+  if (t <= P.t3) return hermite(P.push, t);
+  if (t <= P.t4) { const u = t - P.t3; return P.yTo + P.v0 * u - 0.5 * G * u * u; }
+  if (t <= P.t5) { const x = (t - P.t4) / (P.t5 - P.t4); return P.yLand - (P.yLand + P.dA) * (2 * x - x * x); }
+  if (t <= P.t6) return -P.dA * (1 - smooth((t - P.t5) / (P.t6 - P.t5)));
+  return 0;
+}
+
+/** Jump pose at time t (clamped). wob = fall-loop phase (small airborne flailing on top of the apex pose). */
+function jumpSample(ctx, t, wob = null) {
+  const P = jumpPlan(ctx), J = JUMP, { rig } = ctx, L = ctx.legLength;
+  t = clamp(t, 0, P.T);
+  const lean = P.lean(t), Dh = rx(0.45 * lean);
+  const root = [0, jumpY(P, t), P.z(t)];
+  const air = t > P.t3 && t < P.t4;
+  const legs = SIDES.map((side, i) => {
+    const toes = rig.heads[`${side}Toes`], maxD = maxReach(rig, side, 1);
+    if (!air) {
+      const auth = t <= P.t3 ? J.takeoffPitch * smooth((t - (P.t3 - J.heelRise * P.ts)) / (J.heelRise * P.ts))
+        : J.landPitch * (1 - smooth((t - P.t4) / (J.heelDown * P.ts)));
+      const pitch = Math.max(auth, pitchToReach(rig, side, Dh, root, toes, maxD));
+      return { side, contact: 1, maxD, tgt: { toes, pitch, toePitch: 0, contact: 1 } };
+    }
+    const u = (t - P.t3) / P.tf, k = smooth(u), sn = Math.sin(Math.PI * u);
+    const a = P.relTo[side], b = P.relLand[side];
+    const kick = wob == null ? 0 : (i ? -1 : 1) * 0.04 * L * Math.sin(TAU * wob);
+    const ankle = [a[0] + (b[0] - a[0]) * k, root[1] + a[1] + (b[1] - a[1]) * k + J.tuck * L * sn * sn,
+      root[2] + a[2] + (b[2] - a[2]) * k + J.tuckFwd * L * sn + kick];
+    const pitch = J.takeoffPitch + (J.landPitch - J.takeoffPitch) * k;
+    return { side, contact: 0, maxD, tgt: { ankle, pitch, toePitch: 0.4 * pitch * sn, contact: 0 } };
+  });
+  const { root: r, legJoints } = solveLegs(rig, Dh, root, legs);
+  const up = torso(Dh, { pitch: 0.55 * lean, headWorld: rx(0.3 * lean + 2 * DEG) });
+  const base = standArm(ctx);
+  const arm = i => {
+    const f = wob == null ? 0 : Math.sin(TAU * wob + (i ? Math.PI : 0));
+    return addArm(base, { swing: P.swing(t) + 8 * DEG * f, out: P.out(t) + 5 * DEG * f, bend: P.bend(t) - 16 * DEG, shrug: P.shrug(t) });
+  };
+  return { joints: { ...legJoints, ...up, ...bothArms(rig, arm(0), arm(1)) }, root: r };
+}
+
+const jumpTiming = ctx => {
+  const P = jumpPlan(ctx);
+  return { duration: P.T, speed: 0, stride: 0, velocity: [0, 0, 0], height: P.h,
+    events: { takeoff: P.t3, apex: P.tApex, touchdown: P.t4, settled: P.t6 } };
+};
+/** Both feet planted outside the flight (take-off and touch-down instants count as planted). */
+const jumpContacts = (P, t) => { t = clamp(t, 0, P.T); const c = t <= P.t3 || t >= P.t4 ? 1 : 0; return { left: c, right: c }; };
+
+// Neutral body, speedScale 1: 2.07 s; pelvis rise 0.24 m above take-off, 0.45 s flight.
+const jump = {
+  name: 'jump', loop: false, duration: 2.07, next: 'idle',
+  timing: jumpTiming,
+  contacts: (t, ctx) => jumpContacts(jumpPlan(ctx), t),
+  sample: (t, ctx) => jumpSample(ctx, t),
+};
+
+/** fall: airborne loop at the jump apex (root.y = apex height, so fall -> land blends without a jump). */
+const fall = {
+  name: 'fall', loop: true, duration: JUMP.fallPeriod,
+  timing: ctx => ({ duration: JUMP.fallPeriod / ctx.speedScale, speed: 0, stride: 0, velocity: [0, 0, 0] }),
+  contacts: () => ({ left: 0, right: 0 }),
+  sample: (t, ctx) => jumpSample(ctx, jumpPlan(ctx).tApex, phaseOf(t, JUMP.fallPeriod / ctx.speedScale)),
+};
+
+/** land: from the apex (fall pose) down, touch-down, absorb, stand up. One-shot, then idle. */
+const land = {
+  name: 'land', loop: false, duration: 1.06, next: 'idle',
+  timing: ctx => { const P = jumpPlan(ctx); return { duration: P.T - P.tApex, speed: 0, stride: 0, velocity: [0, 0, 0],
+    events: { touchdown: P.t4 - P.tApex, settled: P.t6 - P.tApex } }; },
+  contacts: (t, ctx) => { const P = jumpPlan(ctx); return jumpContacts(P, P.tApex + clamp(t, 0, P.T - P.tApex)); },
+  sample: (t, ctx) => { const P = jumpPlan(ctx); return jumpSample(ctx, P.tApex + clamp(t, 0, P.T - P.tApex)); },
+};
+
+/** Clip registry: new clips = new entries (names double as i18n keys `clip_<name>`). loop: false = one-shot
+ *  (the animator returns to `next`, default idle). */
+export const CLIPS = { idle, walk, run, idle_look, idle_breathe, idle_fidget, walk_back, strafe_left, strafe_right, jump, fall, land };

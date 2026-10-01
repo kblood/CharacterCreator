@@ -8,9 +8,10 @@
 // morph targets (same names/count as the base, >= 12) / vertex counts / skin; one animation per clip in index.json with the JSON's
 // frame count/duration; rotation channels only, except one translation channel on the root bone; every
 // baked rotation key == qToLocal(restLocal, restWorld, q_json) (<= 0.5 deg), joints the clip does not
-// drive stay at rest; Root translation == rest + pose.root (<= 1 mm); loop closure; bone-level FK on the
-// baked walk/run keys: toes y >= -0.005 m; baked bone FK == fkPositions(sidecar heads, JSON pose) (<= 2 mm,
-// an independent check of the whole axis/rest-frame conversion).
+// drive stay at rest; Root translation == rest + pose.root (<= 1 mm); loop closure (looping clips); one-shots
+// (jump, land) name an existing `next` clip and ordered events inside the clip; bone-level FK on the baked keys
+// of every clip: toes y >= -0.005 m; baked bone FK == fkPositions(sidecar heads, JSON pose) (<= 2 mm, an
+// independent check of the whole axis/rest-frame conversion).
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -174,6 +175,11 @@ for (const [name, clip] of Object.entries(clips)) {
   if (maxDeg > 0.5) { bad++; fail(`${name}: rotation keys differ from qToLocal by ${maxDeg.toFixed(3)} deg`); }
   if (maxRoot > 1e-3) { bad++; fail(`${name}: Root translation off by ${(maxRoot * 1000).toFixed(2)} mm`); }
   if (clip.loop && maxClose > 0.01) { bad++; fail(`${name}: loop not closed (${maxClose.toFixed(3)} deg)`); }
+  if (!clip.loop && !clips[clip.next]) { bad++; fail(`${name}: one-shot without a valid next clip (${clip.next})`); }
+  if (clip.events) {
+    const ev = Object.values(clip.events);
+    if (!ev.every((t, k) => t >= 0 && t <= clip.duration + 1e-4 && (k === 0 || t >= ev[k - 1]))) { bad++; fail(`${name}: events out of order / range ${JSON.stringify(clip.events)}`); }
+  }
 
   // bone-level FK on the baked keys (engine view): lowest toes / ankle
   let minToes = Infinity, minFoot = Infinity, maxFk = 0;
@@ -197,13 +203,14 @@ for (const [name, clip] of Object.entries(clips)) {
       go(k); maxFk = Math.max(maxFk, Q.vLen(Q.vSub(P[k], H[j])));
     }
   }
-  const floorOk = !(name === 'walk' || name === 'run') || minToes >= -0.005;
+  const floorOk = minToes >= -0.005;
   if (maxFk > 2e-3) { bad++; fail(`${name}: baked FK differs from fkPositions(JSON) by ${(maxFk * 1000).toFixed(2)} mm`); }
   if (!floorOk) { bad++; fail(`${name}: toes go ${(-minToes * 1000).toFixed(1)} mm below the floor`); }
   if (!bad) {
     ok(`${name}: ${an.channels.length} channels (${an.channels.length - 1} rotation + Root translation), ${n + 1} keys, ` +
       `${dur.toFixed(4)} s, max rot err ${maxDeg.toFixed(4)} deg, root err ${(maxRoot * 1000).toFixed(3)} mm, ` +
-      `FK vs JSON ${(maxFk * 1000).toFixed(2)} mm, min toes y ${minToes.toFixed(4)} m, min ankle y ${minFoot.toFixed(4)} m`);
+      `FK vs JSON ${(maxFk * 1000).toFixed(2)} mm, min toes y ${minToes.toFixed(4)} m, min ankle y ${minFoot.toFixed(4)} m` +
+      (clip.loop ? '' : `, one-shot -> ${clip.next}`));
   }
 }
 

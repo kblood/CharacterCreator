@@ -2,7 +2,16 @@
  "clips": [
   "idle",
   "walk",
-  "run"
+  "run",
+  "idle_look",
+  "idle_breathe",
+  "idle_fidget",
+  "walk_back",
+  "strafe_left",
+  "strafe_right",
+  "jump",
+  "fall",
+  "land"
  ],
  "boneMap": {
   "hips": "pelvis",

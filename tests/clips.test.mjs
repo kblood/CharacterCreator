@@ -28,15 +28,24 @@ const cases = function* (clipNames = Object.keys(CLIPS)) {
 };
 const angleBetween = (u, v) => Math.acos(Math.max(-1, Math.min(1, Q.vDot(Q.vNorm(u), Q.vNorm(v)))));
 
-test('registry: idle, walk, run with the clip contract', () => {
-  assert.deepEqual(Object.keys(CLIPS), ['idle', 'walk', 'run']);
+const ONE_SHOTS = ['jump', 'land'];
+const LOOPS = Object.keys(CLIPS).filter(n => !ONE_SHOTS.includes(n));
+/** Ground travel per second of a clip: timing().velocity (x = left, z = forward). */
+const vel = tm => tm.velocity || [0, 0, tm.speed];
+
+test('registry: all clips with the clip contract', () => {
+  assert.deepEqual(Object.keys(CLIPS), ['idle', 'walk', 'run', 'idle_look', 'idle_breathe', 'idle_fidget',
+    'walk_back', 'strafe_left', 'strafe_right', 'jump', 'fall', 'land']);
   const ctx = makeContext(RIGS.neutral);
   for (const [name, c] of Object.entries(CLIPS)) {
     assert.equal(c.name, name);
-    assert.equal(c.loop, true);
+    assert.equal(c.loop, !ONE_SHOTS.includes(name), `${name} loop flag`);
+    if (!c.loop) assert.ok(CLIPS[c.next], `${name} next clip`);
     assert.ok(c.duration > 0);
     const tm = c.timing(ctx);
-    assert.ok(tm.duration > 0 && tm.speed >= 0 && tm.stride >= 0, name);
+    assert.ok(tm.duration > 0 && Number.isFinite(tm.speed) && tm.stride >= 0, name);
+    assert.ok(vel(tm).length === 3 && vel(tm).every(Number.isFinite), `${name} velocity`);
+    assert.ok(Math.abs(Math.hypot(...vel(tm)) - Math.abs(tm.speed)) < 1e-9 || Math.abs(tm.speed) < 1e-12, `${name} speed = |velocity| along z`);
     assert.ok(Math.abs(tm.duration - c.duration) / c.duration < 0.02, `${name} metadata duration`);
     const p = c.sample(0, ctx);
     assert.ok(p.joints && p.root && p.root.length === 3);
@@ -49,6 +58,17 @@ test('registry: idle, walk, run with the clip contract', () => {
 test('quats finite and unit; seamless loop sample(0) == sample(duration); deterministic', () => {
   for (const { name, clip, body, ctx, s } of cases()) {
     const T = clip.timing(ctx).duration, tag = `${name}/${body}/${s}`;
+    if (!clip.loop) {                     // one-shots: finite, deterministic, continuous (checked below)
+      for (let i = 0; i <= N; i++) {
+        const p = clip.sample((i * T) / N, ctx), p2 = clip.sample((i * T) / N, ctx);
+        for (const [j, q] of Object.entries(p.joints)) {
+          assert.ok(q.every(Number.isFinite) && Math.abs(Math.hypot(...q) - 1) < 1e-6, `${tag} ${j}`);
+          assert.deepEqual(q, p2.joints[j]);
+        }
+        assert.ok(p.root.every(Number.isFinite), tag);
+      }
+      continue;
+    }
     for (let i = 0; i <= N; i++) {
       const p = clip.sample((i * T) / N, ctx);
       for (const [j, q] of Object.entries(p.joints)) {
@@ -71,9 +91,9 @@ test('quats finite and unit; seamless loop sample(0) == sample(duration); determ
 
 test('feet: no penetration, no float/slide while planted, knees sane, feet do not cross', () => {
   for (const { name, clip, body, rig, ctx, s } of cases()) {
-    const { duration: T, speed } = clip.timing(ctx), tag = `${name}/${body}/${s}`;
+    const tm = clip.timing(ctx), { duration: T } = tm, v = vel(tm), tag = `${name}/${body}/${s}`;
     const runs = { left: [], right: [] }, cur = { left: null, right: null };
-    for (let i = 0; i < 2 * N; i++) {                     // two cycles so stance runs that wrap are whole
+    for (let i = 0; i < (clip.loop ? 2 * N : N + 1); i++) {  // two cycles so stance runs that wrap are whole
       const t = (i * T) / N, p = clip.sample(t, ctx), P = fkPositions(rig.heads, p), c = clip.contacts(t, ctx);
       for (const side of ['left', 'right']) {
         const toes = P[`${side}Toes`], foot = P[`${side}Foot`], hip = P[`${side}UpperLeg`], knee = P[`${side}LowerLeg`];
@@ -87,15 +107,18 @@ test('feet: no penetration, no float/slide while planted, knees sane, feet do no
         assert.ok(perp[2] > -1e-3, `${tag} ${side} knee behind the leg line @${i}`);
         if (c[side]) {
           assert.ok(toes[1] <= restToes + 0.005, `${tag} ${side} planted toes float ${toes[1] - restToes} @${i}`);
-          (cur[side] ||= []).push(toes[2] + speed * t);
+          (cur[side] ||= []).push([toes[0] + v[0] * t, toes[2] + v[2] * t]);
         } else if (cur[side]) { runs[side].push(cur[side]); cur[side] = null; }
       }
       assert.ok(P.leftToes[0] - P.rightToes[0] >= 0.5 * rig.hipWidth, `${tag} feet cross @${i}`);
     }
     for (const side of ['left', 'right']) {
       if (cur[side]) runs[side].push(cur[side]);
-      assert.ok(runs[side].length > 0, `${tag} ${side} never planted`);
-      for (const r of runs[side]) assert.ok(Math.max(...r) - Math.min(...r) < 0.01, `${tag} ${side} foot slides ${Math.max(...r) - Math.min(...r)}`);
+      if (name !== 'fall') assert.ok(runs[side].length > 0, `${tag} ${side} never planted`);
+      for (const r of runs[side]) {
+        const d = Math.max(...r.map(a => Math.hypot(a[0] - r[0][0], a[1] - r[0][1])));
+        assert.ok(d < 0.01, `${tag} ${side} foot slides ${d}`);
+      }
     }
   }
 });
@@ -257,7 +280,8 @@ test('run: cadence and stride grow with speed; tempo scales with the body', () =
 });
 
 test('no crouching: pelvis never drops more than 15% of the leg length (any body, speed <= 2)', () => {
-  for (const { name, clip, body, ctx, s } of cases()) {
+  // the jump's countermovement / landing absorb are deliberate crouches (tested in jump tests below)
+  for (const { name, clip, body, ctx, s } of cases(LOOPS)) {
     const T = clip.timing(ctx).duration;
     for (let i = 0; i < N; i++) {
       const y = clip.sample((i * T) / N, ctx).root[1];
