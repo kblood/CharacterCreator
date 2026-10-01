@@ -242,7 +242,7 @@ Other outfits (through, sum over the 8 bodies, before → after):
 
 | field | coat | skirt | default |
 |---|---|---|---|
-| maxDistance (m) | 0.6 | 0.04 | 0.3 |
+| maxDistance (m) | 0.45 | 0.04 | 0.3 |
 | stiffness.stretch / bend | 0.95 / 0.35 | 0.95 / 0.3 | 0.95 / 0.35 |
 | bendVertical | 0.7 | (= bend) | 0.6 |
 | damping | 0.12 | 0.12 | 0.12 |

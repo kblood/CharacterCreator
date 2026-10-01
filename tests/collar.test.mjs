@@ -150,3 +150,21 @@ test('covered lower layers: T-shirt vertices under the pinned coat carry the coa
   // shoulders / upper arms were where the tee showed through the coat
   assert.ok(dropped.some(i => Math.abs(tee.prim.pos[i][0]) > 0.19 && tee.prim.pos[i][1] > 1.2), 'upper arm / shoulder tee hidden');
 });
+
+// The back of the coat collar is not fitted over the shirt collar (pushing it out moved single top-edge vertices
+// up to 19 mm into short hair); that part of the shirt collar carries the coat bit instead (blender/cc_clothing.py
+// coat_collar own_collar_deg, hide_lower edge_collar). Toward the front, seen through the open gorge, it stays drawn.
+test('shirt collar under the coat collar: hidden at the back, drawn at the front', () => {
+  const sh = D.garments.shirt, SP = sh.prim.pos, z = sh.prim.attr('_CCZONE');
+  assert.ok(z, 'shirt _CCZONE');
+  const bit = D.catalog.bodyZones[item.hidesBodyZones[0]];
+  const top = Math.max(...SP.map(p => p[1]));
+  const col = SP.map((_, i) => i).filter(i => SP[i][1] > top - 0.05);          // the collar band
+  const cz = col.reduce((a, i) => a + SP[i][2], 0) / col.length;
+  const ang = i => Math.atan2(Math.abs(SP[i][0]), cz - SP[i][2]) * 180 / Math.PI;   // 0 = back, 180 = front
+  const frac = (lo, hi) => { const s = col.filter(i => ang(i) >= lo && ang(i) < hi); return { n: s.length, hid: s.filter(i => z[i] & bit).length }; };
+  const back = frac(0, 75), front = frac(100, 181);
+  console.log('shirt collar vertices hidden by the coat: back', back, 'front', front);
+  assert.ok(back.n > 30 && back.hid >= 0.5 * back.n, 'back of the shirt collar hidden under the coat collar');
+  assert.ok(front.n > 30 && front.hid <= 0.05 * front.n, 'front of the shirt collar drawn');
+});

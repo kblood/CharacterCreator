@@ -19,7 +19,9 @@
 //
 //   node tools/cloth_integrity.mjs [--outfits a,b] [--bodies neutral,female] [--clips idle,run] [--every 3]
 //        [--fps 60] [--worker 0|1] [--drawfix 0|1] [--bodylayer 0|1] [--simlayers 0|1] [--predict 0|1]
-//        [--wind 0..1] [--cloth 0] [--json [file]] [--quiet]
+//        [--wind 0..1] [--cloth 0] [--json [file]] [--quiet] [--timeline default|moves]
+//   --timeline moves: the extra clips instead of idle/walk/run (TIMELINES.moves: strafe left/right, walk backward,
+//   a jump with its automatic return to idle, idle_fidget); optional, not part of the default matrix.
 // Exit code 1 when any case is above its threshold (CONFIG.thresholds). tests/integrity.test.mjs runs a reduced
 // matrix. docs/CLOTH_RUNTIME.md "Integrity harness" describes the numbers.
 import fs from 'node:fs';
@@ -46,6 +48,11 @@ export const CONFIG = {
     'coat': ['trenchcoat'],                     // the coat over the underwear only (review 2026-10-01)
     'coat+shoes': ['trenchcoat', 'shoes'],
     'underwear': [],     // the default underwear of the body's sex only
+    'hoodie+jeans+shoes': ['hoodie', 'jeans', 'shoes'],   // the hoodie conflicts with the coat (no hoodie+coat)
+    'shirt+shorts+shoes': ['shirt', 'shorts', 'shoes'],
+    'shirt+skirt': ['shirt', 'skirt'],
+    'hoodie+skirt': ['hoodie', 'skirt'],
+    'shirt+jeans+coat': ['shirt', 'jeans', 'trenchcoat'],
   },
   // every outfit is worn over the default underwear of the body's sex (like the viewer: web/clothing_rules.js
   // outfitWithUnderwear; female = gender < 0), unless the outfit lists an underwear item; false = no underwear
@@ -379,6 +386,16 @@ function drawnVerts(D, s, ch) {
   return s.dv;
 }
 
+/** Optional timelines (--timeline <name>): same format as CONFIG.timeline. 'jump' is a one-shot: the animator
+ *  returns to idle by itself ~2.1 s later (the label stays 'jump' until the next entry). */
+export const TIMELINES = {
+  moves: {
+    timeline: [[-1, 'preroll', 'idle'], [0, 'idle', 'idle'], [1, 'strafe_left', 'strafe_left'], [3, 'strafe_right', 'strafe_right'],
+      [5, 'walk_back', 'walk_back'], [7.5, 'idle', 'idle'], [8.5, 'jump', 'jump'], [11, 'idle_fidget', 'idle_fidget']],
+    duration: 18.5,             // idle_fidget runs 7.5 s: shoulder roll + the forearm raise (3.2-7.4 s)
+  },
+};
+
 /**
  * Runs the timeline for one outfit on one body. Returns { outfit, body, frames, ms, pairs: { 'outer:inner':
  * { [label]: { poke: { n, mm, frames, at }, sink: {...} } } } } (max over the label's measured frames; `frames` =
@@ -422,7 +439,8 @@ export function runCase(D, outfit, bodyValues, opt = {}) {
     if (acc >= 1 / HZ) acc %= 1 / HZ;
     simTime += n / HZ;
     const f = frameInputs(D, ch, defs, caps, { t });
-    const speed = ch.animator.state().rootSpeed || 0;
+    // travel velocity of the blended clips (strafe: sideways, walk_back: backwards); == [0, 0, rootSpeed] for idle/walk/run
+    const rv = ch.animator.state().rootVelocity || [0, 0, ch.animator.state().rootSpeed || 0];
     for (const s of sims) {
       const wv = windVelocity(wind * s.params.wind, simTime);   // as web/cloth/runtime.js: ui wind x garment wind
       const A1 = Float32Array.from(s.anchorsNow()), L = s.layerNow(drawnOf), L1 = L ? Float32Array.from(L) : null, C1 = Float32Array.from(caps);
@@ -433,7 +451,7 @@ export function runCase(D, outfit, bodyValues, opt = {}) {
       const PL = pred && L1 && s.actL?.length === L1.length ? extrapolate(L1, s.actL, LAYER_STRIDE, 3, k) : L1;
       s.actA = A1; s.actC = C1; s.actL = L1;
       const job = { n, A0: reset ? null : s.lastA, A1: PA, C0: reset ? null : s.lastC, C1: PC, L0: reset ? null : s.lastL, L1: PL,
-        floorY: 0, lateral: f.lateral, air: [wv[0], wv[1], wv[2] - speed], limit: s.limit, reset, settle: reset ? SETTLE : 0 };
+        floorY: 0, lateral: f.lateral, air: [wv[0] - rv[0], wv[1] - rv[1], wv[2] - rv[2]], limit: s.limit, reset, settle: reset ? SETTLE : 0 };
       if (n > 0 || reset) {
         const X = Float32Array.from(advance(s.solver, job));
         // drawn this frame: sync = the fresh result; worker = the previous job's result, lag-compensated
@@ -543,10 +561,12 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const outfits = list('--outfits'), bodies = list('--bodies'), clips = list('--clips');
   const every = opt('--every'), cloth = opt('--cloth'), json = opt('--json'), quiet = opt('--quiet') !== null, wind = opt('--wind');
   const fps = opt('--fps'), worker = opt('--worker'), drawFix = opt('--drawfix'), bodyLayer = opt('--bodylayer');
-  const simLayers = opt('--simlayers'), predict = opt('--predict');
+  const simLayers = opt('--simlayers'), predict = opt('--predict'), tl = opt('--timeline');
+  if (tl && tl !== 'default' && !TIMELINES[tl]) throw new Error(`unknown --timeline ${tl} (${Object.keys(TIMELINES).join(', ')})`);
   const cfg = { ...(every ? { every: +every } : {}), ...(wind ? { wind: +wind } : {}), ...(fps ? { fps: +fps } : {}), ...(worker !== null ? { worker: worker !== '0' } : {}),
     ...(drawFix !== null ? { drawFix: drawFix !== '0' } : {}), ...(bodyLayer !== null ? { bodyLayer: bodyLayer !== '0' } : {}),
-    ...(simLayers !== null ? { simLayers: simLayers !== '0' } : {}), ...(predict !== null ? { predict: +predict } : {}) };
+    ...(simLayers !== null ? { simLayers: simLayers !== '0' } : {}), ...(predict !== null ? { predict: +predict } : {}),
+    ...(tl && TIMELINES[tl] ? TIMELINES[tl] : {}) };
   const D = loadData();
   const results = runMatrix(D, { outfits, bodies, clips, cloth: cloth !== '0', cfg, log: quiet ? null : m => console.error(m) });
   const rs = rows(results, { ...CONFIG, ...cfg });
@@ -557,7 +577,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     if (json) fs.writeFileSync(path.resolve(json), s); else console.log(s);
   }
   if (json === null || json) {
-    console.log(table(rs));
+    console.log(table(rs, [...new Set((cfg.timeline ?? CONFIG.timeline).map(x => x[1]).filter(l => l !== 'preroll'))]));
     console.log(`\n${failing.length} of ${rs.length} outfit x body x clip x pair cases above threshold${failing.length ? ' -> FAIL' : ' -> OK'}`);
   }
   process.exitCode = failing.length ? 1 : 0;

@@ -184,6 +184,38 @@
   "source": "http://www.makehumancommunity.org"
  },
  {
+  "asset": "male_casualsuit04",
+  "type": "clothes",
+  "file": "clothes/male_casualsuit04/male_casualsuit04.mhmat",
+  "license": "CC0",
+  "author": "makehuman_system",
+  "source": "http://www.makehumancommunity.org"
+ },
+ {
+  "asset": "male_casualsuit04",
+  "type": "clothes",
+  "file": "clothes/male_casualsuit04/male_casualsuit04.mhclo",
+  "license": "CC0",
+  "author": "makehuman_system",
+  "source": "http://www.makehumancommunity.org"
+ },
+ {
+  "asset": "male_casualsuit03",
+  "type": "clothes",
+  "file": "clothes/male_casualsuit03/male_casualsuit03.mhmat",
+  "license": "CC0",
+  "author": "makehuman_system",
+  "source": "http://www.makehumancommunity.org"
+ },
+ {
+  "asset": "male_casualsuit03",
+  "type": "clothes",
+  "file": "clothes/male_casualsuit03/male_casualsuit03.mhclo",
+  "license": "CC0",
+  "author": "makehuman_system",
+  "source": "http://www.makehumancommunity.org"
+ },
+ {
   "asset": "male_casualsuit05",
   "type": "clothes",
   "file": "clothes/male_casualsuit05/male_casualsuit05.mhmat",
@@ -195,6 +227,22 @@
   "asset": "male_casualsuit05",
   "type": "clothes",
   "file": "clothes/male_casualsuit05/male_casualsuit05.mhclo",
+  "license": "CC0",
+  "author": "makehuman_system",
+  "source": "http://www.makehumancommunity.org"
+ },
+ {
+  "asset": "male_casualsuit02",
+  "type": "clothes",
+  "file": "clothes/male_casualsuit02/male_casualsuit02.mhmat",
+  "license": "CC0",
+  "author": "makehuman_system",
+  "source": "http://www.makehumancommunity.org"
+ },
+ {
+  "asset": "male_casualsuit02",
+  "type": "clothes",
+  "file": "clothes/male_casualsuit02/male_casualsuit02.mhclo",
   "license": "CC0",
   "author": "makehuman_system",
   "source": "http://www.makehumancommunity.org"

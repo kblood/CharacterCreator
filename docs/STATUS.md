@@ -26,6 +26,31 @@
 - [x] Integration check (headless Chrome, local `build/site`): no console errors, 12 morphs / 53 bones loaded,
       `height=1` -> influence 0.45, head bone +0.30 m, skinned mesh top +0.32 m; reset restores bind pose exactly.
 
+## More clips: idle variants, walk_back, strafe, jump / fall / land (2026-10-01, uncommitted)
+- [x] 9 new clips in `web/animation/clips.js` (12 in total), details and references in
+      [ANIMATION_CLIPS.md](ANIMATION_CLIPS.md): `idle_look` 10 s, `idle_breathe` 8 s, `idle_fidget` 9 s,
+      `walk_back` 1.05 s (0.87 m/s), `strafe_left` / `strafe_right` 0.90 s (0.45 m/s), one-shot `jump` 2.09 s
+      (countermovement, ballistic flight, land, back to idle), `fall` 1.2 s loop, one-shot `land` 1.06 s (neutral body).
+- [x] Measured on 7 bodies: foot sliding 0.0 mm and no floating in every planted phase; knees never hyperextend
+      (jump take-off exactly straight, margin 0.0 deg); jump root y'' = -9.81 in flight; pelvis peak 2.2 m/s.
+- [x] Animator: one-shots (`loop: false`, `next`), `play(name, { then, once, fadeOut })`, `state().rootVelocity`,
+      cross-direction locomotion joins at the foot-matched phase. Crossfades between all 132 ordered pairs tested
+      (no pops; worst pelvis step 20.7 mm/frame at 60 fps, land -> run). Idle variation (`web/animation/idlevary.js`,
+      seeded, deterministic under `?shot`). Viewer: all clips in the selector (da/en), "Jump!" button, "Idle
+      variation" checkbox (`?idleVary=`, `?idleSeed=`).
+- [x] Baked: `output/animations/*.json` (idle/walk/run byte-identical), `output/base_body_anim.glb` 12 clips,
+      `check_anim_glb` CHECK OK (floor check now on every clip). `tests/moves.test.mjs` (7) + new animator/clip tests;
+      breast physics bounded and finite through jump/fall/land at 30/60/144 fps.
+- [x] Cloth (`node tools/cloth_integrity.mjs --timeline moves`, coat / tee+skirt+shoes / tee+jeans+shoes x 6
+      bodies, 768 cases): every poke <= 2 vertices or < 5 mm (the jump arm swing was reduced to 85 deg + 20-25 deg
+      abduction for this; at 100 deg the T-shirt armpit poked 10 vertices / 10 mm). 13 cases still over the
+      threshold, all "sink" (body vertices 22-30 mm inside the garment, 3-6 vertices): child T-shirt in strafe /
+      walk_back / idle_fidget, neutral T-shirt in the jump (4/24), coat thigh / spine in walk_back, idle_fidget -
+      the same kind as the default
+      matrix's existing failures (child T-shirt 3-4/30 in walk/run, coat child/tall).
+- [ ] Not done: the `run -> walk_back` crossfade lifts the pelvis smoothly ~5 cm (ground guard); turn-in-place,
+      start/stop transitions; a gravity-driven controller (`fall` + `land` exist for one).
+
 ## Animation (idle / walk / run), 2026-09-30
 - [x] Own procedural clips (`web/animation/clips.js`) on canonical joint names (`web/humanoid.js`, `web/animation/`),
       rotation deltas vs. rest only; leg IK adapts stride/tempo/pelvis to the current body. Viewer UI: clip select,
@@ -364,9 +389,56 @@ Issues 1–11 of the review of the underwear / cloth / breast work. Details: CLO
 - **Full matrix: 26 of 2224 failing** (8 outfits × 9 bodies, ~12 min). Suite: 146 tests, 145 pass, 1 skipped,
   0 fail. `check_glb` / `check_anim_glb`: CHECK OK.
 
+## Hoodie, long-sleeve shirt, shorts (2026-10-01, uncommitted)
+Three new garments, all skinned (no cloth data). Details and pitfalls: [CLOTHING_GUIDE.md](CLOTHING_GUIDE.md),
+section (g) and the appendix.
+- **shorts** (layer 2, bottom): the jeans of `male_casualsuit04`, cut above the knee and flared.
+- **shirt** (layer 3, top): the shirt of `male_casualsuit03`, with collar, placket, cuffs and buttons
+  (secondary colour).
+- **hoodie** (layer 4, top): the top of `male_casualsuit02`, loosened, plus a generated hood that lies down.
+  `CONFLICTS hoodie: [trenchcoat]`.
+- All three are CC0 plus project geometry and have procedural, normal-less textures.
+- `check_garment --bodies all`: all 11 garments pass; `knownExceptions` is empty.
+- Sizes: shorts 0.24, shirt 0.61, hoodie 0.68 MB.
+
+Build changes:
+- Spec flags: `zone_tris`; `hides_lower`; `sim_layer_gap` (0.018, over the simulated skirt); `zone_near` (0.045,
+  for a loose waist); `coat_envelope=False` (shirt and shorts).
+- Coat collar: `own_collar_deg` 75°. The back of the collar is not fitted over the shirt collar; that part of
+  the shirt collar is hidden instead.
+- `output/base_body.glb` changed (body zone bits only, positions unchanged). SHA-256 is now `22f10ef4…`.
+  `base_body_anim.glb` was not rebuilt, so the animation bake must be redone.
+- Hair: `web/materials.js` `calibrate(garments)` now lays long hair, the braid and the ponytail on the hood or
+  collar.
+
+Integrity, full matrix (13 outfits, 9 bodies, idle / walk / run / idle>run): **21 of 3368 failing**.
+- New outfits: 0 failing.
+  - hoodie+jeans+shoes 0 / 292
+  - shirt+shorts+shoes 0 / 224
+  - shirt+skirt 0 / 184
+  - hoodie+skirt 0 / 180
+  - shirt+jeans+coat 0 / 264
+- Old outfits, before → after: 26 → 21.
+  - tee+jeans+shoes 7 → 7
+  - tee+jeans+coat+shoes 1 → 0
+  - tee+skirt+shoes 7 → 7
+  - tee+skirt+coat 2 → 0
+  - jeans+coat 1 → 1
+  - coat 2 → 1
+  - coat+shoes 5 → 4
+  - underwear 1 → 1
+
+Tests:
+- Suite: 178 tests, 176 pass, 1 skipped, 1 fail.
+- The failing test is "long coat over T-shirt + jeans, female" (`tests/cloth.test.mjs`). It is chaotic: ±1e-7 m
+  of noise on the T-shirt flips the result, and 5 of 8 such perturbations pass, on the old output and on this
+  one alike. This build measures tee run 4 / 22.7 mm against the limit of ≤ 1 / 15 mm.
+- `check_glb` / `check_anim_glb`: CHECK OK.
+
 ## Open issues
-- Visible cloth penetrations: 26 of 2224 cases remain above threshold in the full integrity matrix (see "Review
-  fixes"); 2 of them are in `tests/integrity.test.mjs` `KNOWN_FAILING` (old body). Fingertips through the coat side
+- `tests/cloth.test.mjs` coat over T-shirt + jeans, female, is chaotic (see above) and fails on the current build.
+- Visible cloth penetrations: 21 of 3368 cases remain above threshold in the full integrity matrix (see "Hoodie,
+  long-sleeve shirt, shorts"); 2 of them are in `tests/integrity.test.mjs` `KNOWN_FAILING` (old body). Fingertips through the coat side
   in walk (hands are not a cloth layer). Coat stretch p99 in the 10 s matrix: 1.666 / 1.656 on female (the test
   threshold 1.65 is met on the test timeline).
 - Macro morphs outside the 32 corrective pairs (and 3-way combinations) are still linear.
@@ -374,12 +446,13 @@ Issues 1–11 of the review of the underwear / cloth / breast work. Details: CLO
 
 ## TODO (scope v1)
 - Jaw bone / mouth expressions (teeth/tongue are rigid on the head).
-- Clothing: a dress (occupies top+bottom, rules exist); more garments.
-- More clips (jump, wave, crouch, ...) as new `CLIPS` entries; retarget test of the baked GLB in other engines.
+- Clothing: a dress (occupies top+bottom, rules exist); more garments. How to make one: [CLOTHING_GUIDE.md](CLOTHING_GUIDE.md), checked by `node tools/check_garment.mjs <id> --bodies all` (2026-10-01: all 11 garments pass, no known exceptions).
+- More clips (wave, crouch, turn in place, ...) as new `CLIPS` entries (jump, strafe, walk_back, idle variants: done
+  2026-10-01, see [ANIMATION_CLIPS.md](ANIMATION_CLIPS.md)); retarget test of the baked GLB in other engines.
 - Hair: second alpha-blended card layer for a soft hairline; hair physics; CC0 beard if one turns up.
 - Engine ports of `character.js` (Unity/Godot/Unreal) reading the same GLB + joints sidecar.
 
 ## Licensing
 MPFB code is GPL; the MakeHuman base mesh/targets/assets are CC0 -> exported GLBs are free to use. Every shipped
-asset (skin, eyes, brows, lashes, teeth, tongue, 8 hair styles, 4 clothing packs) is checked for CC0 by the build (the generated underwear is project-original geometry, no asset); face/expression
+asset (skin, eyes, brows, lashes, teeth, tongue, 8 hair styles, 6 clothing packs) is checked for CC0 by the build (the generated underwear is project-original geometry, no asset); face/expression
 targets are CC0 per MakeHuman's LICENSE.md; list in `LICENSE-NOTES.md`.

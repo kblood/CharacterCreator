@@ -10,6 +10,7 @@ import { createBreastPhysics, breastMotionScale, combineSupport, zeroWeights, DY
 import { createHumanoid } from './humanoid.js';
 import { createAnimator, SPEED_MIN, SPEED_MAX } from './animation/animator.js';
 import { CLIPS } from './animation/clips.js';
+import { createIdleVariation } from './animation/idlevary.js';
 import { createEyeLife, applyMorphWeights } from './eyelife.js';
 import { upgradeSkin, upgradeHair, upgradeCornea, setSkinParams, hairUniforms, createHairCollider } from './materials.js';
 import { createClothing } from './clothing.js';
@@ -31,6 +32,9 @@ const I18N = {
     hairError: 'Kunne ikke indlæse frisuren', hairLoading: 'Indlæser frisure…',
     noBody: 'Modellen indeholder ingen skinned mesh.', missingMorphs: 'Manglende morphs:',
     anim: 'Animation', animNone: 'Ingen', clip_idle: 'Hvile', clip_walk: 'Gang', clip_run: 'Løb',
+    clip_idle_look: 'Hvile: kigger rundt', clip_idle_breathe: 'Hvile: dybe vejrtrækninger', clip_idle_fidget: 'Hvile: små bevægelser',
+    clip_walk_back: 'Gang baglæns', clip_strafe_left: 'Sidelæns til venstre', clip_strafe_right: 'Sidelæns til højre',
+    clip_jump: 'Hop', clip_fall: 'Fald (i luften)', clip_land: 'Landing', jumpNow: 'Hop!', idleVary: 'Variation i hvile',
     play: 'Afspil', pause: 'Pause', speed: 'Hastighed', animError: 'Animation slået fra:',
     secBody: 'Krop', secFace: 'Ansigt', secEyes: 'Øjne', secLooks: 'Farver og hår', secAnim: 'Animation',
     noseWidth: 'Næsebredde', noseLength: 'Næselængde', noseHeight: 'Næsehøjde', jawWidth: 'Kæbebredde',
@@ -53,6 +57,9 @@ const I18N = {
     hairError: 'Could not load the hair style', hairLoading: 'Loading hair…',
     noBody: 'The model contains no skinned mesh.', missingMorphs: 'Missing morphs:',
     anim: 'Animation', animNone: 'None', clip_idle: 'Idle', clip_walk: 'Walk', clip_run: 'Run',
+    clip_idle_look: 'Idle: look around', clip_idle_breathe: 'Idle: deep breaths', clip_idle_fidget: 'Idle: fidget',
+    clip_walk_back: 'Walk backward', clip_strafe_left: 'Strafe left', clip_strafe_right: 'Strafe right',
+    clip_jump: 'Jump', clip_fall: 'Fall (airborne)', clip_land: 'Land', jumpNow: 'Jump!', idleVary: 'Idle variation',
     play: 'Play', pause: 'Pause', speed: 'Speed', animError: 'Animation disabled:',
     secBody: 'Body', secFace: 'Face', secEyes: 'Eyes', secLooks: 'Colours and hair', secAnim: 'Animation',
     noseWidth: 'Nose width', noseLength: 'Nose length', noseHeight: 'Nose height', jawWidth: 'Jaw width',
@@ -121,12 +128,15 @@ const DEFAULT_TOGGLES = {
   wind: Math.min(1, Math.max(0, +params.get('wind') || 0)),
   // breast physics (female only, docs/BREAST_PHYSICS.md): ?breast=0 turns it off
   breastPhysics: params.get('breast') !== '0',
+  // idle variation (web/animation/idlevary.js): now and then one idle variant while idle; off under ?shot unless
+  // ?idleVary=1 (then seeded with ?idleSeed, default 1, so screenshots stay deterministic)
+  idleVary: params.has('shot') ? params.get('idleVary') === '1' : params.get('idleVary') !== '0',
 };
 // Body defaults (web/character.js defaultValues): male, every other slider at its default. ?sex=female|male|0|1.
 const DEFAULT_BODY = defaultValues();
 const values = { ...DEFAULT_TINTS, ...DEFAULT_TOGGLES, hair: null, ...DEFAULT_BODY };
 if (params.has('sex') && genderOfSex(params.get('sex')) !== null) values.gender = genderOfSex(params.get('sex'));
-let body = null, joints = null, animator = null, humanoid = null, parts = [], cloth = null;
+let body = null, joints = null, animator = null, humanoid = null, parts = [], cloth = null, idleVary = null;
 const eyeLife = createEyeLife({ blink: values.blink });
 const colliders = new Map();                   // hair mesh -> createHairCollider()
 const bodyValues = () => Object.fromEntries(SLIDERS.map(s => [s.id, values[s.id]]));
@@ -145,7 +155,9 @@ function update() {
   setSkinParams({ gender: values.gender });
   syncSexUI();
   // hair collision radii are measured in the rest pose with the current morphs (never changes the rest pose)
-  for (const c of colliders.values()) c.calibrate();
+  // (+ the back of the worn garments: long hair lies on a hood / collar, not inside it)
+  const garments = parts.filter(m => m.visible && m.name.startsWith('Cloth_'));
+  for (const c of colliders.values()) c.calibrate(garments);
   hairUniforms.ccCollide.value = values.hairCollide ? 1 : 0;
   eyeLife.setBlinkEnabled(values.blink);
   if (cloth) {
@@ -526,12 +538,16 @@ animSel.setAttribute('aria-label', t('anim'));
 animSel.append(new Option(t('animNone'), ''));
 for (const n of Object.keys(CLIPS)) animSel.append(new Option(clipLabel(n), n));
 const playBtn = Object.assign(document.createElement('button'), { type: 'button', textContent: t('pause'), disabled: true });
+// one-shot trigger: jump from whatever plays, then back to the looping clip that played before (or idle)
+const jumpBtn = Object.assign(document.createElement('button'), { type: 'button', textContent: t('jumpNow') });
 const sl = document.createElement('label'); sl.textContent = t('speed');
 const sv = Object.assign(document.createElement('span'), { className: 'v', textContent: '1.00' });
 sl.append(sv);
 const speedIn = Object.assign(document.createElement('input'), { type: 'range', min: SPEED_MIN, max: SPEED_MAX, step: 0.05, value: 1 });
 speedIn.setAttribute('aria-label', t('speed'));
-section('secAnim').append(al, animSel, playBtn, sl, speedIn);
+const secAnim = section('secAnim');
+secAnim.append(al, animSel, playBtn, jumpBtn, sl, speedIn);
+checkbox(secAnim, 'idleVary');
 ui.append(resetBtn);                           // keep Reset last
 
 function syncAnimUI() {
@@ -539,6 +555,7 @@ function syncAnimUI() {
   animSel.value = st?.clip ?? '';
   playBtn.disabled = !st?.clip;
   playBtn.textContent = st?.paused ? t('play') : t('pause');
+  jumpBtn.disabled = !animator || !!st?.oneShot;
   speedIn.value = st?.speedScale ?? 1; sv.textContent = (+speedIn.value).toFixed(2);
 }
 animSel.onchange = () => {
@@ -554,11 +571,20 @@ playBtn.onclick = () => {
   if (animator.state().paused) animator.resume(); else animator.pause();
   syncAnimUI();
 };
+jumpBtn.onclick = () => {
+  if (!animator || animator.state().oneShot) return;
+  const st = animator.state(), back = st.clip && CLIPS[st.clip]?.loop !== false && !st.clip.startsWith('idle_') && st.clip !== 'fall' ? st.clip : 'idle';
+  if (!st.clip) { cloth?.reset(); breast.reset(); }
+  if (st.paused) animator.resume();
+  animator.play('jump', { fade: 0.15, then: back });
+  syncAnimUI();
+};
 speedIn.oninput = () => { animator?.setSpeed(+speedIn.value); sv.textContent = (+speedIn.value).toFixed(2); };
 
 function initAnimation() {
   humanoid = createHumanoid(body);
   animator = createAnimator(humanoid, { getBody: bodyValues });
+  idleVary = createIdleVariation({ seed: +params.get('idleSeed') || (params.has('shot') ? 1 : 1 + Math.floor(Math.random() * 1e9)) });
   // URL params for tests/screenshots: ?anim=walk&animT=0.3 (seek + pause)&animSpeed=1.5
   if (params.has('animSpeed')) animator.setSpeed(+params.get('animSpeed'));
   const a = params.get('anim');
@@ -670,7 +696,9 @@ function initCloth(colliderJson) {
     cloth = createClothRuntime({
       THREE, scene, colliders: colliderJson, getBody: () => body,
       getInfluences: () => sliderInfluences(bodyValues()),
-      getRootSpeed: () => animator?.state().rootSpeed || 0,
+      // travel = the blended clip velocity (walk_back: backwards, strafe: sideways); speed along that direction
+      getRootSpeed: () => Math.hypot(...(animator?.state().rootVelocity || [0, 0, 0])),
+      getForward: () => { const v = animator?.state().rootVelocity || [0, 0, 0], l = Math.hypot(...v); return l > 1e-9 ? v.map(c => c / l) : [0, 0, 1]; },
       useWorker: params.get('clothWorker') !== '0',
     });
     cloth.setEnabled(values.cloth); cloth.setWind(values.wind);
@@ -700,7 +728,7 @@ function buildClothUI() {
 const breast = createBreastPhysics();
 // by catalog id; every WORN item counts (worn, not drawn: the bra under a T-shirt still supports), combined as
 // 1 - prod(1 - s) (combineSupport). Support stiffens / damps the spring, shortens its travel and scales the motion.
-const BREAST_SUPPORT = { tshirt: 0.2, trenchcoat: 0.3, bra: 0.5 };
+const BREAST_SUPPORT = { tshirt: 0.2, trenchcoat: 0.3, bra: 0.5, shirt: 0.25, hoodie: 0.3 };
 const breastRig = { bone: null, restQ: null };
 const _bp = new THREE.Vector3(), _bq = new THREE.Quaternion();
 let breastWeights = zeroWeights(), breastScale = 0, breastSupport = 0, breastMs = 0, breastApplied = true;
@@ -738,6 +766,7 @@ window.__breast.reset = () => breast.reset();
 // freezes real time; window.__cloth.advance(seconds) then steps everything at exactly 1/60 s (deterministic
 // filmstrips; the cloth solves on the main thread meanwhile).
 function tick(dt) {
+  if (animator && values.idleVary) idleVary?.update(dt, animator);
   animator?.update(dt);
   if (body) {
     scene.updateMatrixWorld();                  // bones after the animator: gaze frame + hair capsules + cloth

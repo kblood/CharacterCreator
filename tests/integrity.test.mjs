@@ -30,6 +30,12 @@ export const MATRIX = [
   ['tee+skirt+coat', 'female'],   // skirt through the coat, female coat stretch
   ['coat+shoes', 'old'],          // still fails: KNOWN_FAILING trenchcoat:socks
   ['tee+jeans+shoes', 'old'],     // still fails: KNOWN_FAILING tshirt:body
+  // hoodie / long-sleeve shirt / shorts (docs/CLOTHING_GUIDE.md appendix): bodies where they were tightest
+  ['hoodie+jeans+shoes', 'female'],
+  ['shirt+shorts+shoes', 'muscular'],
+  ['shirt+skirt', 'child'],       // the simulated skirt came out through the shirt hem (fixed: sim_layer_gap)
+  ['hoodie+skirt', 'child'],
+  ['shirt+jeans+coat', 'female'],
 ];
 
 /**

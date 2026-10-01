@@ -18,10 +18,10 @@ and the same 53 joints.
 - The build writes a smoothstep in height between two anchors. The anchors are joint heads of the fitted
   rig plus an offset, so the gradient is smooth:
 
-  | garment | pin = 1 above | pin = 0 below | free / pinned / total verts |
+  | garment | pin = 1 above | pin = 0 below | free (< 0.01) / pinned (> 0.99) / total GLB verts |
   |---|---|---|---|
-  | skirt | pelvis + 3 cm | mid thigh | 108 / 145 / 408 |
-  | trenchcoat (long) | spine_02 − 2 cm, just under the belt (jacket, sleeves, standing collar, lapels and belt are always 1) | hip joint − 6 cm | 638 / 1761 / 2584 |
+  | skirt | pelvis + 3 cm | mid thigh | 109 / 152 / 408 |
+  | trenchcoat (long) | spine_02 − 2 cm, just under the belt (jacket, sleeves, standing collar, lapels and belt are always 1) | hip joint − 6 cm | 638 / 1798 / 2584 |
 
 - **Deviation from a COLOR_0 mask.** Many engines read pin masks from vertex colours. The mask is stored as a
   custom attribute instead, because three.js multiplies COLOR_0 into the base colour when vertex colours are
@@ -95,7 +95,7 @@ and the same 53 joints.
 
 | field | meaning | skirt | coat |
 |---|---|---|---|
-| maxDistance | largest distance (m) a free vertex may move away from its skinned position. Scale it by (1 − pin) per vertex. | 0.04 | 0.6 |
+| maxDistance | largest distance (m) a free vertex may move away from its skinned position. Scale it by (1 − pin) per vertex. | 0.04 | 0.45 |
 | stiffness.stretch | edge-length constraint stiffness, 0..1 | 0.95 | 0.95 |
 | stiffness.bend | bending (skip-edge) stiffness, 0..1 | 0.3 | 0.35 |
 | bendVertical (optional) | bending stiffness along vertical chains (long panels) | – | 0.7 |
@@ -175,6 +175,7 @@ Hair can use the same route (chains from the scalp). Hair has no pin data yet.
 ## 5. What is not done
 
 - Per-vertex stiffness maps are not written; only per-garment values are.
-- There are no layer colliders: the cloth collides with body capsules and the floor, not with the garments
-  under it.
+- No layer data is exported for other engines: the viewer's cloth also collides with the worn lower garments
+  and the body's drawn leg / hip skin (`web/cloth/layers.js`, CLOTH_RUNTIME.md "Lower layers"), computed at
+  runtime from the garment meshes, not stored in the GLB.
 - The VRM route (section 4) is not implemented.

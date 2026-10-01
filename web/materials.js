@@ -150,6 +150,7 @@ export const hairUniforms = {
   // jagged, balder edge instead of softening it (compared off / 12 mm / 25 mm on 4 styles). Kept for tuning.
   ccEdgeFade: { value: 0.012 }, ccHairline: { value: 0 },
   ccCollide: { value: 0 },
+  ccCollideFrom: { value: 0.05 }, ccCollideTo: { value: 0.13 },   // strand-length ramp of the collision weight
   ccCapA: { value: [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()] },
   ccCapB: { value: [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()] },
   ccCapR: { value: [0, 0, 0] },
@@ -168,12 +169,12 @@ export function upgradeHair(old, geometry) {
     v = v.replace('#include <common>', `#include <common>
 ${hasLen ? 'attribute float _cchair;' : ''} ${hasEdge ? 'attribute float _ccedge;' : ''}
 varying float vCcLen; varying float vCcEdge;
-uniform float ccCollide; uniform vec3 ccCapA[3]; uniform vec3 ccCapB[3]; uniform float ccCapR[3];`);
+uniform float ccCollide; uniform float ccCollideFrom; uniform float ccCollideTo; uniform vec3 ccCapA[3]; uniform vec3 ccCapB[3]; uniform float ccCapR[3];`);
     v = insertAfter(v, '#include <skinning_vertex>', `
   vCcLen = ${hasLen ? '_cchair' : '0.1'};
   vCcEdge = ${hasEdge ? '_ccedge' : '1.0'};
   {
-    float ccW = ccCollide * smoothstep( ${HAIR_COLLIDE_FROM.toFixed(3)}, ${(HAIR_COLLIDE_FROM + 0.08).toFixed(3)}, vCcLen );
+    float ccW = ccCollide * smoothstep( ccCollideFrom, ccCollideTo, vCcLen );
     if ( ccW > 0.0 ) {
       for ( int i = 0; i < 3; i ++ ) {
         vec3 ab = ccCapB[ i ] - ccCapA[ i ];
@@ -208,18 +209,25 @@ uniform float ccRootTone; uniform float ccTipTone; uniform float ccGradLen; unif
   return m;
 }
 
-// Shoulder / upper-back capsules for the hair collision: [bone A, bone B, fraction of A->B used, max radius].
+// Shoulder / upper-back capsules for the hair collision: [bone A, bone B, fraction of A->B used, max radius,
+// clears the worn garments' back (calibrate(garments): a hood / collar lying on the upper back)].
 export const HAIR_CAPSULES = [
-  ['upperarm_l', 'lowerarm_l', 0.45, 0.06],
-  ['upperarm_r', 'lowerarm_r', 0.45, 0.06],
-  ['spine_03', 'neck_01', 0.8, 0.11],
+  ['upperarm_l', 'lowerarm_l', 0.45, 0.06, false],
+  ['upperarm_r', 'lowerarm_r', 0.45, 0.06, false],
+  ['spine_03', 'neck_01', 0.8, 0.11, true],
 ];
+// m: clearance over a garment back, radius cap, half width of the back strip; strand-length ramp while a garment
+// is cleared (from the root: the hair at the nape lies on a hood / collar too)
+export const HAIR_CLEAR = { gap: 0.006, maxR: 0.2, halfWidth: 0.1, from: 0.0, to: 0.05 };
 
 /**
  * Hair collision state for one hair mesh (bound to the body skeleton). calibrate() sets each capsule radius to
  * min(max radius, 0.96 x the smallest distance of any collision-weighted hair vertex from the capsule in the
- * REST pose with the current morphs), so the rest pose is never changed; update() moves the capsules with the
- * animated bones every frame (mesh-local space, the space of `transformed` after skinning).
+ * REST pose with the current morphs), so the bare-body rest pose is never changed; update() moves the capsules
+ * with the animated bones every frame (mesh-local space, the space of `transformed` after skinning).
+ * calibrate(garments): the worn garment meshes (same skeleton). The upper-back capsule grows to the garments' back
+ * (vertices behind the capsule, between its ends, within HAIR_CLEAR.halfWidth of its axis) + HAIR_CLEAR.gap, so
+ * long hair lies on a hood / collar instead of inside it (by design this changes the rest pose of that hair).
  */
 export function createHairCollider(mesh) {
   const sk = mesh.skeleton, geo = mesh.geometry;
@@ -229,6 +237,7 @@ export function createHairCollider(mesh) {
   const verts = [];
   if (ok) for (let i = 0; i < len.count; i++) if (len.getX(i) > HAIR_COLLIDE_FROM) verts.push(i);
   const radii = [0, 0, 0];
+  let cleared = false;                            // a garment set the upper-back radius (calibrate)
   const tmpM = new THREE.Matrix4(), A = new THREE.Vector3(), B = new THREE.Vector3(), P = new THREE.Vector3();
   const segDist = (p, a, b) => {
     const ab = B.copy(b).sub(a), t = THREE.MathUtils.clamp(P.copy(p).sub(a).dot(ab) / Math.max(ab.lengthSq(), 1e-12), 0, 1);
@@ -238,27 +247,56 @@ export function createHairCollider(mesh) {
     const invBind = new THREE.Matrix4().copy(mesh.bindMatrix).invert();
     return new THREE.Vector3().applyMatrix4(tmpM.copy(sk.boneInverses[bi]).invert()).applyMatrix4(invBind);
   }
-  function calibrate() {
+  const restPos = (m, i, v) => {                  // vertex i of mesh m with its current morphs (relative targets)
+    const g = m.geometry, mp = g.morphAttributes.position || [], inf = m.morphTargetInfluences || [];
+    v.fromBufferAttribute(g.attributes.position, i);
+    for (let t = 0; t < inf.length; t++) if (inf[t] && mp[t]) { v.x += inf[t] * mp[t].getX(i); v.y += inf[t] * mp[t].getY(i); v.z += inf[t] * mp[t].getZ(i); }
+    return v;
+  };
+  function garmentBack(a, b, garments) {          // largest distance of a garment's back from the capsule a-b
+    const ab = b.clone().sub(a), l2 = Math.max(ab.lengthSq(), 1e-12), v = new THREE.Vector3(), c = new THREE.Vector3();
+    let far = 0;
+    for (const m of garments) {
+      const n = m.geometry?.attributes?.position?.count ?? 0;
+      for (let i = 0; i < n; i++) {
+        restPos(m, i, v);
+        const t = Math.min(1, v.clone().sub(a).dot(ab) / l2);   // above b: the capsule's cap (a hood's top)
+        if (t <= 0) continue;
+        c.copy(ab).multiplyScalar(t).add(a);
+        if (v.z > c.z - 0.02 || Math.abs(v.x - c.x) > HAIR_CLEAR.halfWidth) continue;   // the back strip only
+        far = Math.max(far, v.distanceTo(c));
+      }
+    }
+    return far;
+  }
+  function calibrate(garments = []) {
+    cleared = false;
     if (!ok || !verts.length) { radii.fill(0); return radii.slice(); }
     const caps = HAIR_CAPSULES.map(([, , frac], k) => {
       const a = restHead(idx[k][0]), b = restHead(idx[k][1]);
       return [a, a.clone().lerp(b, frac)];
     });
-    const pos = geo.attributes.position, mp = geo.morphAttributes.position || [], inf = mesh.morphTargetInfluences || [];
-    const active = inf.map((w, t) => [w, t]).filter(([w, t]) => w !== 0 && mp[t]);
     const best = HAIR_CAPSULES.map(() => Infinity), v = new THREE.Vector3();
     for (const i of verts) {
-      v.fromBufferAttribute(pos, i);
-      for (const [w, t] of active) { v.x += w * mp[t].getX(i); v.y += w * mp[t].getY(i); v.z += w * mp[t].getZ(i); }
+      restPos(mesh, i, v);
       caps.forEach(([a, b], k) => { const d = segDist(v, a, b); if (d < best[k]) best[k] = d; });
     }
-    HAIR_CAPSULES.forEach(([, , , maxR], k) => { radii[k] = Math.max(0, Math.min(maxR, 0.96 * best[k])); });
+    HAIR_CAPSULES.forEach(([, , , maxR, clears], k) => {
+      radii[k] = Math.max(0, Math.min(maxR, 0.96 * best[k]));
+      if (clears && garments.length) {
+        const far = garmentBack(caps[k][0], caps[k][1], garments);
+        const r = Math.min(HAIR_CLEAR.maxR, far + HAIR_CLEAR.gap);
+        if (far && r > radii[k]) { radii[k] = r; cleared = true; }
+      }
+    });
     return radii.slice();
   }
   const bw = new THREE.Vector3();
   function update() {
     if (!ok) return;
     const inv = mesh.bindMatrixInverse;
+    hairUniforms.ccCollideFrom.value = cleared ? HAIR_CLEAR.from : HAIR_COLLIDE_FROM;
+    hairUniforms.ccCollideTo.value = cleared ? HAIR_CLEAR.to : HAIR_COLLIDE_FROM + 0.08;
     HAIR_CAPSULES.forEach(([, , frac], k) => {
       const [ia, ib] = idx[k];
       A.setFromMatrixPosition(sk.bones[ia].matrixWorld).applyMatrix4(inv);
