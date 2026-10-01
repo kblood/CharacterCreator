@@ -24,8 +24,30 @@ const PROJECT = fileURLToPath(new URL('..', import.meta.url));
 
 export function kindOf(n) {
   return n.startsWith('face_') ? 'face' : n.startsWith('blink_') ? 'expr' : n.startsWith('look_') ? 'look'
-    : n.startsWith('corr_') ? 'corr' : 'macro';
+    : n.startsWith('corr_') ? 'corr' : n.startsWith('bdet_') ? 'bdet' : n.startsWith('dyn_') ? 'dyn' : 'macro';
 }
+
+/** Weights { targetIndex: 1 } for the morphs `list` at full weight plus every corrective between two of them
+ *  (what sliderInfluences gives at those slider extremes). Unknown names are skipped. */
+export function combo(names, list) {
+  const w = {};
+  for (const n of list) if (names.includes(n)) w[names.indexOf(n)] = 1;
+  for (const a of list) for (const b of list) { const k = names.indexOf(`corr_${a}__${b}`); if (k >= 0) w[k] = 1; }
+  return w;
+}
+
+// Female breast shapes (the breast morphs are gated to a female adult at runtime, web/character.js breastGate):
+// the extremes of size x firmness, x weight / muscle / age / proportions, the detail targets and the physics
+// morphs at full deflection, all on the female body.
+const F = 'gender_female';
+export const BREAST_SHAPES = [
+  ['breast_cup_max'], ['breast_cup_min'], ['breast_cup_max', 'breast_firm_min'], ['breast_cup_max', 'breast_firm_max'],
+  ['breast_cup_max', 'weight_max'], ['breast_cup_max', 'weight_min'], ['breast_cup_max', 'muscle_max'],
+  ['breast_cup_max', 'muscle_min'], ['breast_cup_max', 'age_old', 'breast_firm_min'], ['breast_cup_max', 'proportions_ideal'],
+  ['breast_cup_max', 'bdet_breast_dist_decr'], ['breast_cup_max', 'bdet_breast_point_incr'],
+  ['breast_cup_max', 'bdet_breast_height_incr'], ['breast_cup_max', 'bdet_breast_height_decr'],
+  ...['up', 'down', 'left', 'right', 'fwd', 'back'].map(d => ['breast_cup_max', `dyn_breast_${d}`]),
+].map(l => [F, ...l]);
 
 /** Loads base + catalog + every garment GLB of `dir` (default output/). */
 export function loadAll(dir = path.join(PROJECT, 'output')) {
@@ -72,6 +94,7 @@ export function shapes(names) {
     const [a, b] = n.slice(5).split('__');
     out.push({ name: n, w: { [names.indexOf(a)]: 1, [names.indexOf(b)]: 1, [t]: 1 } });
   });
+  if (names.includes('breast_cup_max')) for (const l of BREAST_SHAPES) out.push({ name: l.join('+'), w: combo(names, l) });
   return out;
 }
 
@@ -111,19 +134,60 @@ export function grid(pos, cell = 0.02, keep = null) {
 }
 
 /** Count of `pts` more than TOL inside the surface (pos, normals), considering only surface vertices with keep[i]. */
-export function countInside(pts, pos, normals, keep = null, tol = TOL, drawn = null) {
+export function countInside(pts, pos, normals, keep = null, tol = TOL, drawn = null, tris = null) {
   // keep: surface vertices searched at all; drawn: the nearest surface vertex must be drawn for the point to count
-  // (a point under a hidden part of a lower garment is not visible through it)
+  // (a point under a hidden part of a lower garment is not visible through it).
+  // tris (the surface's index buffer): a point flagged by the nearest-vertex plane must also lie more than tol inside
+  // the nearest triangle of that vertex's 1-ring (signed along the face normal). The vertex plane alone flagged points
+  // 2 mm OUTSIDE the skin at concave creases (panties at weight_max: 9 flagged, all +1.9..+2.0 mm over the true
+  // triangles); a real penetration is inside its nearest triangle too and still counts.
   const near = grid(pos, 0.02, keep);
+  const ring = tris ? vertexRings(pos.length, tris) : null;
   let n = 0, worst = 0;
   const idx = [];
   pts.forEach((p, k) => {
     const i = near(p);
     if (i < 0 || (drawn && !drawn[i])) return;
-    const sd = Q.vDot(Q.vSub(p, pos[i]), normals[i]);
+    let sd = Q.vDot(Q.vSub(p, pos[i]), normals[i]);
+    if (sd < -tol && ring) sd = Math.max(sd, ringSigned(p, pos, tris, ring[i]));
     if (sd < -tol) { n++; idx.push(k); worst = Math.min(worst, sd); }
   });
   return { n, worst, idx };
+}
+
+function vertexRings(n, tris) {
+  const r = Array.from({ length: n }, () => []);
+  for (let t = 0; t < tris.length; t += 3) for (let j = 0; j < 3; j++) r[tris[t + j]].push(t);
+  return r;
+}
+
+/** Signed distance (face normal) from p to the nearest of the triangles `ts` (offsets into tris). */
+function ringSigned(p, pos, tris, ts) {
+  let best = Infinity, sd = -Infinity;
+  for (const t of ts) {
+    const a = pos[tris[t]], b = pos[tris[t + 1]], c = pos[tris[t + 2]];
+    const q = closestOnTri(p, a, b, c), d = Q.vSub(p, q), dd = Q.vDot(d, d);
+    if (dd < best) { best = dd; sd = Q.vDot(d, Q.vNorm(Q.vCross(Q.vSub(b, a), Q.vSub(c, a)))); }
+  }
+  return sd;
+}
+
+function closestOnTri(p, a, b, c) {   // Ericson, Real-Time Collision Detection 5.1.5
+  const ab = Q.vSub(b, a), ac = Q.vSub(c, a), ap = Q.vSub(p, a);
+  const d1 = Q.vDot(ab, ap), d2 = Q.vDot(ac, ap);
+  if (d1 <= 0 && d2 <= 0) return a;
+  const bp = Q.vSub(p, b), d3 = Q.vDot(ab, bp), d4 = Q.vDot(ac, bp);
+  if (d3 >= 0 && d4 <= d3) return b;
+  const vc = d1 * d4 - d3 * d2;
+  if (vc <= 0 && d1 >= 0 && d3 <= 0) { const v = d1 / (d1 - d3); return Q.vAdd(a, Q.vScale(ab, v)); }
+  const cp = Q.vSub(p, c), d5 = Q.vDot(ab, cp), d6 = Q.vDot(ac, cp);
+  if (d6 >= 0 && d5 <= d6) return c;
+  const vb = d5 * d2 - d1 * d6;
+  if (vb <= 0 && d2 >= 0 && d6 <= 0) { const w = d2 / (d2 - d6); return Q.vAdd(a, Q.vScale(ac, w)); }
+  const va = d3 * d6 - d5 * d4;
+  if (va <= 0 && d4 - d3 >= 0 && d5 - d6 >= 0) { const w = (d4 - d3) / ((d4 - d3) + (d5 - d6)); return Q.vAdd(b, Q.vScale(Q.vSub(c, b), w)); }
+  const den = 1 / (va + vb + vc), v = vb * den, w = vc * den;
+  return Q.vAdd(a, Q.vAdd(Q.vScale(ab, v), Q.vScale(ac, w)));
 }
 
 /** Vertices of lower garment `u` still drawn while `ids` are worn: a triangle is dropped when its three vertices
@@ -220,10 +284,10 @@ export function morphReport(D, id, under = []) {
   return shapes(D.names).map(s => {
     const body = morphed(D.body, s.w), bn = vertexNormals(body, idx);
     const pts = morphed(gm.prim, s.w);
-    const r = { shape: s.name, skin: countInside(pts, body, bn, keep).n, layers: 0 };
+    const r = { shape: s.name, skin: countInside(pts, body, bn, keep, TOL, null, idx).n, layers: 0 };
     for (const u of under) {
       const ug = D.garments[u], up = morphed(ug.prim, s.w);
-      r.layers += countInside(pts, up, vertexNormals(up, ug.prim.indices), null, TOL, drawnMask(D, u, [id, ...under])).n;
+      r.layers += countInside(pts, up, vertexNormals(up, ug.prim.indices), null, TOL, drawnMask(D, u, [id, ...under]), ug.prim.indices).n;
     }
     return r;
   });
@@ -241,15 +305,15 @@ export function poseReport(D, id, clipName, under = [], count = 8) {
     const world = poseWorld(D.G, clip, f);
     const body = skin(D.G, D.body, D.body.pos, world), bn = vertexNormals(body, idx);
     const pts = skin(gm.glb, gm.prim, rest, world);
-    const inside = countInside(pts, body, bn, keep);
+    const inside = countInside(pts, body, bn, keep, TOL, null, idx);
     let layers = 0;
     for (const u of under) {
       const ug = D.garments[u], up = skin(ug.glb, ug.prim, ug.prim.pos, world);
-      layers += countInside(pts, up, vertexNormals(up, ug.prim.indices), null, TOL, drawnMask(D, u, [id, ...under])).n;
+      layers += countInside(pts, up, vertexNormals(up, ug.prim.indices), null, TOL, drawnMask(D, u, [id, ...under]), ug.prim.indices).n;
     }
     const ratios = E.map(([a, b], k) => Q.vLen(Q.vSub(pts[a], pts[b])) / Math.max(len0[k], 1e-6)).sort((x, y) => x - y);
     // legs: garment vertices inside the (visible or not) thigh/calf skin = the coat skirt cutting into the legs
-    const legIn = countInside(pts, body, bn, null).idx.filter(k => rest[k][1] < 0.85 && rest[k][1] > 0.3).length;
+    const legIn = countInside(pts, body, bn, null, TOL, null, idx).idx.filter(k => rest[k][1] < 0.85 && rest[k][1] > 0.3).length;
     return { frame: f, skin: inside.n, worst: +(inside.worst * 1000).toFixed(1), layers, legInside: legIn,
       stretchMax: +ratios[ratios.length - 1].toFixed(3), stretchP99: +ratios[Math.floor(ratios.length * 0.99)].toFixed(3),
       squashMin: +ratios[0].toFixed(3) };

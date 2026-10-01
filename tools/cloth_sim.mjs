@@ -21,8 +21,8 @@ import { createSolver, clothParams, hashFloats } from '../web/cloth/solver.js';
 import { morphBase, skinPositions, skinNormals } from '../web/cloth/skin.js';
 import { clothColliderDefs, evalColliders, limitFlags } from '../web/cloth/colliders.js';
 import { windVelocity } from '../web/cloth/wind.js';
-import { hiddenZoneMask, coveringZoneMask, collidesAsLayer } from '../web/clothing_rules.js';
-import { createLayerSet, selectLayerVertices } from '../web/cloth/layers.js';
+import { hiddenZoneMask, coveringZoneMask, collidesAsLayer, filterIndex, layerHiddenZoneMask } from '../web/clothing_rules.js';
+import { createLayerSet, selectLayerVertices, bodyLayerMask } from '../web/cloth/layers.js';
 
 const PROJECT = fileURLToPath(new URL('..', import.meta.url));
 export const OUT = path.join(PROJECT, 'output');
@@ -188,7 +188,7 @@ export const targetWeights = (names, infl) => names.map(n => infl[n] || 0);
  * One garment's cloth instance, same data flow as web/cloth/runtime.js: morphed base -> CPU skinning -> anchors
  * of the simulated particles -> solver.step().
  */
-export function createGarmentSim(D, id, ch, over = {}, under = []) {
+export function createGarmentSim(D, id, ch, over = {}, under = [], worn = null) {
   const g = D.garments[id];
   const model = buildClothModel({ positions: g.positions, index: g.index, pin: g.pin });
   const w = targetWeights(g.targetNames, ch.influences);
@@ -201,20 +201,33 @@ export function createGarmentSim(D, id, ch, over = {}, under = []) {
   const limit = limitFlags(clothColliderDefs(D.colliders), params.limit);
   const anchors = new Float32Array(sim.count * 3);
   // lower layers (web/cloth/layers.js), as web/cloth/runtime.js builds them for the worn garments under this one
-  const lay = under.length ? layerSetFor(D, g, model, under) : null;
+  const lay = under.length ? layerSetFor(D, g, model, under, worn ?? [id, ...under.filter(u => u !== 'body')]) : null;
   return {
     id, model, solver, params, reps, base, limit, layerCount: lay ? lay.count : 0,
     anchorsNow() { return skinPositions(anchors, base, g.skinIndex, g.skinWeight, ch.skinMats, reps); },
-    layerNow() { return lay ? lay.update(() => ch.skinMats, k => targetWeights(D.garments[under[k]].targetNames, ch.influences)) : null; },
+    // drawnOf(id) (optional): { positions, normals } of a lower garment that is simulated itself (its drawn shape)
+    layerNow(drawnOf = null) {
+      return lay ? lay.update(() => ch.skinMats, k => targetWeights((under[k] === 'body' ? D.body : D.garments[under[k]]).targetNames, ch.influences),
+        drawnOf ? k => drawnOf(under[k]) : null) : null;
+    },
   };
 }
 
-/** Lower-layer collision set of cloth garment g (model) over the garments `under` (same selection as the runtime). */
-export function layerSetFor(D, g, model, under) {
+/**
+ * Lower-layer collision set of cloth garment g (model) over the garments `under` (same selection as the runtime).
+ * 'body' in `under` = the body's drawn leg / hip skin (layers.js bodyLayerMask; drawn = not hidden by the zones of
+ * the `worn` ids), as the runtime adds it last.
+ */
+export function layerSetFor(D, g, model, under, worn = []) {
   const freeBind = [];
   for (let p = 0; p < model.particleCount; p++) if (model.pin[p] < 0.999) { const v = model.rep[p]; freeBind.push(g.positions[3 * v], g.positions[3 * v + 1], g.positions[3 * v + 2]); }
   const fb = Float32Array.from(freeBind);
   return createLayerSet(under.map(id => {
+    if (id === 'body') {
+      const b = D.body, n = b.positions.length / 3;
+      const mask = bodyLayerMask(filterIndex(b.index, b.zone ? { array: b.zone } : null, layerHiddenZoneMask(D.catalog, worn)), b.skinIndex, b.skinWeight, D.names, n);
+      return { positions: b.positions, normals: b.normals, skinIndex: b.skinIndex, skinWeight: b.skinWeight, targets: b.targets, list: selectLayerVertices(b.positions, fb, undefined, mask) };
+    }
     const u = D.garments[id];
     return { positions: u.positions, normals: u.normals, skinIndex: u.skinIndex, skinWeight: u.skinWeight, targets: u.targets, list: selectLayerVertices(u.positions, fb) };
   }));
@@ -417,7 +430,7 @@ export function runTimeline(D, garmentIds, values = {}, opt = {}) {
   const defs = clothColliderDefs(D.colliders);
   const caps = new Float32Array(defs.length * 7);
   // collide with the lower layers that are worn (opt.under), unless opt.layerCollide === false (metric only)
-  // (an array: collide only with those of them); footwear is not collided with, as in the runtime (collidesAsLayer)
+  // (an array: collide only with those of them); skin-tight underwear is not collided with, as in the runtime (collidesAsLayer)
   const collideUnder = opt.under && opt.layerCollide !== false ? opt.under.filter(u => (Array.isArray(opt.layerCollide)
     ? opt.layerCollide.includes(u) : collidesAsLayer(D.catalog.items.find(i => i.id === u)))) : [];
   const sims = garmentIds.map(id => createGarmentSim(D, id, ch, over[id] || over, collideUnder));

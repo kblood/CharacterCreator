@@ -8,7 +8,8 @@
 //   { type: 'drop', key }
 // Messages out:
 //   { type: 'ready' }
-//   { type: 'done', key, seq, x (Float32Array copy), A1ref, steps, resets, ms, stats? }
+//   { type: 'done', key, seq, x (Float32Array copy), A1ref, C1ref, L1ref (the inputs it was solved against: lag
+//     compensation + drawfix.js), steps, resets, ms, stats? }
 //   { type: 'error', key, message }
 import { createSolver, advance } from './solver.js';
 
@@ -28,7 +29,7 @@ function handle(msg) {
       const t0 = performance.now();
       const x = advance(s, msg.job);
       const ms = performance.now() - t0;
-      const out = { type: 'done', key, seq: msg.seq, x: Float32Array.from(x), A1ref: msg.job.A1, n: msg.job.n,
+      const out = { type: 'done', key, seq: msg.seq, x: Float32Array.from(x), A1ref: msg.job.A1, C1ref: msg.job.C1, L1ref: msg.job.L1 ?? null, n: msg.job.n,
         settle: msg.job.reset ? msg.job.settle | 0 : 0,
         steps: s.steps, resets: s.resets, ms };
       if (msg.stats) out.stats = { stretch: s.stretch(), pen: s.penetrations(msg.job.C1, msg.job.floorY ?? 0, 0.002, msg.job.limit) };

@@ -126,10 +126,10 @@ for (const b of COAT_BODIES) {
   });
 }
 
-test('footwear is not a collision layer, trousers / shirts / skirts are', () => {
+test('skin-tight underwear is not a collision layer, footwear / trousers / shirts / skirts are', () => {
   const byId = id => D.catalog.items.find(i => i.id === id);
-  assert.equal(collidesAsLayer(byId('shoes')), false);
-  for (const id of ['tshirt', 'jeans', 'skirt']) assert.equal(collidesAsLayer(byId(id)), true, id);
+  for (const id of ['briefs', 'panties', 'bra']) assert.equal(collidesAsLayer(byId(id)), false, id);
+  for (const id of ['shoes', 'tshirt', 'jeans', 'skirt']) assert.equal(collidesAsLayer(byId(id)), true, id);
 });
 
 for (const b of ['neutral', 'short', 'child', 'female']) {

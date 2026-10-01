@@ -20,9 +20,18 @@ export const DEFAULTS = {
   hz: 60, substeps: 8, maxSteps: 4,
   stretch: 0.95, compress: 0.55, bend: 0.35, bendVertical: 0.6,
   damping: 0.12, gravityScale: 1, wind: 0.3, friction: 0.3, thickness: 0.01, maxDistance: 0.3,
-  drag: 0.6, dragNormal: 3.0, floorFriction: 0.6, mirrorGap: 0.003, teleport: 0.3, tetherSlack: 0.04, bendFloor: 3, limitSlack: 0.02, limit: 'arms,hips',
+  drag: 0.6, dragNormal: 3.0, floorFriction: 0.6, mirrorGap: 0.003, teleport: 0.3, tetherSlack: 0.04, bendFloor: 3, limitSlack: 0.02, limitSlackPinned: null, limit: 'arms,hips',
   layerThickness: 0.012, layerDepth: 0.04, layerReach: 0.05, layerSided: true,
 };
+
+/**
+ * Anchor-limited capsules: how far (m) beyond its skinned target's own distance from the capsule axis a particle of
+ * pin weight `pin` may be pushed out. limitSlack for free cloth; with limitSlackPinned (ccCloth extras) it blends
+ * toward that value as the pin weight rises, so a nearly pinned band (the skirt's waist under the T-shirt hem) stays
+ * on its skinned shape instead of bulging out over the hip / thigh capsules.
+ */
+export const limitSlackOf = (prm, pin) => (prm.limitSlackPinned == null ? prm.limitSlack
+  : prm.limitSlack + (prm.limitSlackPinned - prm.limitSlack) * Math.min(1, Math.max(0, pin)));
 
 /** stiffness 0..1 -> XPBD compliance (m/N at unit mass): 1e-3 (limp) .. 1e-9 (rigid), log-linear. */
 export const compliance = s => 10 ** (-3 - 6 * Math.min(1, Math.max(0, s)));
@@ -36,7 +45,8 @@ export function clothParams(extras = {}, over = {}) {
   p.stretch = pick('stretch', st.stretch);
   p.bend = pick('bend', st.bend);
   p.bendVertical = pick('bendVertical', e.bendVertical ?? st.bend);
-  for (const k of ['maxDistance', 'damping', 'gravityScale', 'wind', 'friction', 'thickness', 'layerThickness']) p[k] = pick(k, e[k]);
+  for (const k of ['maxDistance', 'damping', 'gravityScale', 'wind', 'friction', 'thickness', 'layerThickness', 'limitSlack']) p[k] = pick(k, e[k]);
+  p.limitSlackPinned = typeof e.limitSlackPinned === 'number' && Number.isFinite(e.limitSlackPinned) ? e.limitSlackPinned : DEFAULTS.limitSlackPinned;
   p.limit = typeof e.limit === 'string' ? e.limit : DEFAULTS.limit;
   return { ...p, ...over };
 }
@@ -50,7 +60,7 @@ export function createSolver(sim, restX, params) {
   const N = sim.count;
   const x = new Float32Array(N * 3), v = new Float32Array(N * 3), prev = new Float32Array(N * 3);
   const A0 = new Float32Array(N * 3), A1 = new Float32Array(N * 3);
-  const w = new Float32Array(N), maxD = new Float32Array(N);
+  const w = new Float32Array(N), maxD = new Float32Array(N), slackI = new Float64Array(N);
   const nrm = new Float32Array(N * 3);
   const MAXC = 10;
   const cand = new Int16Array(N * MAXC), ncand = new Uint8Array(N);
@@ -70,6 +80,7 @@ export function createSolver(sim, restX, params) {
       const pin = sim.pin[i];
       w[i] = pin >= 0.999 ? 0 : 1;
       maxD[i] = (1 - pin) * prm.maxDistance;
+      slackI[i] = limitSlackOf(prm, pin);
     }
   }
   function setRest(X) {
@@ -297,7 +308,7 @@ export function createSolver(sim, restX, params) {
             let ta = l2 > 1e-12 ? (tx * abx + ty * aby + tz * abz) / l2 : 0;
             ta = ta < 0 ? 0 : ta > 1 ? 1 : ta;
             const dA = Math.hypot(tx - ta * abx, ty - ta * aby, tz - ta * abz);
-            if (dA + prm.limitSlack < R) { R = dA + prm.limitSlack; if (d2 >= R * R) continue; }
+            if (dA + slackI[i] < R) { R = dA + slackI[i]; if (d2 >= R * R) continue; }
           }
           const d = Math.sqrt(d2), k = R / d;
           x[o] = qx + dx * k; x[o + 1] = qy + dy * k; x[o + 2] = qz + dz * k;
@@ -396,7 +407,7 @@ export function createSolver(sim, restX, params) {
           let ta = l2 > 1e-12 ? ((A1[o] - caps[c]) * abx + (A1[o + 1] - caps[c + 1]) * aby + (A1[o + 2] - caps[c + 2]) * abz) / l2 : 0;
           ta = ta < 0 ? 0 : ta > 1 ? 1 : ta;
           const dA = Math.hypot(A1[o] - caps[c] - ta * abx, A1[o + 1] - caps[c + 1] - ta * aby, A1[o + 2] - caps[c + 2] - ta * abz);
-          R = Math.min(R, dA + prm.limitSlack);
+          R = Math.min(R, dA + slackI[i]);
         }
         const depth = R - d;
         if (depth > tol) { n++; worst = Math.max(worst, depth); break; }

@@ -10,7 +10,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { jointNames } from '../tools/glb.mjs';
 import * as C from '../tools/cloth_check.mjs';
-import { wearRules, resolveOutfit, hiddenZoneMask, coveringZoneMask, filterIndex } from '../web/clothing_rules.js';
+import { wearRules, resolveOutfit, hiddenZoneMask, coveringZoneMask, filterIndex, collidesAsLayer, defaultUnderwear,
+  outfitWithUnderwear, swapUnderwearForSex, isUnderwear } from '../web/clothing_rules.js';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const out = f => path.join(root, 'output', f);
@@ -21,19 +22,24 @@ const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 
 // Outfits the penetration tests use: garment -> the lower layers worn under it.
 const UNDER = { shoes: [], jeans: ['shoes'], skirt: [], tshirt: ['jeans'], trenchcoat: ['tshirt', 'jeans'] };
+// Generated underwear (layer 0, blender/cc_clothing.py add_generated) and the outer garments over its DRAWN part.
+const UNDERWEAR = ['briefs', 'panties', 'bra'];
+const OVER_UNDERWEAR = [['jeans', ['shoes', 'briefs']], ['jeans', ['shoes', 'panties']], ['skirt', ['briefs']], ['skirt', ['panties']],
+  ['tshirt', ['jeans', 'bra', 'panties']], ['trenchcoat', ['bra', 'panties']], ['trenchcoat', ['briefs']]];
 
 test('catalog: slots, unique ids, files, bytes, layers, zones, colours, default outfit', () => {
-  assert.deepEqual(CAT.slots, ['top', 'bottom', 'shoes', 'outerwear']);
+  assert.deepEqual(CAT.slots, ['underwear', 'bra', 'top', 'bottom', 'shoes', 'outerwear']);
+  assert.deepEqual(CAT.underwearSlots, ['underwear', 'bra']);
   for (const s of CAT.slots) assert.ok(CAT.slotLabels[s]?.da && CAT.slotLabels[s]?.en, `slot label ${s}`);
   assert.equal(CAT.bodyZoneAttribute, '_CCZONE');
   assert.equal(new Set(CAT.items.map(i => i.id)).size, CAT.items.length);
-  for (const s of ['top', 'bottom', 'shoes', 'outerwear']) assert.ok(CAT.items.some(i => i.slot === s), `an item for ${s}`);
+  for (const s of CAT.slots) assert.ok(CAT.items.some(i => i.slot === s), `an item for ${s}`);
   const hex = /^#[0-9a-f]{6}$/;
   for (const it of CAT.items) {
     assert.equal(it.file, `clothing_${it.id}.glb`);
     assert.equal(fs.statSync(out(it.file)).size, it.bytes, `${it.id}: bytes recorded`);
     assert.ok(CAT.slots.includes(it.slot) && it.occupies.includes(it.slot), `${it.id} slot/occupies`);
-    assert.ok(Number.isInteger(it.layer) && it.layer > 0);
+    assert.ok(Number.isInteger(it.layer) && (isUnderwear(CAT, it.id) ? it.layer === 0 : it.layer > 0), `${it.id} layer`);
     assert.ok(it.label.da && it.label.en, `${it.id} labels`);
     assert.ok(hex.test(it.colors.primary), `${it.id} primary colour`);
     if (it.colors.secondary) assert.ok(hex.test(it.colors.secondary));
@@ -42,20 +48,33 @@ test('catalog: slots, unique ids, files, bytes, layers, zones, colours, default 
   }
   assert.ok(ITEMS.trenchcoat.layer > ITEMS.tshirt.layer && ITEMS.tshirt.layer > ITEMS.jeans.layer, 'coat outside tee outside jeans');
   for (const id of CAT.default) assert.ok(ITEMS[id]);
+  assert.deepEqual(CAT.defaultUnderwear, { male: ['briefs'], female: ['panties', 'bra'] });
+  for (const id of UNDERWEAR) {
+    assert.ok(isUnderwear(CAT, id) && ITEMS[id].collidesAsLayer === false && !collidesAsLayer(ITEMS[id]), `${id}: underwear, no cloth layer`);
+    assert.ok(ITEMS[id].colors.secondary, `${id}: primary + secondary colour`);
+  }
+  assert.equal(ITEMS.briefs.sex, 'male');
+  assert.ok(ITEMS.panties.sex === 'female' && ITEMS.bra.sex === 'female');
 });
 
-test('size budget: every garment < 1 MB, the trench coat < 1.5 MB', () => {
+test('size budget: every garment < 1 MB, the trench coat < 1.5 MB, underwear < 0.3 MB', () => {
   for (const it of CAT.items) {
-    const max = it.id === 'trenchcoat' ? 1.5e6 : 1.0e6;
+    const max = it.id === 'trenchcoat' ? 1.5e6 : isUnderwear(CAT, it.id) ? 0.3e6 : 1.0e6;
     assert.ok(it.bytes < max, `${it.id}: ${it.bytes} bytes`);
   }
 });
 
-test('licences: CC0 MakeHuman system assets only; the coat extension is marked project-original', () => {
+test('licences: CC0 MakeHuman system assets or project-original geometry, marked in the catalog + LICENSE-NOTES', () => {
   const lic = path.join(root, 'build', 'blend', 'asset_licenses.json');
   const recorded = fs.existsSync(lic) ? JSON.parse(fs.readFileSync(lic, 'utf8')) : null;   // build/ is not in git
   const notes = fs.readFileSync(path.join(root, 'LICENSE-NOTES.md'), 'utf8');
   for (const it of CAT.items) {
+    if (it.license === 'project-original') {          // generated underwear: no third-party asset at all
+      assert.match(it.projectOriginal, /add_generated/, `${it.id}: generator recorded`);
+      assert.ok(!/clothes\//.test(it.source), `${it.id}: no asset source`);
+      assert.ok(notes.includes(`clothing_${it.id}.glb`), `${it.id}: documented in LICENSE-NOTES.md`);
+      continue;
+    }
     assert.ok(it.license.startsWith('CC0'), `${it.id}: ${it.license}`);
     const pack = it.source.match(/clothes\/(\w+)/)?.[1];
     assert.ok(pack, `${it.id}: source pack`);
@@ -167,7 +186,7 @@ test('body zones: _CCZONE on the body, hidden skin is covered by the garment (no
   assert.ok(D.zone.every(z => Number.isInteger(z) && (z & ~all) === 0), 'zone values are bitmasks of known zones');
   // hidden body triangles whose outward ray hits no garment triangle within 20 cm. Shoes: the foot soles face
   // the ground under the shoe sole (never visible).
-  const MAX = { shoes: 40, tshirt: 4, jeans: 4, skirt: 0, trenchcoat: 0 };
+  const MAX = { shoes: 40, tshirt: 4, jeans: 4, skirt: 0, trenchcoat: 0, briefs: 0, panties: 0, bra: 0 };
   for (const it of CAT.items) {
     const h = C.holes(D, [it.id]);
     assert.ok(h.hidden > 100, `${it.id}: hides skin (${h.hidden} triangles)`);
@@ -229,4 +248,112 @@ test('outfit rules: occupies / conflicts / layering / resolveOutfit / zone mask 
   assert.deepEqual([...filterIndex(idx, zone, 1)], [1, 2, 3]);
   assert.equal(filterIndex(idx, zone, 0), idx);
   assert.equal(hiddenZoneMask(CAT, CAT.items.map(i => i.id)), Object.values(CAT.bodyZones).reduce((a, b) => a | b, 0));
+});
+
+// ---- underwear (generated, layer 0; docs/CLOTH_SPEC.md "Underwear") ------------------------------------------------
+const drawnTris = (id, worn) => {
+  const g = D.garments[id].prim;
+  return filterIndex(g.indices, { array: g.attr('_CCZONE') }, coveringZoneMask(CAT, worn, id)).length / 3;
+};
+
+test('underwear coverage: fully covered = nothing drawn, partial cover (skirt, open coat) = only the visible part', () => {
+  const full = id => D.garments[id].prim.indices.length / 3;
+  // fully covered: no triangle left -> web/clothing.js hides the mesh (not drawn, not skinned)
+  for (const [id, over] of [['bra', ['tshirt']], ['bra', ['tshirt', 'skirt', 'trenchcoat']]]) {
+    assert.equal(drawnTris(id, [id, ...over]), 0, `${id} under ${over.join('+')}: nothing drawn`);
+  }
+  // Under the jeans a few triangles stay drawn (measured: briefs 73-76 of 892, panties 62 of 588): the waistband
+  // along the jeans top edge (rule `edge`) and the crotch, whose skin the jeans do not hide either (a dropped
+  // underwear triangle over skin hidden by the underwear's own zone was a hole through the body: the T-shirt-hem
+  // holes of review 2026-10-01, tests/integrity.test.mjs 'no hole through the body'). Before that fix this asserted 0 drawn.
+  for (const [id, over] of [['briefs', ['tshirt', 'jeans']], ['panties', ['tshirt', 'jeans']], ['briefs', ['jeans']],
+    ['briefs', ['tshirt', 'jeans', 'trenchcoat', 'shoes']], ['panties', ['jeans']]]) {
+    const n = drawnTris(id, [id, ...over]);
+    assert.ok(n <= 0.12 * full(id), `${id} under ${over.join('+')}: ${n} of ${full(id)} drawn (only waistband + crotch)`);
+  }
+  // partial: the skirt hangs free below the hips (pin < 0.99 is never a cover), the coat is open at the front
+  for (const [id, over] of [['briefs', ['tshirt', 'skirt']], ['panties', ['tshirt', 'skirt']], ['bra', ['trenchcoat']]]) {
+    const n = drawnTris(id, [id, ...over]);
+    assert.ok(n > 0.05 * full(id) && n < 0.8 * full(id), `${id} under ${over.join('+')}: partly drawn (${n} of ${full(id)})`);
+  }
+  assert.equal(drawnTris('briefs', ['briefs', 'trenchcoat']), full('briefs'), 'the open coat covers no briefs (its skirt is free)');
+  // the underwear never hides other garments and is not hidden by another underwear item
+  assert.equal(coveringZoneMask(CAT, ['panties', 'bra'], 'panties'), 0);
+  for (const it of CAT.items.filter(i => !isUnderwear(CAT, i.id))) {
+    assert.equal(coveringZoneMask(CAT, [it.id, ...UNDERWEAR], it.id) & hiddenZoneMask(CAT, UNDERWEAR), 0, `${it.id} not covered by underwear`);
+  }
+});
+
+test('underwear on the skin: every morph extreme / corrective corner / breast extreme (bra follows breast morphs + dyn)', () => {
+  // vertices > 2 mm inside VISIBLE skin (tools/cloth_check.mjs). Measured: briefs <= 4, panties <= 7 (edge vertices
+  // at concave creases), bra <= 12 except two breast extremes where the body overlaps itself: at cup max + old +
+  // firmness min the sagging breast folds over the underbust band (33 band vertices inside the breast, the skin covers
+  // the band - no fabric pokes out) and at dyn_breast_back (full physics deflection, 20). Bra over the chest at
+  // ordinary shapes: 0.
+  const LIM = { briefs: 5, panties: 8, bra: 12 };
+  const BRA_FOLD = { 'gender_female+breast_cup_max+age_old+breast_firm_min': 35, 'gender_female+breast_cup_max+dyn_breast_back': 22 };
+  for (const id of UNDERWEAR) {
+    for (const r of C.morphReport(D, id, [])) {
+      const lim = (id === 'bra' && BRA_FOLD[r.shape]) || LIM[id];
+      assert.ok(r.skin <= lim, `${id} ${r.shape}: ${r.skin} vertices inside visible skin (limit ${lim})`);
+    }
+  }
+  // the bra follows the breast motion morphs (it carries them like the body)
+  const g = D.garments.bra.prim, t = D.names.indexOf('dyn_breast_fwd');
+  assert.ok(g.targets[t].filter(d => Math.hypot(...d) > 0.01).length > 20, 'bra follows dyn_breast_fwd');
+});
+
+test('underwear in walk / run, and outer garments over the drawn underwear (no underwear through jeans / skirt / coat)', { skip: !D.clips.walk }, () => {
+  // measured: underwear skin <= 6 (<= 4.6 mm); outer over drawn underwear: jeans 3, skirt 2 (run), others 0
+  for (const id of UNDERWEAR) {
+    for (const clip of ['walk', 'run']) {
+      for (const r of C.poseReport(D, id, clip, [], 4)) {
+        assert.ok(r.skin <= 8 && Math.abs(r.worst) <= 6, `${id} ${clip} f${r.frame}: ${r.skin} inside skin, ${r.worst} mm`);
+        assert.ok(r.stretchP99 < 3.5, `${id} ${clip} f${r.frame}: stretch ${r.stretchP99}`);
+      }
+    }
+  }
+  for (const [id, under] of OVER_UNDERWEAR) {
+    // morph shapes: the garment's vertices inside the drawn underwear alone (the underwear zones still hide the skin)
+    const uw = under.filter(u => UNDERWEAR.includes(u));
+    const base = C.morphReport(D, id, under.filter(u => !uw.includes(u)));
+    C.morphReport(D, id, under).forEach((r, k) => {
+      const n = r.layers - base[k].layers;
+      assert.ok(n <= 4, `${id} over ${under.join('+')} ${r.shape}: ${n} vertices inside the drawn underwear`);
+    });
+    for (const clip of ['walk', 'run']) {
+      // The skinned (cloth off) coat sleeve swings into the torso at the armpit when the arm comes down from the A
+      // pose (16-27 coat vertices inside the visible skin with NO underwear, 21-25 mm deep: the overlap the coat
+      // limits above already carry). The bra cups the open coat leaves drawn sit there, so those same vertices count
+      // again; the underwear may not add any beyond that bare-coat overlap (cloth on, the sleeve is simulated and
+      // tools/cloth_integrity.mjs outfits 'coat' / 'coat+shoes' measure the coat over the underwear).
+      const bare = C.poseReport(D, id, clip, [], 4);
+      C.poseReport(D, id, clip, under.filter(u => UNDERWEAR.includes(u)), 4).forEach((r, k) => {
+        const lim = Math.max(4, bare[k].skin);
+        assert.ok(r.layers <= lim, `${id} over ${under.join('+')} ${clip} f${r.frame}: ${r.layers} inside the drawn underwear (limit ${lim}: bare ${id} skin ${bare[k].skin})`);
+      });
+    }
+  }
+});
+
+test('underwear rules: default per sex, swap on sex change, explicit naked, kept / removed by the outfit', () => {
+  assert.deepEqual(defaultUnderwear(CAT, 'male'), ['briefs']);
+  assert.deepEqual(defaultUnderwear(CAT, 'female'), ['panties', 'bra']);
+  assert.deepEqual(outfitWithUnderwear(CAT, null, 'male'), ['briefs'], 'nothing requested: default underwear');
+  assert.deepEqual(outfitWithUnderwear(CAT, null, 'female'), ['panties', 'bra']);
+  assert.deepEqual(outfitWithUnderwear(CAT, 'none', 'male'), [], '?outfit=none = naked');
+  assert.deepEqual(outfitWithUnderwear(CAT, '', 'male'), [], '?outfit= = naked');
+  assert.deepEqual(outfitWithUnderwear(CAT, [], 'female'), [], 'empty list = naked');
+  assert.deepEqual(outfitWithUnderwear(CAT, 'tshirt,jeans', 'male'), ['briefs', 'tshirt', 'jeans']);
+  assert.deepEqual(outfitWithUnderwear(CAT, ['tshirt', 'skirt'], 'female'), ['panties', 'bra', 'tshirt', 'skirt']);
+  assert.deepEqual(outfitWithUnderwear(CAT, 'tshirt,jeans', 'male', false), ['tshirt', 'jeans'], '?underwear=0');
+  assert.deepEqual(outfitWithUnderwear(CAT, 'panties,jeans', 'male'), ['panties', 'jeans'], 'explicit underwear kept');
+  assert.deepEqual(swapUnderwearForSex(CAT, ['briefs', 'tshirt'], 'female'), ['panties', 'bra', 'tshirt']);
+  assert.deepEqual(swapUnderwearForSex(CAT, ['panties', 'bra', 'jeans'], 'male'), ['briefs', 'jeans']);
+  assert.deepEqual(swapUnderwearForSex(CAT, ['tshirt'], 'female'), ['tshirt'], 'taken off stays off');
+  assert.deepEqual(swapUnderwearForSex(CAT, ['briefs'], 'male'), ['briefs']);
+  assert.deepEqual(wearRules(CAT, ['briefs', 'jeans'], 'panties'), ['jeans', 'panties'], 'one item per underwear slot');
+  assert.deepEqual(wearRules(CAT, ['panties', 'bra'], 'tshirt'), ['panties', 'bra', 'tshirt'], 'bra slot is separate');
+  // body zones: the underwear hides the skin under it (the body triangles under the underwear are dropped)
+  for (const id of UNDERWEAR) assert.ok(hiddenZoneMask(CAT, [id]) > 0 && C.holes(D, [id]).hidden > 100, `${id} hides skin`);
 });

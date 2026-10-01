@@ -73,7 +73,8 @@ export function buildColliders(dir) {
     j.forEach((ji, k) => { if (prim.weights[i][k] > bw) { bw = prim.weights[i][k]; best = ji; } });
     return best >= 0 ? names[best] : null;
   });
-  const morphs = P.targetNames.map((n, t) => [n, t]).filter(([n]) => !/^(face_|blink_|look_)/.test(n));
+  // dyn_* (breast motion, set per frame by web/breastphysics.js) is not a slider influence: no collider variant
+  const morphs = P.targetNames.map((n, t) => [n, t]).filter(([n]) => !/^(face_|blink_|look_|dyn_)/.test(n));
   const parts = n => (n.startsWith('corr_') ? n.slice(5).split('__') : []);
   const headAt = (bone, w) => {
     let h = joints.bones[bone];

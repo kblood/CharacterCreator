@@ -9,19 +9,75 @@
 //   4. writes world-space positions/normals into a plain THREE.Mesh "proxy" that shares the garment's index, UVs
 //      and materials, and hides the SkinnedMesh from the camera (layers, so its .visible still means "worn").
 // Free particles are drawn at x_sim + (A_now - A_ref): the skinned motion since the positions were computed is
-// added, so neither the fixed-step remainder nor the worker latency makes the cloth lag behind the body.
+// added, so neither the fixed-step remainder nor the worker latency makes the cloth lag behind the body. A worker
+// job is solved against its inputs (anchors, capsules, layer points) extrapolated one frame ahead, the frame its
+// result is drawn in, and the drawn positions are projected out of this frame's capsules / layers (drawfix.js).
 import { buildClothModel, PIN_FIXED } from './model.js';
 import { createSolver, clothParams, advance } from './solver.js';
 import { morphBase, skinPositions, skinNormals, triNormals } from './skin.js';
 import { clothColliderDefs, evalColliders, limitFlags } from './colliders.js';
 import { windVelocity } from './wind.js';
-import { createLayerSet, selectLayerVertices } from './layers.js';
+import { createLayerSet, selectLayerVertices, bodyLayerMask, LAYER_PARTS, LAYER_STRIDE } from './layers.js';
+import { createDrawFix } from './drawfix.js';
 
 const HZ = 60, MAX_STEPS = 4, SETTLE = 20, STATS_EVERY = 30;
 
-function readAttr(attr, Ctor = Float32Array) {
+// view = true: a plain attribute's own array is returned (read only, no copy: layer sources, the body's morphs)
+function readAttr(attr, Ctor = Float32Array, view = false) {
+  if (!attr.isInterleavedBufferAttribute && attr.array instanceof Ctor && attr.array.length === attr.count * attr.itemSize) return view ? attr.array : attr.array.slice();
   const out = new Ctor(attr.count * attr.itemSize);
   for (let i = 0; i < attr.count; i++) for (let c = 0; c < attr.itemSize; c++) out[i * attr.itemSize + c] = attr.getComponent(i, c);
+  return out;
+}
+
+/**
+ * Per-frame morph set (dyn_* targets): the union of the vertices any of them moves, and each target's deltas on that
+ * list (dense, 3 floats per listed vertex). null when the garment has no non-zero dyn target.
+ * Returns { keys, list, deltas, cur: Float32Array(len) (= base + dyn, maintained by dynBase), last, on }.
+ */
+export function buildDyn(targets, keys, len) {
+  keys = keys.filter(k => targets[k]?.some(v => v !== 0));
+  if (!keys.length) return null;
+  const hit = new Uint8Array(len / 3);
+  for (const k of keys) { const t = targets[k]; for (let v = 0; v < hit.length; v++) if (t[3 * v] || t[3 * v + 1] || t[3 * v + 2]) hit[v] = 1; }
+  const list = Int32Array.from(hit.reduce((a, h, v) => (h && a.push(v), a), []));
+  const deltas = keys.map(k => { const t = targets[k], d = new Float32Array(list.length * 3); list.forEach((v, i) => d.set(t.subarray(3 * v, 3 * v + 3), 3 * i)); return d; });
+  return { keys, list, deltas, cur: new Float32Array(len), last: new Float32Array(keys.length), on: false };
+}
+
+/** base (static rest shape) + the current dyn influences, sparse over dyn.list. Returns the array to skin from. */
+export function dynBase(dyn, base, inf) {
+  if (!dyn) return base;
+  if (dyn.baseRef !== base) { dyn.cur.set(base); dyn.baseRef = base; dyn.on = false; }   // first call / new base array
+  let any = false, same = dyn.on;
+  for (let j = 0; j < dyn.keys.length; j++) {
+    const w = inf[dyn.keys[j]] || 0;
+    if (w) any = true;
+    if (Math.abs(w - dyn.last[j]) > 1e-7) same = false;
+  }
+  if (!any && !dyn.on) return base;                 // idle: no copy at all
+  if (same) return dyn.cur;
+  const { list, deltas } = dyn;
+  for (let i = 0; i < list.length; i++) {
+    const o = 3 * list[i];
+    let x = base[o], y = base[o + 1], z = base[o + 2];
+    for (let j = 0; j < deltas.length; j++) {
+      const w = inf[dyn.keys[j]] || 0;
+      if (!w) continue;
+      const d = deltas[j];
+      x += w * d[3 * i]; y += w * d[3 * i + 1]; z += w * d[3 * i + 2];
+    }
+    dyn.cur[o] = x; dyn.cur[o + 1] = y; dyn.cur[o + 2] = z;
+  }
+  for (let j = 0; j < dyn.keys.length; j++) dyn.last[j] = inf[dyn.keys[j]] || 0;
+  dyn.on = any;
+  return any ? dyn.cur : base;
+}
+
+/** cur + (cur - prev) on the first `cols` of every `stride` floats (positions; normals / radii / part ids kept). */
+export function extrapolate(out, cur, prev, stride, cols = stride) {
+  out.set(cur);
+  if (prev && prev.length === cur.length) for (let i = 0; i < cur.length; i += stride) for (let c = 0; c < cols; c++) out[i + c] = 2 * cur[i + c] - prev[i + c];
   return out;
 }
 
@@ -68,6 +124,7 @@ export function createClothRuntime(opts) {
     if (!g || msg.seq !== g.seq) return;             // stale (garment rebuilt / reset meanwhile)
     g.inFlight = false; g.sentAt = 0;
     g.X = msg.x; g.Aref = msg.A1ref;
+    g.fix.setRef(msg.x, msg.C1ref, msg.L1ref);
     g.steps = msg.steps; g.resets = msg.resets;
     if (msg.n) perf.solve.push(msg.ms / (msg.n + (msg.settle || 0)));
     if (msg.stats) g.stats = msg.stats;
@@ -83,7 +140,12 @@ export function createClothRuntime(opts) {
     const sim = model.sim;
     const n = positions.length / 3;
     const targets = (geo.morphAttributes.position || []).map(a => readAttr(a));
-    const active = targets.map((t, k) => (t.some(v => v !== 0) ? k : -1)).filter(k => k >= 0);
+    // per-frame morphs (breast motion dyn_*, docs/BREAST_PHYSICS.md) are kept out of the rest shape: they would
+    // re-morph the whole garment and reset the solver's rest lengths every frame. They are added to the skinned
+    // base per frame over their few vertices only (dynBase).
+    const dynSet = new Set(Object.entries(mesh.morphTargetDictionary || {}).filter(([nm]) => nm.startsWith('dyn_')).map(([, k]) => k));
+    const active = targets.map((t, k) => (!dynSet.has(k) && t.some(v => v !== 0) ? k : -1)).filter(k => k >= 0);
+    const dyn = buildDyn(targets, [...dynSet], positions.length);
     const extras = mesh.userData?.ccCloth || null;
     const params = clothParams(extras);
     const reps = Int32Array.from(sim.particles, p => model.rep[p]);
@@ -117,9 +179,11 @@ export function createClothRuntime(opts) {
         if (PN[3 * p] * bindN[3 * v] + PN[3 * p + 1] * bindN[3 * v + 1] + PN[3 * p + 2] * bindN[3 * v + 2] < 0) nsign[v] = -1;
       }
     }
+    const limit = limitFlags(defs, params.limit);
     const g = {
       key: `${mesh.userData.ccClothing ?? mesh.name}#${++seq}`, id: mesh.userData.ccClothing ?? mesh.name, mesh, proxy,
-      model, sim, params, reps, simOf, limit: limitFlags(defs, params.limit), targets, active, positions, bindN, nsign,
+      model, sim, params, reps, simOf, limit, targets, active, dyn, positions, bindN, nsign,
+      fix: createDrawFix(sim, params, limit), D: new Float32Array(sim.count * 3), act: null, drawn: -1,
       skinIndex: readAttr(geo.getAttribute('skinIndex'), Uint16Array), skinWeight: readAttr(geo.getAttribute('skinWeight')),
       base: new Float32Array(positions.length), lastInfl: null, restX: new Float32Array(sim.count * 3),
       mats: new Float32Array(16 * mesh.skeleton.bones.length),
@@ -137,8 +201,9 @@ export function createClothRuntime(opts) {
     let changed = force || !g.lastInfl;
     if (!changed) for (const k of g.active) if (Math.abs((inf[k] || 0) - g.lastInfl[k]) > 1e-6) { changed = true; break; }
     if (!changed) return false;
-    g.lastInfl = Float32Array.from(g.targets, (_, k) => inf[k] || 0);
+    g.lastInfl = Float32Array.from(g.targets, (_, k) => (g.dyn?.keys.includes(k) ? 0 : inf[k] || 0));
     morphBase(g.base, g.positions, g.targets.map((t, k) => (g.lastInfl[k] ? t : null)), g.lastInfl);
+    if (g.dyn) { g.dyn.cur.set(g.base); g.dyn.on = false; }
     g.reps.forEach((v, s) => { g.restX[3 * s] = g.base[3 * v]; g.restX[3 * s + 1] = g.base[3 * v + 1]; g.restX[3 * s + 2] = g.base[3 * v + 2]; });
     if (g.solver) g.solver.setRest(g.restX);
     if (g.remote) worker.postMessage({ type: 'rest', key: g.key, restX: g.restX });
@@ -179,43 +244,68 @@ export function createClothRuntime(opts) {
   }
 
   // Lower layers (web/cloth/layers.js): the worn garments with a lower catalog layer (userData.ccLayer) than g,
-  // except footwear (userData.ccLayerCollide false, clothing_rules.js collidesAsLayer). Their vertices near g's
-  // free particles (bind space) become collision points, rebuilt when that set changes. At most LAYER_PARTS
-  // garments are collided with (solver.js); more are not worn at once in the catalog.
-  function syncLayers(g, meshes) {
+  // except skin-tight underwear (userData.ccLayerCollide false, clothing_rules.js collidesAsLayer), and the body's
+  // drawn leg / hip skin (last part; bodyLayerMask on the zone-filtered index, where skin hidden only by skin-tight
+  // underwear still counts: body.userData.ccLayerIndex). Their vertices near g's free
+  // particles (bind space) become collision points, rebuilt when that set (or the body's zones) changes. At most
+  // LAYER_PARTS parts are collided with (solver.js); more garments are not worn at once in the catalog.
+  let idxSeq = 0;
+  const idxIds = new WeakMap();
+  function syncLayers(g, meshes, body) {
     const my = g.mesh.userData.ccLayer ?? 0;
+    const useBody = !!(body?.isSkinnedMesh && body.geometry.index && body.geometry.getAttribute('normal'));
     const lower = meshes.filter(m => m !== g.mesh && m.isSkinnedMesh && m.visible && m.userData.ccClothing != null
-      && (m.userData.ccLayer ?? 0) < my && m.userData.ccLayerCollide !== false && m.geometry.getAttribute('normal'));
-    const key = lower.map(m => m.uuid).join(',');
+      && (m.userData.ccLayer ?? 0) < my && m.userData.ccLayerCollide !== false && m.geometry.getAttribute('normal'))
+      .slice(0, LAYER_PARTS - (useBody ? 1 : 0));
+    const bIdx = useBody ? body.geometry.index : null;
+    if (bIdx && !idxIds.has(bIdx)) idxIds.set(bIdx, ++idxSeq);
+    const key = lower.map(m => m.uuid).join(',') + (bIdx ? `|${body.uuid}:${idxIds.get(bIdx)}` : '');
     if (g.layers && g.layers.key === key) return g.layers;
     if (!g.freeBind) {
       const fb = [];
       for (let p = 0; p < g.model.particleCount; p++) if (g.model.pin[p] < PIN_FIXED) { const v = g.model.rep[p]; fb.push(g.positions[3 * v], g.positions[3 * v + 1], g.positions[3 * v + 2]); }
       g.freeBind = Float32Array.from(fb);
     }
-    const parts = lower.map(m => {
-      const geo = m.geometry, positions = readAttr(geo.getAttribute('position'));
-      return { positions, normals: readAttr(geo.getAttribute('normal')), skinIndex: readAttr(geo.getAttribute('skinIndex'), Uint16Array),
-        skinWeight: readAttr(geo.getAttribute('skinWeight')), targets: (geo.morphAttributes.position || []).map(a => readAttr(a)),
-        list: selectLayerVertices(positions, g.freeBind) };
-    });
-    const set = lower.length ? createLayerSet(parts) : null;
-    g.layers = { key, meshes: lower, set, mats: lower.map(m => new Float32Array(16 * m.skeleton.bones.length)) };
+    // (read only: createLayerSet copies the selected vertices)
+    const part = (m, mask = null) => {
+      const geo = m.geometry, positions = readAttr(geo.getAttribute('position'), Float32Array, true);
+      const skinIndex = readAttr(geo.getAttribute('skinIndex'), Uint16Array, true), skinWeight = readAttr(geo.getAttribute('skinWeight'), Float32Array, true);
+      const sel = mask ? mask(skinIndex, skinWeight, positions.length / 3) : null;
+      return { positions, normals: readAttr(geo.getAttribute('normal'), Float32Array, true), skinIndex, skinWeight,
+        targets: (geo.morphAttributes.position || []).map(a => readAttr(a, Float32Array, true)), list: selectLayerVertices(positions, g.freeBind, undefined, sel) };
+    };
+    const parts = lower.map(m => part(m));
+    const ms = [...lower];
+    if (useBody) {
+      const names = body.skeleton.bones.map(b => b.name);
+      // the skin under skin-tight underwear counts too (clothing.js applyZones sets ccLayerIndex with the index)
+      const lIdx = body.userData.ccLayerIndex ?? bIdx.array;
+      parts.push(part(body, (si, sw, n) => bodyLayerMask(lIdx, si, sw, names, n)));
+      ms.push(body);
+    }
+    const set = ms.length ? createLayerSet(parts) : null;
+    g.layers = { key, meshes: ms, set, mats: ms.map(m => new Float32Array(16 * m.skeleton.bones.length)) };
     g.lastL = null; g.needReset = true;
     return g.layers;
   }
 
-  function writeProxy(g) {
+  // L = this frame's layer points (or null)
+  function writeProxy(g, L) {
     const n = g.positions.length / 3, pos = g.proxy.geometry.attributes.position.array, nrm = g.proxy.geometry.attributes.normal.array;
     const { model, simOf, sim } = g;
-    const X = g.X, Aref = g.Aref, A = g.A;
+    const X = g.X, Aref = g.Aref, A = g.A, D = g.D;
     let x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
+    if (X) {
+      // drawn = solved + skinned motion since, then out of this frame's capsules / layers (drawfix.js)
+      for (let q = 0; q < D.length; q++) D[q] = X[q] + A[q] - Aref[q];
+      g.fix.apply(D, A, caps, L);
+    }
     // particle positions (welded) -> normals across UV seams
     for (let p = 0; p < model.particleCount; p++) {
       const s = simOf[p], v = model.rep[p], o = 3 * p;
       if (X && s >= 0 && sim.pin[s] < PIN_FIXED) {
         const q = 3 * s;
-        g.PX[o] = X[q] + A[q] - Aref[q]; g.PX[o + 1] = X[q + 1] + A[q + 1] - Aref[q + 1]; g.PX[o + 2] = X[q + 2] + A[q + 2] - Aref[q + 2];
+        g.PX[o] = D[q]; g.PX[o + 1] = D[q + 1]; g.PX[o + 2] = D[q + 2];
       } else { g.PX[o] = g.skin[3 * v]; g.PX[o + 1] = g.skin[3 * v + 1]; g.PX[o + 2] = g.skin[3 * v + 2]; }
     }
     triNormals(g.PN, g.PX, model.tris);
@@ -274,17 +364,27 @@ export function createClothRuntime(opts) {
     const fwd = opts.getForward?.() || [0, 0, 1];
     const speed = opts.getRootSpeed?.() || 0;
     let solveMs = 0, statsNow = ++perf.frames % STATS_EVERY === 0;
-    for (const g of live) {
+    // inner garments first: a simulated lower garment (the skirt) is a layer of the coat in its DRAWN shape
+    const order = [...live].sort((a, b) => (a.mesh.userData.ccLayer ?? 0) - (b.mesh.userData.ccLayer ?? 0));
+    const drawnOf = m => {
+      const q = garments.get(m);
+      if (!q || q.drawn !== perf.frames) return null;
+      const a = q.proxy.geometry.attributes;
+      return { positions: a.position.array, normals: a.normal.array };
+    };
+    for (const g of order) {
       updateBase(g);
       const ready = ensureSolver(g);
       skinMats(g);
-      skinPositions(g.skin, g.base, g.skinIndex, g.skinWeight, g.mats);
+      skinPositions(g.skin, dynBase(g.dyn, g.base, g.mesh.morphTargetInfluences || []), g.skinIndex, g.skinWeight, g.mats);
       if (g.bindN) skinNormals(g.skinN, g.bindN, g.skinIndex, g.skinWeight, g.mats);
       g.reps.forEach((v, s) => { g.A[3 * s] = g.skin[3 * v]; g.A[3 * s + 1] = g.skin[3 * v + 1]; g.A[3 * s + 2] = g.skin[3 * v + 2]; });
       const wv = windVelocity(st.wind * g.params.wind, st.time);
       const air = [wv[0] - speed * fwd[0], wv[1] - speed * fwd[1], wv[2] - speed * fwd[2]];
-      const lay = syncLayers(g, meshes);
-      const L = lay.set ? lay.set.update(k => skinMatsOf(lay.meshes[k], lay.mats[k]), k => lay.meshes[k].morphTargetInfluences) : null;
+      const lay = syncLayers(g, meshes, body);
+      const L = lay.set ? lay.set.update(k => skinMatsOf(lay.meshes[k], lay.mats[k]), k => lay.meshes[k].morphTargetInfluences, k => drawnOf(lay.meshes[k])) : null;
+      // worker jobs are solved one frame ahead: this frame's inputs + their motion since the previous frame
+      const act = g.act ??= { A: null, C: null, L: null, pA: new Float32Array(g.A.length), pC: new Float32Array(caps.length), pL: null };
       const reset = g.needReset;
       const job = { n: reset ? Math.max(n, 0) : n, A0: reset ? null : g.lastA, A1: g.A, C0: reset ? null : g.lastC, C1: caps,
         L0: reset ? null : g.lastL, L1: L, floorY: 0, lateral: lat, air, limit: g.limit, reset, settle: reset ? SETTLE : 0 };
@@ -296,6 +396,7 @@ export function createClothRuntime(opts) {
           if (n) { solveMs += performance.now() - s0; perf.solve.push((performance.now() - s0) / Math.max(1, n + job.settle)); }
           g.Aref = Float32Array.from(g.A);
           g.lastA = Float32Array.from(g.A); g.lastC = Float32Array.from(caps); g.lastL = L ? Float32Array.from(L) : null;
+          g.fix.setRef(g.X, g.lastC, g.lastL);
           g.steps = g.solver.steps; g.resets = g.solver.resets;
           if (statsNow) g.stats = { stretch: g.solver.stretch(), pen: g.solver.penetrations(caps, 0, 0.002, g.limit) };
         }
@@ -306,16 +407,26 @@ export function createClothRuntime(opts) {
         else if (!g.inFlight && (g.owed > 0 || reset)) {
           job.n = g.owed;
           g.seq++;
-          worker.postMessage({ type: 'job', key: g.key, seq: g.seq, job: { ...job, A1: Float32Array.from(g.A), C1: Float32Array.from(caps), L1: L ? Float32Array.from(L) : null },
-            stats: statsNow || g.statsDue > 0 });
+          const pred = !reset && act.A;
+          if (act.pC.length !== caps.length) act.pC = new Float32Array(caps.length);
+          if (L && act.pL?.length !== L.length) act.pL = new Float32Array(L.length);
+          const A1 = Float32Array.from(pred ? extrapolate(act.pA, g.A, act.A, 3) : g.A);
+          const C1 = Float32Array.from(pred ? extrapolate(act.pC, caps, act.C, 7, 6) : caps);
+          const L1 = L ? Float32Array.from(pred ? extrapolate(act.pL, L, act.L, LAYER_STRIDE, 3) : L) : null;
+          worker.postMessage({ type: 'job', key: g.key, seq: g.seq, job: { ...job, A1, C1, L1 }, stats: statsNow || g.statsDue > 0 });
           g.statsDue = statsNow ? 0 : g.statsDue;
           g.inFlight = true; g.sentAt = performance.now(); g.owed = 0; g.needReset = false;
-          g.lastA = Float32Array.from(g.A); g.lastC = Float32Array.from(caps); g.lastL = L ? Float32Array.from(L) : null;
+          g.lastA = A1; g.lastC = C1; g.lastL = L1;
           if (reset) { g.X = null; g.Aref = null; }
         } else if (statsNow) g.statsDue = 1;
       }
-      writeProxy(g);
+      // this frame's actual inputs (the next job's extrapolation base)
+      act.A = act.A?.length === g.A.length ? (act.A.set(g.A), act.A) : Float32Array.from(g.A);
+      act.C = act.C?.length === caps.length ? (act.C.set(caps), act.C) : Float32Array.from(caps);
+      act.L = L ? (act.L?.length === L.length ? (act.L.set(L), act.L) : Float32Array.from(L)) : null;
+      writeProxy(g, L);
       setShown(g, true);
+      g.drawn = perf.frames;
     }
     perf.steps.push(n);
     perf.frame.push(performance.now() - t0);
