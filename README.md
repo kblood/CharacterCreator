@@ -118,6 +118,8 @@ idle-variation rules and how to add a clip: [docs/ANIMATION_CLIPS.md](docs/ANIMA
 
 Short version (full table in [LICENSE-NOTES.md](LICENSE-NOTES.md)):
 
+The code in this repository is released under the MIT license ([LICENSE](LICENSE)). The assets are CC0 as listed below.
+
 - **MPFB 2** is GPL-3.0 code. It runs inside Blender at build time only and is not part of this repo or the output.
 - **MakeHuman base mesh, targets, rig and weights** and the shipped **skin texture, eyes, eyebrows,
   eyelashes, teeth, tongue and 8 hair styles** (MakeHuman CC0 system pack, verified per asset by the build)
