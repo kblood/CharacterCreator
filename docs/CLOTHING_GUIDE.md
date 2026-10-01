@@ -462,6 +462,8 @@ A garment is simulated in the viewer when it has the `_CLOTH_PIN` attribute, an 
 
 ## (g) Pitfalls already hit (and the fix that is in the code)
 
+Symptom -> cause -> fix overview and open problems: [AVOIDING_CLIPPING.md](AVOIDING_CLIPPING.md).
+
 **Fitting and binding**
 
 | problem | fix |
