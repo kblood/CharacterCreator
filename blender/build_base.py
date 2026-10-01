@@ -74,7 +74,7 @@ from bl_ext.user_default.mpfb.entities.clothes.mhclo import Mhclo
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path[:0] = [_HERE, os.path.join(_HERE, "tools")]
 import cc_textures as tex                                   # noqa: E402  blender/cc_textures.py
-from glbutil import read_glb, write_glb, patch_materials, embed_textures, quantize_morphs  # noqa: E402
+from glbutil import read_glb, write_glb, patch_materials, patch_mesh_extras, embed_textures, quantize_morphs  # noqa: E402
 
 PROJECT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RIG = "game_engine"
@@ -88,6 +88,12 @@ MACRO_MORPHS = [
     ("muscle_min", "muscle", 0.0), ("muscle_max", "muscle", 1.0),
     ("height_short", "height", 0.0), ("height_tall", "height", 1.0),
     ("proportions_ideal", "proportions", 1.0), ("proportions_uncommon", "proportions", 0.0),
+    # breast macros (MakeHuman breast/female-<age>-<muscle>-<weight>-<cup>-<firmness> targets, CC0). MPFB applies them
+    # for any body with a female component and does NOT scale them by gender (targetservice.py: "there are no male
+    # complementary targets"), so the delta sampled at neutral gender equals the one at gender 0 (probe: gender x
+    # cupsize interaction 0.0 mm). The runtime gates them with the female weight x adult (web/character.js).
+    ("breast_cup_min", "cupsize", 0.0), ("breast_cup_max", "cupsize", 1.0),
+    ("breast_firm_min", "firmness", 0.0), ("breast_firm_max", "firmness", 1.0),
 ]
 MACRO_VALUE = {k: (p, v) for k, p, v in MACRO_MORPHS}
 
@@ -119,7 +125,35 @@ LOOK_MORPHS = [("look_left", "yaw", 30.0), ("look_right", "yaw", -30.0),
 # Corrective morphs for macro interactions: sample(A and B together) - neutral - delta(A) - delta(B).
 # Runtime weight = weight(A) * weight(B) (web/character.js). Chosen by measured interaction size
 # (probe: gender x age up to 65 mm, weight x muscle up to 81 mm, gender x muscle 24 mm, gender x weight 13 mm).
-CORRECTIVE_PAIRS = [("gender", "age"), ("weight", "muscle"), ("gender", "muscle"), ("gender", "weight")]
+CORRECTIVE_PAIRS = [("gender", "age"), ("weight", "muscle"), ("gender", "muscle"), ("gender", "weight"),
+                    # breast pairs (probe, max over the 4 corners): cupsize x firmness 52.7 mm, cupsize x age 36.6 mm,
+                    # cupsize x muscle 17.2 mm, firmness x age 16.6 mm (MakeHuman has one breast target per
+                    # age/muscle/weight/cup/firmness combination). cupsize x weight (<= 14.5 mm), x height /
+                    # proportions / gender (0 mm) stay linear.
+                    ("cupsize", "firmness"), ("cupsize", "age"), ("cupsize", "muscle"), ("firmness", "age")]
+# Breast detail morphs (MakeHuman breast/ detail targets, CC0): bdet_<stem>_decr / _incr, one bipolar slider each in
+# web/character.js (group 'breast', gated like the breast macros). Same loading as FACE_TARGETS.
+BREAST_TARGETS = [
+    ("breast_dist", ["breast/breast-dist-decr"], ["breast/breast-dist-incr"]),
+    ("breast_point", ["breast/breast-point-decr"], ["breast/breast-point-incr"]),
+    ("breast_height", ["breast/breast-trans-down"], ["breast/breast-trans-up"]),
+]
+# Breast physics (web/breastphysics.js, docs/BREAST_PHYSICS.md): generated secondary-motion morphs (project-original,
+# no third-party data). The breast tissue weight W (0..1 per basemesh vertex, incl. helper geometry so every
+# fitted garment follows) is |delta(breast_cup_max)| normalised, i.e. the tissue MakeHuman's cup target moves; the
+# morph translates it by DYN_AMPLITUDE * W along a fixed axis (Blender space: +Z up, -Y forward, +X the character's
+# left). Runtime weights 0..1 come from a damped spring driven by the chest acceleration; no joint offsets.
+DYN_AMPLITUDE = 0.02
+DYN_MORPHS = [("dyn_breast_up", (0, 0, 1)), ("dyn_breast_down", (0, 0, -1)), ("dyn_breast_left", (1, 0, 0)),
+              ("dyn_breast_right", (-1, 0, 0)), ("dyn_breast_fwd", (0, -1, 0)), ("dyn_breast_back", (0, 1, 0))]
+# glTF mesh extras ccJiggle on Body (contract for other engines; values == web/breastphysics.js BREAST_PHYSICS)
+JIGGLE = {"version": 1, "doc": "docs/BREAST_PHYSICS.md", "driverBone": "spine_03", "amplitude": DYN_AMPLITUDE,
+          "morphs": {"up": "dyn_breast_up", "down": "dyn_breast_down", "left": "dyn_breast_left",
+                     "right": "dyn_breast_right", "forward": "dyn_breast_fwd", "back": "dyn_breast_back"},
+          "frequencyHz": 2.6, "dampingRatio": 0.4, "maxDisplacement": 0.012, "gain": 0.75,
+          "maxWeight": 0.75, "upMaxWeight": 0.6, "backMaxWeight": 0.35,
+          "supportStiffness": 2, "supportDamping": 0.5, "supportTravel": 0.5,
+          "gate": "female weight x clamp(1 + age, 0, 1) (web/character.js breastGate)"}
 
 
 def _expand(paths):
@@ -136,6 +170,9 @@ def _expand(paths):
 FACE_MORPHS = []
 for _stem, _neg, _pos in FACE_TARGETS:
     FACE_MORPHS += [("face_%s_decr" % _stem, _expand(_neg)), ("face_%s_incr" % _stem, _expand(_pos))]
+BDET_MORPHS = []
+for _stem, _neg, _pos in BREAST_TARGETS:
+    BDET_MORPHS += [("bdet_%s_decr" % _stem, _expand(_neg)), ("bdet_%s_incr" % _stem, _expand(_pos))]
 CORR_MORPHS = []
 for _a, _b in CORRECTIVE_PAIRS:
     for _ka in [k for k, p, _ in MACRO_MORPHS if p == _a]:
@@ -153,9 +190,15 @@ for _k, _, _ in LOOK_MORPHS:
     MORPH_KIND[_k] = "look"
 for _k, _, _ in CORR_MORPHS:
     MORPH_KIND[_k] = "corr"
+for _k, _ in BDET_MORPHS:
+    MORPH_KIND[_k] = "bdet"
+for _k, _ in DYN_MORPHS:
+    MORPH_KIND[_k] = "dyn"
 CORR_PARTS = {k: (a, b) for k, a, b in CORR_MORPHS}
-TARGET_FILES = dict(FACE_MORPHS + EXPR_TARGETS)
-ZERO_BELOW = {"face": 5e-5, "expr": 5e-5, "corr": 2e-4}   # |delta| below this (m) is written as exact 0 (sparse glTF)
+TARGET_FILES = dict(FACE_MORPHS + EXPR_TARGETS + BDET_MORPHS)
+DYN_AXIS = dict(DYN_MORPHS)
+# |delta| below this (m) is written as exact 0 (sparse glTF)
+ZERO_BELOW = {"face": 5e-5, "expr": 5e-5, "corr": 2e-4, "bdet": 5e-5, "dyn": 5e-5}
 
 
 # MakeHuman system assets (all CC0, checked at build time by check_license()).
@@ -314,10 +357,28 @@ def with_targets(files):
 # raw[key] = (absolute sampled coordinates incl. ground shift, dz) for the MHCLO fit of the parts;
 # offsets[key]: bone head offsets (joints sidecar)
 delta, offsets, raw = {}, {}, {}
+DYN_W = None                                              # breast tissue weight per basemesh vertex (dyn morphs)
+
+
+def breast_tissue_weight():
+    """0..1 per basemesh vertex: how much of the breast tissue a vertex is (see DYN_MORPHS). |delta(cup_max)| over
+    60 % of its body maximum saturates at 1, smoothstepped so the chest wall and the rim fade in softly."""
+    dc = np.linalg.norm(delta["breast_cup_max"], axis=1)
+    t = np.clip(dc / (0.6 * dc[body_idx].max()), 0, 1)
+    w = t * t * (3 - 2 * t)
+    w[w < 0.02] = 0.0
+    return w
+
+
 for key, kind in MORPH_KIND.items():
     if kind == "look":
         continue                                          # eyes only, computed from the Eyes mesh below
-    if kind == "macro":
+    if kind == "dyn":
+        if DYN_W is None:
+            DYN_W = breast_tissue_weight()
+        arr = BASE_ARR + DYN_AMPLITUDE * DYN_W[:, None] * np.array(DYN_AXIS[key], float)
+        heads, dz, h = base_heads, 0.0, base_hi - base_lo
+    elif kind == "macro":
         prop, val = MACRO_VALUE[key]
         set_macro(prop, val)
         arr, heads, dz, h = sample_now()
@@ -341,9 +402,9 @@ for key, kind in MORPH_KIND.items():
     if kind in ZERO_BELOW:
         d[np.linalg.norm(d, axis=1) < ZERO_BELOW[kind]] = 0.0
     delta[key] = d
-    if kind == "expr":
-        offs = {}                                         # eyelids do not move joints
-    elif kind in ("face", "corr"):
+    if kind in ("expr", "dyn"):
+        offs = {}                                         # eyelids / breast motion do not move joints
+    elif kind in ("face", "corr", "bdet"):
         offs = {n: o for n, o in offs.items() if o.length > 1e-4}
     offsets[key] = offs
     nb = np.linalg.norm(d[body_idx], axis=1)
@@ -373,7 +434,11 @@ for key in morph_names:
     if key in delta:
         sk.data.foreach_set("co", (basis_co + delta[key].astype(np.float32)).ravel())
 print("BUILD morphs", len(morph_names), "=", {k: sum(1 for v in MORPH_KIND.values() if v == k)
-                                            for k in ("macro", "face", "expr", "look", "corr")})
+                                            for k in ("macro", "face", "expr", "look", "corr", "bdet", "dyn")})
+if DYN_W is not None:
+    print("BUILD breast tissue weight: %d body verts > 0, %d at 1, %d helper verts > 0"
+          % (int((DYN_W[body_idx] > 0).sum()), int((DYN_W[body_idx] > 0.99).sum()),
+             int((DYN_W > 0).sum() - (DYN_W[body_idx] > 0).sum())))
 
 # rig with weights on the full mesh (weights are indexed on the complete basemesh)
 bpy.context.view_layer.objects.active = human
@@ -832,7 +897,8 @@ if not args.no_assets:
             check_license=check_license, add_asset=add_asset, last_fit=lambda: _LAST_FIT[0], fit_keys=fit_keys,
             MORPH_KIND=MORPH_KIND, CORR_PARTS=CORR_PARTS, ZERO_BELOW=ZERO_BELOW, tex=tex,
             make_material=make_material, MATERIALS=MATERIALS, bone_names={b.name for b in rig.data.bones}))
-        for _g in sorted(cc_clothing.GARMENTS, key=lambda g: g["layer"]):
+        # generated underwear (layer 0) last: it never changes the other garments or their zone bits
+        for _g in sorted(cc_clothing.GARMENTS, key=lambda g: (bool(g.get("gen")), g["layer"])):
             CLOTH.add(_g)
         CLOTH.finish_body()
 
@@ -862,6 +928,7 @@ human.data.materials.clear(); human.data.materials.append(mat)
 human.name = "Body"; rig.name = "Armature"
 human["cc_export"] = "base"
 
+MESH_EXTRAS = {"Body": {"ccJiggle": JIGGLE}}   # merged into the Body mesh extras (base + bake_clips.py)
 GLTF_OPTS = dict(export_format='GLB', use_selection=True, export_morph=True, export_skins=True,
                  export_animations=False, export_apply=False, export_yup=True, export_image_format='AUTO')
 
@@ -874,6 +941,7 @@ def export(path, objs, **kw):
     bpy.ops.export_scene.gltf(filepath=path, **dict(GLTF_OPTS, **kw))
     g, b = read_glb(path)
     patched = patch_materials(g, MATERIALS)
+    patch_mesh_extras(g, MESH_EXTRAS)
     b = embed_textures(g, b, MATERIALS)
     b = quantize_morphs(g, b)                  # KHR_mesh_quantization for the morph deltas (see glbutil.py)
     write_glb(path, g, b)
@@ -917,5 +985,6 @@ with open(args.joints, "w", encoding="utf-8") as f:
 print("BUILD joints", args.joints, len(sidecar["bones"]), "bones", len(sidecar["morphs"]), "morphs")
 
 bpy.context.scene["cc_materials"] = json.dumps(MATERIALS)   # bake_clips.py applies the same glTF material patch
+bpy.context.scene["cc_mesh_extras"] = json.dumps(MESH_EXTRAS)   # ... and the same mesh extras (ccJiggle)
 bpy.ops.wm.save_as_mainfile(filepath=args.blend)
 print("BUILD done", args.out)

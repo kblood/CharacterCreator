@@ -9,7 +9,8 @@
 import * as THREE from 'three';
 import { characterMeshes, bindToSkeleton } from './character.js';
 
-import { wearRules, resolveOutfit, hiddenZoneMask, coveringZoneMask, filterIndex, collidesAsLayer } from './clothing_rules.js';
+import { wearRules, resolveOutfit, hiddenZoneMask, coveringZoneMask, filterIndex, collidesAsLayer, outfitWithUnderwear,
+  swapUnderwearForSex, defaultUnderwear, isUnderwear, layerHiddenZoneMask } from './clothing_rules.js';
 
 export { wearRules, resolveOutfit, hiddenZoneMask, coveringZoneMask, filterIndex };
 
@@ -45,11 +46,14 @@ function setTint(m, hex, which = 'primary') {
 }
 
 /**
- * opts: { loader, getBody(), addPart(mesh), onChange(), setStatus(msg, isError), t(key), lang }
+ * opts: { loader, getBody(), addPart(mesh), onChange(), setStatus(msg, isError), t(key), lang, getSex() -> 'male' | 'female',
+ *   underwear (default true; false = no default underwear, ?underwear=0) }
  * Returns the controller used by main.js (UI, hooks, reset).
  */
 export function createClothing(opts) {
   const { loader, getBody, addPart, onChange, setStatus, t, lang } = opts;
+  const getSex = opts.getSex ?? (() => 'male');
+  let underwearDefault = opts.underwear !== false;
   let catalog = null, token = 0, pending = null, bodyIndex = null;
   const cache = new Map();                          // id -> { meshes, materials }
   const worn = [];
@@ -77,7 +81,7 @@ export function createClothing(opts) {
       m.frustumCulled = false; m.castShadow = true; m.receiveShadow = true; m.visible = false;
       m.userData.ccClothing = id;
       m.userData.ccLayer = it.layer ?? 0;             // cloth runtime: garments with a lower layer are collided with
-      m.userData.ccLayerCollide = collidesAsLayer(it);  // ... unless footwear (clothing_rules.js)
+      m.userData.ccLayerCollide = collidesAsLayer(it);  // ... unless skin-tight underwear (clothing_rules.js)
       for (const mat of [].concat(m.material)) {
         const mi = mat.userData?.ccMask?.index;
         const tex = mi !== undefined ? await g.parser.getDependency('texture', mi).catch(() => null) : null;
@@ -106,20 +110,33 @@ export function createClothing(opts) {
     if (!bodyIndex) bodyIndex = geo.index.array.slice();
     const arr = filterIndex(bodyIndex, attr, hiddenZoneMask(catalog, worn));
     geo.setIndex(new THREE.BufferAttribute(arr, 1));
+    // the cloth body layer: the skin hidden only by skin-tight underwear still counts (clothing_rules.js
+    // layerHiddenZoneMask; read by web/cloth/runtime.js syncLayers, which rebuilds when the index above changes)
+    body.userData.ccLayerIndex = filterIndex(bodyIndex, attr, layerHiddenZoneMask(catalog, worn));
     // garments under a worn higher layer (T-shirt under the coat) drop the triangles it fully covers
     // (vertex attribute _CCZONE of the garment; skinning differences would otherwise poke through)
+    // Underwear carries the zone bits of every garment that covers it: a fully covered item keeps no triangle and
+    // its mesh is hidden (not drawn, not skinned; it stays worn and comes back when the cover is taken off).
     for (const id of worn) {
       for (const m of cache.get(id)?.meshes ?? []) {
         const g = m.geometry, za = g.attributes._cczone;
         if (!za || !g.index) continue;
         if (!m.userData.ccIndex) m.userData.ccIndex = g.index.array.slice();
-        g.setIndex(new THREE.BufferAttribute(filterIndex(m.userData.ccIndex, za, coveringZoneMask(catalog, worn, id)), 1));
+        const idx = filterIndex(m.userData.ccIndex, za, coveringZoneMask(catalog, worn, id));
+        g.setIndex(new THREE.BufferAttribute(idx, 1));
+        m.userData.ccCovered = idx.length === 0;
+        if (idx.length === 0) m.visible = false;
       }
     }
   }
 
   function syncUI() {
     if (!catalog) return;
+    // a slot whose items are all made for the other sex (the bra on a male body) is hidden unless one is worn
+    for (const r of ui.rows) {
+      const off = !r.sexes.has('*') && !r.sexes.has(getSex()) && !worn.some(w => item(w)?.slot === r.slot);
+      for (const e of r.els) e.hidden = off;
+    }
     for (const s of catalog.slots) {
       const id = worn.find(w => item(w)?.slot === s) ?? '';
       ui.selects[s].value = id;
@@ -132,8 +149,18 @@ export function createClothing(opts) {
     }
   }
 
-  /** Sets the whole outfit (rules applied, later items win). Returns a promise. */
+  /**
+   * Sets the whole outfit as requested (?outfit=, __set('outfit'), init, reset): rules applied, later items win;
+   * 'none' / '' / [] = naked, a non-empty list without underwear gets the default underwear of the current sex
+   * (clothing_rules.js outfitWithUnderwear), null = the catalog default + default underwear. Returns a promise.
+   */
   function setOutfit(ids) {
+    if (!catalog) return Promise.resolve();
+    return applyOutfit(outfitWithUnderwear(catalog, ids, getSex(), underwearDefault));
+  }
+
+  /** Sets exactly these ids (rules applied; no default underwear added). */
+  function applyOutfit(ids) {
     if (!catalog) return Promise.resolve();
     const list = ids == null ? [] : (typeof ids === 'string' ? ids.split(',') : [...ids]).map(s => String(s).trim()).filter(Boolean);
     const want = resolveOutfit(catalog, list.filter(x => x !== 'none'));
@@ -160,8 +187,22 @@ export function createClothing(opts) {
   }
   const statusEl = () => document.getElementById('status')?.textContent ?? '';
 
-  function wear(id) { return setOutfit(wearRules(catalog, worn, id)); }
-  function takeOff(slot) { return setOutfit(worn.filter(w => item(w)?.slot !== slot)); }
+  function wear(id) { return applyOutfit(wearRules(catalog, worn, id)); }
+  function takeOff(slot) { return applyOutfit(worn.filter(w => item(w)?.slot !== slot)); }
+  /** Sex changed: worn underwear of the other sex is swapped for the new default (colours kept per item). */
+  function setSex(sex) {
+    if (!catalog) return Promise.resolve();
+    const next = swapUnderwearForSex(catalog, worn, sex);
+    syncUI();
+    return next.length === worn.length && next.every((id, i) => id === worn[i]) ? Promise.resolve() : applyOutfit(next);
+  }
+  /** Underwear on (default for the sex) / off, keeping the rest of the outfit. */
+  function setUnderwear(on) {
+    if (!catalog) return Promise.resolve();
+    underwearDefault = !!on;
+    const rest = worn.filter(w => !isUnderwear(catalog, w));
+    return applyOutfit(on ? [...defaultUnderwear(catalog, getSex()), ...rest] : rest);
+  }
 
   function setColor(id, which, hex) {
     if (!colors[id]) return;
@@ -195,6 +236,7 @@ export function createClothing(opts) {
       ui.primary[s] = mk('primary');
       ui.secondary[s] = mk('secondary');
       ui.selects[s] = sel;
+      ui.rows.push({ slot: s, els: [l, sel, row], sexes: new Set(items.map(i => i.sex ?? '*')) });
       sectionEl.append(l, sel, row);
     }
     syncUI();
@@ -207,13 +249,16 @@ export function createClothing(opts) {
       if (!catalog?.items?.length) { catalog = null; sectionEl.hidden = true; return; }
       for (const it of catalog.items) colors[it.id] = defaultColors(it);
       buildUI(sectionEl);
-      await setOutfit(initial ?? catalog.default ?? []);
+      await setOutfit(initial);                    // null: catalog default + default underwear
     },
-    setOutfit, wear, takeOff, setColor,
+    setOutfit, wear, takeOff, setColor, setSex, setUnderwear,
+    /** Worn ids (logical: covered underwear is still worn). */
+    worn: () => [...worn],
     reset() {
       if (!catalog) return Promise.resolve();
       for (const it of catalog.items) { colors[it.id] = defaultColors(it); applyColors(it.id); }
-      return setOutfit(catalog.default ?? []);
+      underwearDefault = opts.underwear !== false;
+      return setOutfit(null);
     },
     state() {
       const body = getBody();
@@ -224,6 +269,8 @@ export function createClothing(opts) {
         bodyTriangles: body?.geometry.index ? body.geometry.index.count / 3 : null,
         bodyTrianglesFull: bodyIndex ? bodyIndex.length / 3 : (body?.geometry.index ? body.geometry.index.count / 3 : null),
         visibleMeshes: [...cache.values()].flatMap(r => r.meshes).filter(m => m.visible).map(m => m.name),
+        // worn but fully covered (not drawn / skinned), e.g. underwear under T-shirt + jeans
+        coveredItems: worn.filter(id => (cache.get(id)?.meshes ?? []).length && cache.get(id).meshes.every(m => m.userData.ccCovered)),
         garmentTriangles: Object.fromEntries(worn.map(id => [id, (cache.get(id)?.meshes ?? []).reduce((n, m) => n + (m.geometry.index?.count ?? 0) / 3, 0)])),
       };
     },

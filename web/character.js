@@ -6,8 +6,17 @@
 // group 'body': MakeHuman macro morphs; group 'face': MakeHuman detail targets (face_<stem>_decr / _incr,
 // blender/build_base.py FACE_TARGETS). Face morphs are carried by every part (eyes, brows, lashes, teeth,
 // hair), so e.g. the hair follows a longer forehead or larger ears. They move no joints.
+//
+// Sex is binary: the 'gender' entry (binary: true) is not a slider in the UI but a male / female switch that sets
+// gender = +1 (male, SEXES.male) or -1 (female). Both ends are exact MakeHuman macro samples (gender 1.0 / 0.0), so
+// every morph, corrective, garment fit, collider and joint offset is exact there. Scripts may still pass values in
+// between (old calls keep working, they are clamped like any slider). sexOf(values) reads it back.
+// group 'breast': female-only sliders (MakeHuman breast macros breast_cup_* / breast_firm_* and detail targets
+// bdet_*), gated by breastGate(values) = female weight x adult: 0 for a male or a child, so they never show there.
+// `default` = the value the viewer starts with and Reset returns to (defaultValues()); missing values in
+// sliderInfluences() still mean 0.
 export const SLIDERS = [
-  { id: 'gender',      group: 'body', label: 'Køn (K ↔ M)',           neg: 'gender_female',        pos: 'gender_male' },
+  { id: 'gender',      group: 'body', label: 'Køn',                   neg: 'gender_female',        pos: 'gender_male', binary: true, default: 1 },
   { id: 'age',         group: 'body', label: 'Alder (barn ↔ gammel)', neg: 'age_child',            pos: 'age_old' },
   { id: 'height',      group: 'body', label: 'Højde',                 neg: 'height_short',         pos: 'height_tall', scale: { pos: 0.45 } },
   { id: 'weight',      group: 'body', label: 'Vægt',                  neg: 'weight_min',           pos: 'weight_max' },
@@ -22,15 +31,54 @@ export const SLIDERS = [
     ['mouthWidth', 'mouth_width', 'Mundbredde'], ['earSize', 'ear_size', 'Ørestørrelse'],
     ['forehead', 'forehead', 'Pande', 0.6],
   ].map(([id, stem, label, scale]) => ({ id, group: 'face', label, neg: `face_${stem}_decr`, pos: `face_${stem}_incr`, ...(scale ? { scale } : {}) })),
+  { id: 'breastSize',       group: 'breast', label: 'Størrelse', neg: 'breast_cup_min',  pos: 'breast_cup_max',  default: 0.35 },
+  { id: 'breastFirmness',   group: 'breast', label: 'Fasthed',   neg: 'breast_firm_min', pos: 'breast_firm_max', default: 0.45 },
+  { id: 'breastHeight',     group: 'breast', label: 'Højde',     neg: 'bdet_breast_height_decr', pos: 'bdet_breast_height_incr', default: 0 },
+  { id: 'breastSpacing',    group: 'breast', label: 'Afstand',   neg: 'bdet_breast_dist_decr',   pos: 'bdet_breast_dist_incr',   default: 0 },
+  { id: 'breastProjection', group: 'breast', label: 'Form',      neg: 'bdet_breast_point_decr',  pos: 'bdet_breast_point_incr',  default: 0 },
 ];
 export const FACE_SLIDERS = SLIDERS.filter(s => s.group === 'face');
+export const BREAST_SLIDERS = SLIDERS.filter(s => s.group === 'breast');
+
+// ---- sex -----------------------------------------------------------------------------------------------
+export const SEXES = { male: 1, female: -1 };
+/** 'male' | 'female' from slider values (gender >= 0 is male; a missing gender is the default, male). */
+export const sexOf = values => ((Number(values?.gender ?? 1) || 0) < 0 ? 'female' : 'male');
+/** Parses a sex given as 'male' | 'female' | 'm' | 'f' | 1 (male) | 0 (female) | -1 (female) -> gender value
+ *  (+1 / -1), or null when it cannot be read. 0/1 follows MakeHuman's gender macro (0 = female, 1 = male). */
+export function genderOfSex(sex) {
+  if (typeof sex === 'string') {
+    const s = sex.trim().toLowerCase();
+    if (s === 'male' || s === 'm' || s === '1') return SEXES.male;
+    if (s === 'female' || s === 'f' || s === '0' || s === '-1') return SEXES.female;
+    return null;
+  }
+  if (sex === true) return SEXES.male;
+  if (sex === false) return SEXES.female;
+  if (typeof sex !== 'number') return null;
+  const n = sex;
+  if (n === 1) return SEXES.male;
+  if (n === 0 || n === -1) return SEXES.female;
+  return null;
+}
+/** The values the viewer starts with / resets to (every slider's default, male). */
+export function defaultValues() {
+  return Object.fromEntries(SLIDERS.map(s => [s.id, s.default ?? 0]));
+}
+/** Breast morph gate 0..1: female weight (gender -1 -> 1, >= 0 -> 0) x adult (age -1 child -> 0, >= 0 -> 1). */
+export function breastGate(values) {
+  const g = clamp(Number(values?.gender) || 0, -1, 1), a = clamp(Number(values?.age) || 0, -1, 1);
+  return Math.max(0, -g) * clamp(1 + a, 0, 1);
+}
 
 // Corrective morphs (blender/build_base.py CORRECTIVE_PAIRS): corr_<A>__<B> = what the real MakeHuman
 // combination A+B adds on top of the linear sum of A and B. Runtime weight = influence(A) * influence(B),
 // which is exact at the corners and bilinear in between (MakeHuman itself blends its macro targets
 // multi-linearly, so this is the same model). Pairs: gender x age, weight x muscle, gender x muscle,
-// gender x weight (height and proportions interact little and are left linear).
-const CORR_AXES = [['gender', 'age'], ['weight', 'muscle'], ['gender', 'muscle'], ['gender', 'weight']];
+// gender x weight (height and proportions interact little and are left linear), and the breast pairs
+// size x firmness, size x age, size x muscle, firmness x age (their parts are gated, so the products are too).
+const CORR_AXES = [['gender', 'age'], ['weight', 'muscle'], ['gender', 'muscle'], ['gender', 'weight'],
+  ['breastSize', 'breastFirmness'], ['breastSize', 'age'], ['breastSize', 'muscle'], ['breastFirmness', 'age']];
 const sliderById = Object.fromEntries(SLIDERS.map(s => [s.id, s]));
 export const CORRECTIVES = CORR_AXES.flatMap(([a, b]) => {
   const A = sliderById[a], B = sliderById[b];
@@ -49,10 +97,12 @@ function sideScale(s, side) {
  *  plus the corrective morphs (product of their two parts). */
 export function sliderInfluences(values) {
   const out = {};
+  const gate = breastGate(values);
   for (const s of SLIDERS) {
     const v = clamp(Number(values?.[s.id]) || 0, -1, 1);
-    out[s.neg] = v < 0 ? -v * sideScale(s, 'neg') : 0;
-    out[s.pos] = v > 0 ? v * sideScale(s, 'pos') : 0;
+    const g = s.group === 'breast' ? gate : 1;
+    out[s.neg] = v < 0 ? -v * sideScale(s, 'neg') * g : 0;
+    out[s.pos] = v > 0 ? v * sideScale(s, 'pos') * g : 0;
   }
   for (const c of CORRECTIVES) out[c.name] = out[c.a] * out[c.b];
   return out;
@@ -68,7 +118,8 @@ export function validateMorphs(mesh) {
 }
 
 const warnedMorphs = new Set();
-const optionalMorph = n => n.startsWith('corr_');
+// correctives and the breast morphs are optional (a GLB built before them still works, the breast UI just does nothing)
+const optionalMorph = n => /^(corr_|breast_|bdet_|dyn_)/.test(n);
 /** Sets only the influences of morphs owned by SLIDERS (and the correctives); other morph targets
  *  (blink, look) are left untouched. */
 export function applySliders(mesh, values) {

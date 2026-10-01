@@ -21,8 +21,9 @@ test('face sliders: 13 bipolar sliders onto face_<stem>_decr / _incr, ids unique
   assert.ok(inf.face_forehead_incr > 0 && inf.face_forehead_incr <= 1);
 });
 
-test('correctives: 16 pairs, influence = product of the two part influences', () => {
-  assert.equal(CORRECTIVES.length, 16);
+test('correctives: 32 (8 pairs x 4 corners), influence = product of the two part influences', () => {
+  assert.equal(CORRECTIVES.length, 32);
+  assert.equal(new Set(CORRECTIVES.map(c => c.name)).size, 32);
   const inf = sliderInfluences({ gender: 1, age: -0.5, weight: 0.8, muscle: 0.5 });
   assert.equal(inf.corr_gender_male__age_child, 0.5);
   assert.equal(inf.corr_gender_female__age_child, 0);
@@ -42,7 +43,7 @@ test('applySliders leaves blink/look morphs alone and skips missing correctives 
   applySliders(mesh, { gender: 1, chin: -1 });
   console.warn = warn;
   assert.deepEqual(mesh.morphTargetInfluences, [0, 1, 0.7, 0.3, 1, 0]);
-  assert.ok(!warned.some(w => w.includes('corr_')), 'no warning for correctives the mesh lacks');
+  assert.ok(!warned.some(w => /corr_|breast_|bdet_/.test(w)), 'no warning for correctives / breast morphs the mesh lacks');
 });
 
 // deterministic rng

@@ -23,20 +23,22 @@ const mean = ps => ps.reduce((s, p) => add(s, p, 1 / ps.length), [0, 0, 0]);
 const allVerts = part => part.prims.flatMap(p => p.pos);
 const allTargets = (part, t) => part.prims.flatMap(p => p.targets[t]);
 
-// Morph targets (blender/build_base.py MORPH_KIND): 12 macro, 26 face detail, 2 blink, 4 look, 16 correctives.
-const NT = 60;
+// Morph targets (blender/build_base.py MORPH_KIND): 16 macro (12 body + 4 breast), 26 face detail, 2 blink, 4 look,
+// 32 correctives (16 body + 16 breast), 6 breast detail (bdet_), 6 breast motion (dyn_, docs/BREAST_PHYSICS.md).
+const NT = 92;
 const kind = n => (n.startsWith('face_') ? 'face' : n.startsWith('blink_') ? 'expr' : n.startsWith('look_') ? 'look'
-  : n.startsWith('corr_') ? 'corr' : 'macro');
+  : n.startsWith('corr_') ? 'corr' : n.startsWith('bdet_') ? 'bdet' : n.startsWith('dyn_') ? 'dyn' : 'macro');
 const own = kind2 => kind2 === 'look' || kind2 === 'expr';       // eyes / lids move on their own
 
-test('base GLB: Body + 5 face parts, one skin (53 joints), identical 60 morph target names', () => {
+test('base GLB: Body + 5 face parts, one skin (53 joints), identical 92 morph target names', () => {
   assert.ok(BODY, 'node Body');
   assert.equal(G.json.skins.length, 1);
   assert.equal(jointNames(G).length, 53);
   const names = BODY.targetNames;
   assert.equal(names.length, NT);
   const count = k => names.filter(n => kind(n) === k).length;
-  assert.deepEqual([count('macro'), count('face'), count('expr'), count('look'), count('corr')], [12, 26, 2, 4, 16]);
+  assert.deepEqual([count('macro'), count('face'), count('expr'), count('look'), count('corr'), count('bdet'), count('dyn')],
+    [16, 26, 2, 4, 32, 6, 6]);
   assert.ok(G.json.extensionsRequired?.includes('KHR_mesh_quantization'), 'quantized morph deltas');
   for (const n of FACE) {
     assert.ok(P[n], `node ${n}`);
@@ -154,7 +156,7 @@ test('size budget: base GLB < 9 MB, base + default hair < 12 MB', () => {
   assert.ok(base + hair < 12e6, `base + hair ${base + hair}`);
 });
 
-test('hair.json: >= 8 styles, each GLB skinned to the body joints, 60 morphs, follows the head', () => {
+test('hair.json: >= 8 styles, each GLB skinned to the body joints, 92 morphs, follows the head', () => {
   assert.ok(manifest.styles.length >= 8);
   assert.ok(manifest.styles.some(s => s.id === manifest.default));
   const baseJoints = new Set(jointNames(G));

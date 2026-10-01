@@ -43,9 +43,13 @@ def load(path, size=None):
     return a.reshape(h, w, 4)
 
 
-def save(arr, path, quality=88):
-    """Save (H, W, 3|4) array. .jpg -> JPEG (alpha dropped), .png -> RGBA PNG."""
+def save(arr, path, quality=88, bw=False):
+    """Save (H, W, 3|4) or (H, W) array. .jpg -> JPEG (alpha dropped), .png -> RGBA PNG; bw (or a 2D array) -> one
+    grey channel (decoded as R = G = B). A grey PNG keeps a crisp mask small: the knit-free mask of the generated
+    underwear is ~4x smaller than as JPEG, whose ringing also left grey noise around the trim."""
     h, w = arr.shape[:2]
+    if arr.ndim == 2:
+        arr, bw = np.stack([arr, arr, arr], -1), True
     if arr.shape[2] == 3:
         arr = np.concatenate([arr, np.ones((h, w, 1), np.float32)], axis=2)
     img = bpy.data.images.new(os.path.basename(path), w, h, alpha=True)
@@ -60,7 +64,7 @@ def save(arr, path, quality=88):
     st.file_format = img.file_format
     st.quality = quality
     st.compression = 90
-    st.color_mode = "RGB" if jpg else "RGBA"
+    st.color_mode = "BW" if bw else ("RGB" if jpg else "RGBA")
     st.color_depth = "8"
     img.save_render(path, scene=scene)
     bpy.data.images.remove(img)

@@ -221,3 +221,16 @@ def patch_materials(gltf, spec):
             m.setdefault("extras", {}).update(s["extras"])
         done.append(m["name"])
     return done
+
+
+def patch_mesh_extras(gltf, spec):
+    """Merge extras into the mesh of every node named in spec ({node name: {key: value}}); the exporter's own mesh
+    extras (targetNames) are kept. Returns the node names that were patched."""
+    done = []
+    for n in gltf.get("nodes", []):
+        s = spec.get(n.get("name"))
+        if s is None or "mesh" not in n:
+            continue
+        gltf["meshes"][n["mesh"]].setdefault("extras", {}).update(s)
+        done.append(n["name"])
+    return done
