@@ -1,12 +1,22 @@
 {
  "version": 1,
  "slots": [
+  "underwear",
+  "bra",
   "top",
   "bottom",
   "shoes",
   "outerwear"
  ],
  "slotLabels": {
+  "underwear": {
+   "da": "Undertøj",
+   "en": "Underwear"
+  },
+  "bra": {
+   "da": "Bh",
+   "en": "Bra"
+  },
   "top": {
    "da": "Overdel",
    "en": "Top"
@@ -29,11 +39,132 @@
   "legs": 2,
   "hips": 4,
   "torso": 8,
-  "coat": 16
+  "coat": 16,
+  "underwear_m": 32,
+  "underwear_f": 64,
+  "bra": 128
  },
  "bodyZoneAttribute": "_CCZONE",
  "default": [],
+ "defaultUnderwear": {
+  "male": [
+   "briefs"
+  ],
+  "female": [
+   "panties",
+   "bra"
+  ]
+ },
+ "underwearSlots": [
+  "underwear",
+  "bra"
+ ],
  "items": [
+  {
+   "id": "briefs",
+   "file": "clothing_briefs.glb",
+   "mesh": "Cloth_briefs",
+   "label": {
+    "da": "Underbukser",
+    "en": "Briefs"
+   },
+   "slot": "underwear",
+   "occupies": [
+    "underwear"
+   ],
+   "conflicts": [],
+   "layer": 0,
+   "hidesBodyZones": [
+    "underwear_m"
+   ],
+   "colors": {
+    "primary": "#2b2b30",
+    "secondary": "#c9c9cc"
+   },
+   "bytes": 227604,
+   "vertices": 513,
+   "license": "project-original",
+   "source": "project-original: short-leg briefs generated from the body surface by blender/cc_clothing.py add_generated (no third-party asset)",
+   "projectOriginal": "whole mesh (513 vertices, 842 faces) generated from the body surface by blender/cc_clothing.py add_generated (trunks)",
+   "sex": "male",
+   "collidesAsLayer": false,
+   "coveredBy": {
+    "jeans": 488,
+    "skirt": 399,
+    "tshirt": 13,
+    "trenchcoat": 3
+   }
+  },
+  {
+   "id": "panties",
+   "file": "clothing_panties.glb",
+   "mesh": "Cloth_panties",
+   "label": {
+    "da": "Trusser",
+    "en": "Panties"
+   },
+   "slot": "underwear",
+   "occupies": [
+    "underwear"
+   ],
+   "conflicts": [],
+   "layer": 0,
+   "hidesBodyZones": [
+    "underwear_f"
+   ],
+   "colors": {
+    "primary": "#2a2630",
+    "secondary": "#b58a9c"
+   },
+   "bytes": 184344,
+   "vertices": 370,
+   "license": "project-original",
+   "source": "project-original: bikini briefs generated from the body surface by blender/cc_clothing.py add_generated (no third-party asset)",
+   "projectOriginal": "whole mesh (370 vertices, 530 faces) generated from the body surface by blender/cc_clothing.py add_generated (bikini)",
+   "sex": "female",
+   "collidesAsLayer": false,
+   "coveredBy": {
+    "jeans": 347,
+    "skirt": 292,
+    "tshirt": 4,
+    "trenchcoat": 0
+   }
+  },
+  {
+   "id": "bra",
+   "file": "clothing_bra.glb",
+   "mesh": "Cloth_bra",
+   "label": {
+    "da": "Bh",
+    "en": "Bra"
+   },
+   "slot": "bra",
+   "occupies": [
+    "bra"
+   ],
+   "conflicts": [],
+   "layer": 0,
+   "hidesBodyZones": [
+    "bra"
+   ],
+   "colors": {
+    "primary": "#2a2630",
+    "secondary": "#b58a9c"
+   },
+   "bytes": 294332,
+   "vertices": 507,
+   "license": "project-original",
+   "source": "project-original: strapless bra generated from the body surface by blender/cc_clothing.py add_generated (no third-party asset)",
+   "projectOriginal": "whole mesh (507 vertices, 810 faces) generated from the body surface by blender/cc_clothing.py add_generated (bra)",
+   "sex": "female",
+   "collidesAsLayer": false,
+   "coveredBy": {
+    "jeans": 0,
+    "skirt": 0,
+    "tshirt": 507,
+    "trenchcoat": 317
+   }
+  },
   {
    "id": "tshirt",
    "file": "clothing_tshirt.glb",
@@ -55,7 +186,7 @@
     "primary": "#2f5f9e",
     "secondary": "#e08a2c"
    },
-   "bytes": 356576,
+   "bytes": 388104,
    "vertices": 810,
    "license": "CC0",
    "source": "MakeHuman system assets: clothes/male_casualsuit04 (T-shirt of male_casualsuit04)"
@@ -80,7 +211,7 @@
    "colors": {
     "primary": "#3d5f8c"
    },
-   "bytes": 414732,
+   "bytes": 420056,
    "vertices": 886,
    "license": "CC0",
    "source": "MakeHuman system assets: clothes/male_casualsuit04 (jeans of male_casualsuit04)"
@@ -105,10 +236,10 @@
    "colors": {
     "primary": "#4b4b52"
    },
-   "bytes": 190236,
+   "bytes": 194980,
    "vertices": 395,
    "license": "CC0",
-   "source": "MakeHuman system assets: clothes/female_elegantsuit01 (skirt of female_elegantsuit01)",
+   "source": "MakeHuman system assets: clothes/female_elegantsuit01 (skirt of female_elegantsuit01, lower part flared by this project)",
    "cloth": {
     "version": 1,
     "pinAttribute": "_CLOTH_PIN",
@@ -123,7 +254,8 @@
     "wind": 0.3,
     "colliders": "body_colliders.json",
     "units": "metres, glTF Y-up",
-    "limit": "arms,hips,thighs"
+    "limit": "arms,hips,thighs",
+    "limitSlackPinned": 0.006
    }
   },
   {
@@ -147,7 +279,7 @@
     "primary": "#6b3f24",
     "secondary": "#d9d9d9"
    },
-   "bytes": 834380,
+   "bytes": 847684,
    "vertices": 1722,
    "license": "CC0",
    "source": "MakeHuman system assets: clothes/shoes01 (shoes01 (shoes + socks))"
@@ -173,7 +305,7 @@
     "primary": "#2b2b30",
     "secondary": "#1f1b1a"
    },
-   "bytes": 943448,
+   "bytes": 1006216,
    "vertices": 2472,
    "license": "CC0 source + project-original extension",
    "source": "MakeHuman system assets: clothes/male_casualsuit05 (jacket of male_casualsuit05, cut at the waist; long skirt, belt, standing collar and lapels generated by this project)",
@@ -185,7 +317,7 @@
     "version": 1,
     "pinAttribute": "_CLOTH_PIN",
     "pinMeaning": "1 = follows the skinned mesh, 0 = free",
-    "maxDistance": 0.6,
+    "maxDistance": 0.45,
     "stiffness": {
      "stretch": 0.95,
      "bend": 0.35
@@ -198,7 +330,8 @@
     "bendVertical": 0.7,
     "friction": 0.3,
     "thickness": 0.02,
-    "limit": "arms,hips"
+    "limit": "arms,hips",
+    "layerThickness": 0.015
    }
   }
  ],
@@ -206,6 +339,7 @@
   "occupies": "putting an item on removes every worn item that occupies one of its slots",
   "conflicts": "putting an item on also removes the worn items listed in its conflicts (and items that list it)",
   "layer": "higher layer = outside; each item was fitted over every lower-layer item",
-  "covered": "a garment whose vertex attribute _CCZONE carries the zone bit of a worn higher-layer item drops its triangles whose three vertices carry that bit"
+  "covered": "a garment whose vertex attribute _CCZONE carries the zone bit of a worn higher-layer item drops its triangles whose three vertices carry that bit",
+  "underwear": "underwear (underwearSlots, layer 0) is worn by default (defaultUnderwear per sex; switching sex swaps it); a non-empty outfit without underwear gets the default added, outfit 'none' / [] is naked; it is hidden where worn garments cover it (rule 'covered'; mesh not drawn when nothing is left) and is never a cloth collision layer (collidesAsLayer false)"
  }
 }

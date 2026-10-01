@@ -1,0 +1,202 @@
+[
+ {
+  "asset": "young_caucasian_female",
+  "type": "skins",
+  "file": "skins/young_caucasian_female/young_caucasian_female.mhmat",
+  "license": "CC0",
+  "author": "makehuman_system",
+  "source": "http://www.makehumancommunity.org"
+ },
+ {
+  "asset": "lightblue",
+  "type": "eyes",
+  "file": "eyes/materials/lightblue.mhmat",
+  "license": "CC0",
+  "author": "makehuman_system",
+  "source": "http://www.makehumancommunity.org"
+ },
+ {
+  "asset": "high-poly",
+  "type": "eyes",
+  "file": "eyes/high-poly/high-poly.mhclo",
+  "license": "CC0",
+  "author": "makehuman_system",
+  "source": "http://www.makehumancommunity.org"
+ },
+ {
+  "asset": "eyebrow001",
+  "type": "eyebrows",
+  "file": "eyebrows/eyebrow001/eyebrow001.mhclo",
+  "license": "CC0",
+  "author": "makehuman_system",
+  "source": "http://www.makehumancommunity.org"
+ },
+ {
+  "asset": "eyelashes01",
+  "type": "eyelashes",
+  "file": "eyelashes/eyelashes01/eyelashes01.mhclo",
+  "license": "CC0",
+  "author": "makehuman_system",
+  "source": "http://www.makehumancommunity.org"
+ },
+ {
+  "asset": "teeth_base",
+  "type": "teeth",
+  "file": "teeth/teeth_base/teeth_base.mhclo",
+  "license": "CC0",
+  "author": "makehuman_system",
+  "source": "http://www.makehumancommunity.org"
+ },
+ {
+  "asset": "tongue01",
+  "type": "tongue",
+  "file": "tongue/tongue01/tongue01.mhclo",
+  "license": "CC0",
+  "author": "makehuman_system",
+  "source": "http://www.makehumancommunity.org"
+ },
+ {
+  "asset": "short02",
+  "type": "hair",
+  "file": "hair/short02/short02.mhclo",
+  "license": "CC0",
+  "author": "makehuman_system",
+  "source": "http://www.makehumancommunity.org"
+ },
+ {
+  "asset": "bob02",
+  "type": "hair",
+  "file": "hair/bob02/bob02.mhclo",
+  "license": "CC0",
+  "author": "makehuman_system",
+  "source": "http://www.makehumancommunity.org"
+ },
+ {
+  "asset": "long01",
+  "type": "hair",
+  "file": "hair/long01/long01.mhclo",
+  "license": "CC0",
+  "author": "makehuman_system",
+  "source": "http://www.makehumancommunity.org"
+ },
+ {
+  "asset": "ponytail01",
+  "type": "hair",
+  "file": "hair/ponytail01/ponytail01.mhclo",
+  "license": "CC0",
+  "author": "makehuman_system",
+  "source": "http://www.makehumancommunity.org"
+ },
+ {
+  "asset": "braid01",
+  "type": "hair",
+  "file": "hair/braid01/braid01.mhclo",
+  "license": "CC0",
+  "author": "makehuman_system",
+  "source": "http://www.makehumancommunity.org"
+ },
+ {
+  "asset": "short04",
+  "type": "hair",
+  "file": "hair/short04/short04.mhclo",
+  "license": "CC0",
+  "author": "makehuman_system",
+  "source": "http://www.makehumancommunity.org"
+ },
+ {
+  "asset": "bob01",
+  "type": "hair",
+  "file": "hair/bob01/bob01.mhclo",
+  "license": "CC0",
+  "author": "makehuman_system",
+  "source": "http://www.makehumancommunity.org"
+ },
+ {
+  "asset": "afro01",
+  "type": "hair",
+  "file": "hair/afro01/afro01.mhclo",
+  "license": "CC0",
+  "author": "makehuman_system",
+  "source": "http://www.makehumancommunity.org"
+ },
+ {
+  "asset": "shoes01",
+  "type": "clothes",
+  "file": "clothes/shoes01/shoes01.mhmat",
+  "license": "CC0",
+  "author": "makehuman_system",
+  "source": "http://www.makehumancommunity.org"
+ },
+ {
+  "asset": "shoes01",
+  "type": "clothes",
+  "file": "clothes/shoes01/shoes01.mhclo",
+  "license": "CC0",
+  "author": "makehuman_system",
+  "source": "http://www.makehumancommunity.org"
+ },
+ {
+  "asset": "male_casualsuit04",
+  "type": "clothes",
+  "file": "clothes/male_casualsuit04/male_casualsuit04.mhmat",
+  "license": "CC0",
+  "author": "makehuman_system",
+  "source": "http://www.makehumancommunity.org"
+ },
+ {
+  "asset": "male_casualsuit04",
+  "type": "clothes",
+  "file": "clothes/male_casualsuit04/male_casualsuit04.mhclo",
+  "license": "CC0",
+  "author": "makehuman_system",
+  "source": "http://www.makehumancommunity.org"
+ },
+ {
+  "asset": "female_elegantsuit01",
+  "type": "clothes",
+  "file": "clothes/female_elegantsuit01/female_elegantsuit01.mhmat",
+  "license": "CC0",
+  "author": "makehuman_system",
+  "source": "http://www.makehumancommunity.org"
+ },
+ {
+  "asset": "female_elegantsuit01",
+  "type": "clothes",
+  "file": "clothes/female_elegantsuit01/female_elegantsuit01.mhclo",
+  "license": "CC0",
+  "author": "makehuman_system",
+  "source": "http://www.makehumancommunity.org"
+ },
+ {
+  "asset": "male_casualsuit04",
+  "type": "clothes",
+  "file": "clothes/male_casualsuit04/male_casualsuit04.mhmat",
+  "license": "CC0",
+  "author": "makehuman_system",
+  "source": "http://www.makehumancommunity.org"
+ },
+ {
+  "asset": "male_casualsuit04",
+  "type": "clothes",
+  "file": "clothes/male_casualsuit04/male_casualsuit04.mhclo",
+  "license": "CC0",
+  "author": "makehuman_system",
+  "source": "http://www.makehumancommunity.org"
+ },
+ {
+  "asset": "male_casualsuit05",
+  "type": "clothes",
+  "file": "clothes/male_casualsuit05/male_casualsuit05.mhmat",
+  "license": "CC0",
+  "author": "makehuman_system",
+  "source": "http://www.makehumancommunity.org"
+ },
+ {
+  "asset": "male_casualsuit05",
+  "type": "clothes",
+  "file": "clothes/male_casualsuit05/male_casualsuit05.mhclo",
+  "license": "CC0",
+  "author": "makehuman_system",
+  "source": "http://www.makehumancommunity.org"
+ }
+]

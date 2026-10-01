@@ -10,11 +10,13 @@ plain skinned meshes. Nothing here is garment-specific: a new garment only needs
 | `web/cloth/solver.js` | XPBD solver: pure JS, no three.js, no per-step allocation; `advance(solver, job)` is shared by the worker and the sync path |
 | `web/cloth/colliders.js` | cloth capsules from `body_colliders.json` → posed capsules each frame (slider radii) |
 | `web/cloth/layers.js` | lower-layer collision points: the worn garments under a cloth garment, skinned each frame (see Lower layers) |
+| `web/cloth/drawfix.js` | drawn-frame contacts: the drawn (lag-compensated) positions are pushed out of THIS frame's capsules / layers (see Frame flow 4) |
 | `web/cloth/skin.js` | CPU morph + linear-blend skinning, normals |
 | `web/cloth/wind.js` | deterministic gusting wind velocity |
 | `web/cloth/worker.js` | module worker (browser) / `worker_threads` (node tests) |
 | `web/cloth/runtime.js` | three.js glue: per-garment state, fixed step, proxy mesh, stats |
 | `tools/cloth_sim.mjs` | headless harness: real animator + skeleton + the same solver; `node tools/cloth_sim.mjs trenchcoat skirt` prints the numbers below |
+| `tools/cloth_integrity.mjs` | visible layer penetrations per outfit × body × clip × pair (see "Integrity harness") |
 | `tests/cloth.test.mjs` | tests (see Tests) |
 
 ## Frame flow
@@ -22,7 +24,11 @@ plain skinned meshes. Nothing here is garment-specific: a new garment only needs
 1. The animator writes bone rotations (+ root position); `updateMatrixWorld`.
 2. For each worn cloth garment (`runtime.update(dt, meshes)`):
    - **Rest shape.** When the garment's slider influences change, the bind positions are morphed again. The
-     result gives new rest lengths (`setRest`), so the cloth follows every slider.
+     result gives new rest lengths (`setRest`), so the cloth follows every slider. The breast-motion morphs
+     (`dyn_*`, set every frame by the breast physics) are not part of the rest shape: `buildDyn`/`dynBase` add
+     them to the morphed base per frame over their few vertices only, so they move the anchors without a
+     re-morph or new rest lengths. `layers.js` likewise ignores targets that do not touch its picked vertices.
+     See [BREAST_PHYSICS.md](BREAST_PHYSICS.md).
    - **Skinning.** All vertices are skinned on the CPU with the same matrices three.js uses (world =
      `matrixWorld · bindMatrixInverse · Σ w · boneWorld · boneInverse · bindMatrix · morphed`). The skinned
      position is the anchor of each particle: pinned particles sit exactly on it, and free particles are held
@@ -41,6 +47,20 @@ plain skinned meshes. Nothing here is garment-specific: a new garment only needs
 4. **Lag compensation.** Free particles are drawn at `x_sim + (A_now − A_ref)`. This adds the skinned motion
    since the positions were computed, so neither the fixed-step remainder nor the worker's one-frame latency
    makes the cloth trail behind the body.
+5. **One-frame prediction (worker).** A worker job is solved against its inputs (anchors, capsules, layer
+   points) extrapolated one frame ahead (`extrapolate`: `2·now − previous`), the frame its result is drawn in.
+   The next job interpolates from those predicted inputs, so the solver sees a continuous input stream.
+6. **Drawn-frame contacts** (`drawfix.js`). The rigid lag shift does not move the cloth away from a leg that
+   moved further than its anchor: a running shin moves 5–8 cm per frame, and the drawn coat panel lay inside the
+   jeans (`trenchcoat:jeans` failed on 9/9 bodies with the worker, 0/9 in sync). After the shift, every drawn
+   free particle is pushed out of the capsules and lower-layer tangent planes of the frame that is drawn:
+   - capsules as in the solver (radius + thickness, anchor-limited groups); a particle that the motion carried
+     past the capsule axis goes back out on the side it was on in the solved frame;
+   - layers: each particle keeps the layer points it was in front of in the solved frame (per part, within
+     `DRAW_REACH` = 8 cm) and is pushed out of their current planes; plus the nearest point per part now
+     (within `DRAW_NEAR` = 4 cm) if it was in front of that point in the solved frame (a shoe toe that swung
+     into the coat hem since);
+   - the solver state is not touched, so the worker and sync paths stay bit-identical.
 
 **Worker.** One job is in flight per garment and the result is one frame late. The worker is used when
 `Worker` + module workers are available. It falls back to sync if the worker fails to start, errors, or does
@@ -120,8 +140,20 @@ explain it: the garments are simply thicker than the body.
 
 **How** (`web/cloth/layers.js`, `solver.js`, `runtime.js` `syncLayers`):
 - The lower garments are the worn, visible skinned clothing meshes with a lower `ccLayer` than the cloth
-  garment, except footwear (`collidesAsLayer` in `clothing_rules.js`: items that hide only `feet`). At most
-  `LAYER_PARTS` = 4 garments.
+  garment, except the underwear (`collidesAsLayer` in `clothing_rules.js`: slots `underwear` / `bra`,
+  `collidesAsLayer: false`; 2 mm over the skin, so the capsules already stand for it, and fully covered
+  underwear is not drawn at all, CLOTH_SPEC.md "Underwear"). Footwear IS a layer (since 2026-10-01): in run
+  the shoe swings forward through the ankle-length coat hem, which the foot capsule alone did not stop
+  (`trenchcoat:shoes` 30 failing cases → 3, together with the drawn-frame contacts).
+- **Body layer.** The body's drawn leg / hip skin is the last part (`bodyLayerMask`: vertices of drawn,
+  zone-filtered triangles whose dominant bone is pelvis / thigh / calf / foot / ball). A flat foot or a knee
+  is wider than its capsule, so bare legs came out through the coat hem / front panels in run. Arms are left
+  to the anchor-limited arm capsules.
+- **Simulated skirt under the coat.** Garments are updated inner first; a lower garment that is itself
+  simulated (the skirt) is a layer in its DRAWN shape of this frame (`createLayerSet` `drawnOf`), not its
+  skinned one (`trenchcoat:skirt` 34 → 0 failing cases in the matrix of review 2026-10-01; the "1" first written here
+  was not from a recorded run).
+- At most `LAYER_PARTS` = 4 parts (garments + body).
 - Only garment vertices within `LAYER_SELECT` = 12 cm of the cloth garment's free particles (bind pose) are
   used. They are skinned on the CPU each frame with their normals: `[x, y, z, nx, ny, nz, part]` per point.
 - Once per step, each free particle gets the nearest point of **each garment** (part) within `layerReach`
@@ -132,12 +164,13 @@ explain it: the garments are simply thicker than the body.
 - `layerSided`: a particle that was already behind the plane at the substep start is left alone. It went
   past a thin edge (the jeans' outer seam, the tee hem) and is not inside. Yanking it across stretched the
   coat (heavy p99 1.21 → 1.34 without this, 1.26 with it).
-- Footwear is excluded because on short bodies the hem reaches the shoes. Pushing the hem out over the shoe
-  fights the floor, and the shoe then kicks through the hem (through-count 5 on short, worse than without).
+- Footwear was excluded until 2026-10-01 (on short bodies, pushing the hem out over the shoe fought the floor
+  and the shoe kicked through the hem). With the drawn-frame contacts that no longer happens: short fails no
+  shoe case in the integrity matrix.
 
 | parameter (`DEFAULTS`) | value |
 |---|---|
-| layerThickness (m) | 0.012 (`ccCloth.layerThickness` overrides) |
+| layerThickness (m) | 0.012 (`ccCloth.layerThickness` overrides; the trenchcoat uses 0.015 since 2026-10-01) |
 | layerDepth (m) | 0.04 |
 | layerReach (m) | 0.05 |
 | layerSided | true |
@@ -217,6 +250,12 @@ Other outfits (through, sum over the 8 bodies, before → after):
 | friction | 0.3 | – | 0.3 |
 | thickness (m) | 0.02 | – | 0.01 |
 | limit | arms,hips | arms,hips,thighs | arms,hips |
+| limitSlack (m) | – | – | 0.02 |
+| limitSlackPinned (m) | – | 0.006 | – (= limitSlack) |
+
+`limitSlackPinned` (`solver.js` `limitSlackOf`): the anchor-limited slack blends from `limitSlack` toward this
+value as the pin weight rises, so the skirt's nearly pinned waist band stays on its skinned shape instead of
+bulging out over the hip / thigh capsules through the T-shirt hem (`tshirt:skirt` 36 failing cases → 0).
 
 Missing or invalid values fall back to the defaults.
 
@@ -312,19 +351,180 @@ Every test prints its numbers and tolerances.
 | dt spikes / teleport | jittered dt + 0.25 s hitches: coat p99 1.48 < 1.8; a 1 m teleport resets once with stretch max 1.004 |
 | long coat, 8 bodies | p99 ≤ 1.65; mean ≤ 1.3; pen ≤ 6 particles, ≤ 25 mm and ≤ cloth off; floor 0; crossed 0; hem ≥ floor; trail ≥ 0.15 m; rise ≤ 0.3 m |
 | skirt, 4 bodies | p99 ≤ 2.4 and < cloth off; pen ≤ 12 and ≤ cloth off; crossed 0 |
-| coat over tee + jeans, 8 bodies | per layer (tee, jeans, body) `through` ≤ 1 in walk and in run and ≤ 15 mm; total < cloth off; p99 ≤ 1.65; pen ≤ 6; crossed 0 (today all 0) |
-| footwear | `collidesAsLayer`: shoes no, tee / jeans / skirt yes |
+| coat over tee + jeans, 8 bodies | per layer (tee, jeans, body) `through` ≤ 1 in walk and in run and ≤ 15 mm; total < cloth off; p99 ≤ 1.65; pen ≤ 6; crossed 0 (passes: through all 0; female p99 1.587, was 1.687 before the coat's layerThickness 0.015) |
+| layers | `collidesAsLayer`: briefs / panties / bra no; shoes / tee / jeans / skirt yes |
+| integrity (`tests/integrity.test.mjs`) | visible poke / sink per layer pair, 11 outfit × body cases (5 added 2026-10-01 from the full matrix's failures: coat / female, coat+shoes / neutral and old, tee+skirt+coat / female, tee+jeans+shoes / old); `KNOWN_FAILING` 2 entries (coat+shoes trenchcoat:socks, tee+jeans+shoes tshirt:body, both on old); hidden zones are not tested |
+| shoes, more bodies (`integrity.test.mjs`) | tee + jeans + shoes on child, heavy, tall, old and male heavy / child: no shoes:socks, jeans:shoes |
+| socks inside the shoe (`integrity.test.mjs`, static) | every CONFIG body and its male variant, bind pose: no sock TRIANGLE centroid lies outside the shoe (the shoe is behind it within 3 cm and nothing in front); catches the patches between vertices that the vertex-based harness misses |
 | worker vs sync | 40 frames with a varying step count and reset: `worker_threads` hash = main-thread hash, without and with lower layers |
+
+## Integrity harness (`tools/cloth_integrity.mjs`, `tests/integrity.test.mjs`)
+
+Counts VISIBLE layer penetrations of worn outfits while the character animates. Cloth runs as in the viewer:
+60 Hz steps from a frame accumulator (max 4 per frame), `advance()` with interpolated anchors / capsules /
+layers, and by default the worker path (the result is drawn one frame late, lag-compensated `x + A_now − A_ref`).
+Deterministic.
+
+```powershell
+node tools\cloth_integrity.mjs                                   # full matrix, ~12 min, table; exit 1 above thresholds
+node tools\cloth_integrity.mjs --outfits jeans+coat --bodies neutral,female --clips run
+node tools\cloth_integrity.mjs --worker 0                        # sync path (?clothWorker=0)
+node tools\cloth_integrity.mjs --fps 15 --json report.json       # low frame rate; JSON report (+ table)
+```
+
+- **Matrix** (`CONFIG` at the top of the file):
+  - outfits: tee+jeans+shoes, tee+jeans+coat+shoes, tee+skirt+shoes, tee+skirt+coat, jeans+coat, coat,
+    coat+shoes (coat over the underwear only, added 2026-10-01) and `underwear` (nothing else); every outfit is worn over the body sex's default underwear like in the viewer
+    (`CONFIG.underwear`, `wornOutfit`: briefs, or panties + bra for gender < 0), so only its drawn part is tested;
+  - bodies: the 8 `cloth_sim.mjs` shapes + male (gender slider +1);
+  - one 10 s run per outfit × body (1 s idle preroll): idle, walk, run, idle, idle→run crossfade (0.3 s);
+  - measured every 3rd frame.
+- **Surfaces.** Every drawn surface: body (layer −1), garments by catalog layer. The socks are split off the
+  shoe mesh (components ≤ 400 vertices, layer − 0.5). Simulated garments are tested in their simulated shape.
+  Body triangles hidden by the outfit's zones and garment triangles covered by a higher layer (`_CCZONE`) are
+  left out, as in the viewer.
+- **poke (outer:inner)**: an inner vertex came out through the outer surface. The ray along its normal no longer
+  hits the outer surface, but the ray backwards does within 30 mm. Depth = that distance, so 30 mm = "≥ 30 mm".
+- **sink**: an outer vertex lies behind the inner surface (the ray along its normal hits it within 30 mm).
+- **Only visible hits count**:
+  - the pair must be layered at that vertex in the bind pose (ray coverage within 0.15 m);
+  - the triangle normals must agree (dot ≥ 0.3);
+  - the ray outward from the hit must escape: no drawn surface within 0.6 m. Without this, the T-shirt armpit
+    behind the arm and the coat sleeve counted. In screenshots those armpit hits were not visible.
+- **Thresholds.** `CONFIG.thresholds`, first matching rule {outfit, body, clip, pair} wins. The default fails a
+  case when the max per-frame count > 2 vertices AND the deepest > 5 mm.
+- **Test.** `tests/integrity.test.mjs` runs 11 outfit × body cases on a 4.6 s timeline (~30 s). It asserts the
+  thresholds, except for pairs in `KNOWN_FAILING`. A known entry that starts passing fails the test, so remove
+  entries as they are fixed. Until review 2026-10-01 the MATRIX had 6 cases that all passed and none of the
+  failing ones; it now includes the reported cases (coat over underwear only, socks / shoes through the coat,
+  skirt + coat on female) and two that still fail, listed in `KNOWN_FAILING` with their numbers.
+
+**Baseline 2026-10-01** (full matrix, worker path, 60 fps): 461 of 1188 outfit × body × clip × pair cases above
+threshold. Max per-frame vertex count / deepest mm over bodies and clips:
+
+| outfit | pair | bodies failing | poke | sink | seen |
+|---|---|---|---|---|---|
+| all with shoes | shoes:socks | 9/9 | 10–21 / ≥ 30 | 10–26 / 29 | sock out over the shoe heel / collar in walk and run |
+| jeans + shoes | jeans:shoes | 8/9 (not male) | 16–22 / 18 | 5 / 30 | shoe tongue / laces through the jeans hem, already in idle |
+| coat + jeans | trenchcoat:jeans | 9/9 | 28–30 / ≥ 30 | 12 / 30 | shins / knees through the coat panels in run, coat hem flap out through the shin |
+| coat + jeans + shoes | trenchcoat:shoes | 9/9 | 31 / ≥ 30 | 3 / 30 | shoe through the coat hem (footwear is not a coat layer) |
+| coat, no jeans | trenchcoat:body | 9/9 | 33–81 / ≥ 30 | 4–7 / 30 | legs through the coat |
+| skirt + coat | trenchcoat:skirt | 9/9 | 20 / 25 | 9 / 29 | simulated skirt out through the back of the coat |
+| skirt | skirt:body | 9/9 | 15 / 26 | 5–7 / 26 | thighs through the front of the skirt in run |
+| tee + skirt | tshirt:skirt | 9/9 | 7 / 16 | 18 / 30 | skirt waist band vs the T-shirt hem |
+| tee | tshirt:body | 3/9 (heavy, child, old) | 1 / 11 | 4 / 30 | not checked in a screenshot |
+
+**With the default underwear (2026-10-01, full matrix, 6 outfits)**: 470 of 1584 cases above threshold. The
+pairs above are unchanged (459 of their cases, was 461; skirt:body slightly fewer because the skin under the
+briefs is hidden). New underwear pairs, 9 failing cases:
+
+| outfit | pair | failing | max poke | max sink | note |
+|---|---|---|---|---|---|
+| tee + skirt (+ coat) | skirt:briefs | 6 cases (neutral, tall, male; idle / walk / run) | 5 / 9 mm | – | briefs front through the simulated skirt where it lies on the thighs (same cause as skirt:body); tee+skirt+coat: 0 failing |
+| tee + skirt | skirt:panties | 0 | 6 / 3 mm | – | |
+| underwear | briefs:body | 1 (child, walk) | – | 3 / 29 mm | thigh skin over the leg opening when the hip bends |
+| underwear | panties:body | 2 (female, run / idle>run) | – | 5 / 30 mm | the same at the leg line |
+| all others with jeans / tee / coat | *:briefs, *:panties, *:bra | 0 pairs | | | fully covered underwear is not drawn, so not tested |
+
+Sync path (`--worker 0`), coat outfits: 134 of 756 cases instead of 278. trenchcoat:jeans passes on 9/9
+bodies, and trenchcoat:body fails on 3/9 with ≤ 5 vertices. **The coat problems are mostly the worker's
+one-frame latency.** Fast legs (run) move 5–8 cm per frame, the drawn cloth is solved against the previous
+frame's capsules / layers, and the lag compensation shifts it rigidly with its anchors, not away from the legs.
+A real-time headless-Chrome run (worker, ~15 fps) shows the same: jeans shins through the coat and a coat hem
+flap out through the shin. The pairs without a coat (socks, jeans:shoes, skirt:body, tshirt:skirt) are the same
+in both paths.
+
+**After the fixes (2026-10-01, full matrix, worker, 60 fps, default underwear): 35 of 1584 cases above
+threshold (was 470).** Correction (review 2026-10-01): this section first said 34; the run had 35, and the
+trenchcoat:skirt row below was not from that run. The tables are kept as written; the current numbers are in
+"After review 2026-10-01" below. What changed:
+- shoes / socks (`cc_clothing.py`): the socks take the shoe's skin weights near the shoe (`sock_weights`); the
+  build pushes the sock inside the shoe (`keep_inside`: a sock vertex outside, or closer than `EPS_LAYER` under
+  it, moves in; a shoe vertex that a sock face bulges past pushes that face in);
+- jeans hem over the shoe (`cc_clothing.py` clearance): every connected part of a lower garment is its own
+  collider (the sock no longer hides the shoe tongue), and `wrap`: a shoe vertex that comes out through the
+  middle of a large jeans face moves that face out;
+- skirt: lower part flared by up to ×1.15 (`flare`), waist band `limitSlackPinned` 0.006;
+- coat: drawn-frame contacts, one-frame prediction, body and shoes as layers, the skirt as a layer in its drawn
+  shape (see Frame flow / Lower layers).
+
+| pair | failing cases before | after |
+|---|---|---|
+| shoes:socks | 94 | 0 |
+| trenchcoat:jeans | 70 | 2 (child run 4 / 18 mm, old run 3 / 11 mm) |
+| skirt:body | 66 | 0 |
+| jeans:shoes | 61 | 0 |
+| trenchcoat:body | 52 | 5 (child run, old run, short, female) |
+| tshirt:skirt | 36 | 0 |
+| trenchcoat:skirt | 34 | 1 as first written (tall idle>run, 7 / 25 mm; not from the recorded run, see the correction above); 0 after review 2026-10-01 |
+| trenchcoat:shoes | 30 | 3 (old idle 8 / 21 mm, muscular run 8 / 7 mm, female idle>run 16 / 13 mm) |
+| tshirt:body | 18 | 18 (unchanged: heavy / child / old, the tee sinks into the belly, ≥ 30 mm) |
+| skirt:briefs | 6 | 2 (tall) |
+| panties:body | 2 | 2 (unchanged) |
+| briefs:body | 1 | 1 (unchanged) |
+
+| outfit | failing cases before | after |
+|---|---|---|
+| tee + jeans + shoes | 72 | 9 |
+| tee + jeans + coat + shoes | 126 | 3 |
+| tee + skirt + shoes | 117 | 11 |
+| tee + skirt + coat | 96 | 3 |
+| jeans + coat | 56 | 5 |
+| underwear | 3 | 3 |
+
+**After review 2026-10-01** (full matrix, 8 outfits incl. coat / coat+shoes over the underwear only, worker,
+60 fps, trenchcoat `layerThickness` 0.015, `under_outer`): **26 of 2224 cases above threshold.**
+
+| pair | failing | bodies / clips | max |
+|---|---|---|---|
+| tshirt:body | 14 | child, old (tee+jeans+shoes and tee+skirt+shoes, all clips) | sink 3–4 / 22–30 mm (the skinned tee sinks into the belly; not addressed) |
+| trenchcoat:body | 7 | child run / idle>run, female run, tall walk | poke 16 / 28 mm (child run, the foot through the hem), sink 3–4 / 30 mm (spine_02, thigh, lower arm) |
+| trenchcoat:shoes | 2 | male run, old run (coat+shoes) | 8–10 / 8–9 mm (the shoe at the calf through the hem) |
+| trenchcoat:socks | 1 | old run (coat+shoes) | 5 / 7 mm |
+| trenchcoat:jeans | 1 | child run | 3 / 9 mm |
+| briefs:body | 1 | child walk (underwear) | sink 3 / 27 mm (thigh over the leg opening) |
+
+| outfit | cases | failing |
+|---|---|---|
+| tee + jeans + shoes | 360 | 7 |
+| tee + jeans + coat + shoes | 576 | 1 |
+| tee + skirt + shoes | 288 | 7 |
+| tee + skirt + coat | 360 | 2 |
+| jeans + coat | 224 | 1 |
+| coat | 116 | 2 |
+| coat + shoes | 260 | 5 |
+| underwear | 40 | 1 |
+
+No skirt:panties / skirt:briefs / *:bra case fails any more. Coat stretch p99 in the matrix (no threshold
+there): max 1.666 (jeans+coat female), 1.656 (tee+skirt+coat female), all others ≤ 1.645; `cloth.test.mjs`
+(shorter timeline, threshold 1.65): female 1.565, coat-over-layers female 1.587.
+
+Screenshots (headless Chrome, bone-tracked close-ups of the shoes on 6 bodies in idle / walk / run, coat over
+jeans in walk / run, skirt in run front / side / back on 8 bodies + female) show no sock patches through the
+shoe and no legs through the skirt. Seen but not fixed: a small dark notch at the back of the jeans hem (old,
+run), a small dark triangle in the skirt front (tall, run), and a pointed skirt hem in front (child, run).
 
 ## Not verified
 
 - Mobile GPUs and CPUs, and browsers other than headless Chrome.
 - Stability over hours (only 10 s timelines and short browser runs were tested).
 - Lower layers:
-  - A simulated skirt under the coat is collided with in its skinned pose, not its simulated one (female: 4
-    skirt vertices through at the front opening in run).
-  - Bare skin and feet are not a layer (only the capsules). In one close-up frame, a small heel speck showed
-    through the female back hem in run.
-  - Fingertips through the coat sides in idle were already there before (hands vs the limited arm capsules).
-- Stacks of more than 4 lower garments (`LAYER_PARTS`), and a cloth garment under another cloth garment.
+  - Fingertips through the coat sides in idle were already there before (hands vs the limited arm capsules;
+    arms are not part of the body layer).
+  - The integrity harness tests vertices only; the static sock test covers triangle centres of the socks only.
+- **Coat stretch, female.** Fixed in `cloth.test.mjs` (1.687 → 1.587) by the coat's `layerThickness` 0.015
+  (16 → 11 failing coat cases in the matrix; 0.018 let the shoe toes through). The full 10 s matrix still has
+  two female coat cases at p99 1.656 / 1.666 (no stretch threshold there). p99 stays chaotic here (mm-level input
+  changes move it ±0.1).
+- **Fingertips through the coat in walk** (review 2026-10-01, issue 9): still seen in a screenshot (the left
+  hand's fingers behind the coat side, male, walk); the hands are limited capsules and not a cloth layer. Not fixed.
+- **Cost of the drawn-frame contacts / prediction / body + shoe layers.** Measured on 2026-10-01 in headless
+  Chrome on a heavily loaded machine. The old code measured 3.5 ms/frame there instead of its documented
+  0.76, so only the ratio holds: worker main thread ×1.5 (coat over tee + jeans + shoes, run: 3.5 → 5.2 ms
+  loaded), skirt + coat ×1.9, skirt alone ×2.6, sync ×1.18. Scaled to the earlier unloaded numbers, that is
+  ~1.1 ms/frame on the worker main thread (target ~1 ms) and ~2.8 ms in sync (target 2.5 ms). This must be
+  measured again on an idle machine.
+- The integrity CONFIG bodies are gender 0 (between the sexes) apart from `male` / `female`, while the viewer
+  default is male (+1).
+- Stacks of more than 4 lower parts (`LAYER_PARTS`, the body included), and a cloth garment under another cloth garment.
 - Hair vs coat collar.

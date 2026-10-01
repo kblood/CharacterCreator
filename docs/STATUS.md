@@ -1,4 +1,4 @@
-# Status (2026-09-30)
+# Status (2026-10-01)
 
 ## Working
 - MPFB 2.0.17 installed in Blender 5.2 (user_default extension repo). Base: 13 380 verts body, `game_engine` rig (53 bones).
@@ -212,21 +212,174 @@
   - Details: [CLOTH_RUNTIME.md](CLOTH_RUNTIME.md#lower-layers-cloth-vs-the-garments-underneath).
 - Not verified:
   - mobile, browsers other than headless Chrome, hour-long runs;
-  - a simulated skirt under the coat is a layer in its skinned pose only;
-  - bare skin and feet are not a layer.
+  - (since 2026-10-01 the simulated skirt is a layer in its drawn shape, and leg skin / feet / shoes are layers).
+
+## Cloth integrity harness (2026-10-01, uncommitted)
+- `tools/cloth_integrity.mjs` + `tests/integrity.test.mjs`. It counts VISIBLE penetrations between drawn
+  layers (poke = inner through outer, sink = outer behind inner). Hidden zones and armpits behind the arm do
+  not count. Cloth runs as in the viewer (worker latency included). Details and table:
+  [CLOTH_RUNTIME.md](CLOTH_RUNTIME.md#integrity-harness-toolscloth_integritymjs-testsintegritytestmjs).
+- Baseline (5 outfits × 9 bodies × idle / walk / run / idle→run): 461 of 1188 cases above threshold
+  (> 2 vertices and > 5 mm).
+  - Socks through the shoes: 9/9 bodies.
+  - Shoe tongue through the jeans hem: 8/9.
+  - Thighs through the skirt: 9/9.
+  - Skirt through the coat: 9/9.
+  - Jeans / legs / shoes through the coat: 9/9.
+- The coat cases come mostly from the worker's one-frame latency. On the sync path, jeans through the coat is 0/9.
+- The test was green only through `KNOWN_FAILING`, which listed 8 pairs.
+
+## Cloth integrity fixes (2026-10-01, uncommitted)
+Details and tables: [CLOTH_RUNTIME.md](CLOTH_RUNTIME.md#integrity-harness-toolscloth_integritymjs-testsintegritytestmjs).
+
+- **Full matrix: 470 → 35 failing cases** (first written as 34; corrected in review 2026-10-01, see below) (6 outfits × 9 bodies × 4 clips, worker path, default underwear).
+  - shoes:socks 94 → 0, jeans:shoes 61 → 0, skirt:body 66 → 0, tshirt:skirt 36 → 0;
+  - trenchcoat:jeans 70 → 2, trenchcoat:body 52 → 5, trenchcoat:skirt 34 → 0 (first written as 1), trenchcoat:shoes 30 → 3;
+  - unchanged: tshirt:body 18 (heavy / child / old), panties:body 2, briefs:body 1; skirt:briefs 6 → 2.
+- `KNOWN_FAILING` in `tests/integrity.test.mjs` was emptied (2 entries again since review 2026-10-01, when the
+  MATRIX got the failing cases). New tests: shoes on 6 more bodies (incl. male heavy
+  / child); a static test that no sock triangle sticks out of the shoe on any body (the vertex-based harness had
+  missed sock patches between vertices on the male heavy / child bodies).
+- **Shoes** (build, `cc_clothing.py`): socks take the shoe's skin weights near the shoe (`sock_weights`); the sock is
+  pushed inside the shoe (`keep_inside`); every part of a lower garment is its own clearance collider; `wrap`
+  moves a jeans face out where a shoe vertex comes through its middle.
+- **Skirt**: lower part flared up to ×1.15 (`flare`, no new vertices); waist band `limitSlackPinned` 0.006; the
+  hidden-skin zone is checked per triangle (8 skin vertices stay drawn where the flare opened the crotch).
+- **Coat** (runtime): drawn-frame contacts (`web/cloth/drawfix.js`), one-frame input prediction for the worker,
+  the body's leg skin and the shoes as layers, the simulated skirt as a layer in its drawn shape.
+- Rebuilt: `clothing_shoes/jeans/skirt/trenchcoat.glb`, `clothing.json`, `base_body.glb`, `base_body_anim.glb`,
+  `body_colliders.json`. `check_glb` / `check_anim_glb`: CHECK OK. `cloth_check` holes: shoes 32, skirt 0, jeans 2
+  (as before).
+- **Tests:** `node --test "tests/*.test.mjs"` = 138 tests, 136 pass, 1 skipped, **1 FAILED** at the time: coat over
+  tee + jeans, female, stretch p99 1.687 > 1.65 (fixed in review 2026-10-01, below).
+- **Screenshots** (headless Chrome, looked at): shoe close-ups on 6 bodies in idle / walk / run, coat over jeans in
+  walk / run, skirt in run front / side / back on 8 bodies + female, skirt + coat. Seen and not fixed: a small notch
+  at the back of the jeans hem (old, run), a small dark triangle in the skirt (tall, run), a pointed skirt hem
+  (child, run).
+- **Not verified:** main-thread cost on an idle machine. Measured on a loaded machine only, as a ratio against the
+  old code: worker ×1.5, sync ×1.18, which is roughly 1.1 ms/frame worker and 2.8 ms sync on the earlier
+  baseline (targets ~1 ms / 2.5 ms).
+
+## Sex switch, chest sliders, breast physics (2026-10-01, uncommitted)
+Details: [BREAST_PHYSICS.md](BREAST_PHYSICS.md).
+
+- **Sex:** a male/female switch replaces the gender slider. The default is male (`?sex=`, `__set('sex', ...)`).
+  - Both values are exact MakeHuman macro samples.
+- **Chest section (female only, hidden for male):** size, firmness, height, spacing, shape.
+  - Uses the MakeHuman CC0 `cupsize` / `firmness` macros and the `breast-dist/point/trans` targets.
+  - 4 new corrective pairs.
+  - The breast morphs are gated by female x adult in `character.js`, so they are exactly 0 on a male.
+  - Default female: size 0.35, firmness 0.45. MakeHuman's own default (cup 0.5 / firmness 0.5) adds no breast target at all, which is why the old female looked flat.
+- **Breast physics:** a damped spring (2.6 Hz, damping 0.3) driven by `spine_03` acceleration and tilt.
+  - Six generated `dyn_breast_*` morphs, 2 cm each; morph only, no bone writes.
+  - The T-shirt and coat carry the same morphs.
+  - The cloth runtime adds them sparsely per frame instead of re-morphing the rest shape.
+  - Default female, peak tissue motion: idle 0.2 mm, walk 5.8 mm, run 9.9 mm (T-shirt) / 8.1 mm (coat); size 1 / firmness -1 nude run: 18.6 mm.
+  - Cost 0.01–0.05 ms/frame. `?breast=0` or the checkbox turns it off.
+- **Assets:** 92 morph targets (was 60). `base_body.glb` 7.23 MB (was 7.03), `base_body_anim.glb` 7.41 MB.
+  - `check_glb` and `check_anim_glb`: CHECK OK.
+- **Garments:** `cloth_check`, 20 female breast extremes. T-shirt and coat: 0 skin penetrations.
+  - Coat vs T-shirt: 4 vertices, the same as the female baseline (weight extremes 12/20, as before).
+- **Tests:** `node --test "tests/*.test.mjs"` = 126 tests, 125 pass, 1 skipped. New: `tests/breast.test.mjs` (15).
+- **Screenshots:** headless Chrome.
+  - Default male plus UI.
+  - Female: 10 body/breast shapes × nude / T-shirt / coat × front / side / 3/4.
+  - Walk/run filmstrips.
+- **Still not good:**
+  - At large, soft sizes the underside silhouette is visibly polygonal with a dark lower edge (base-mesh resolution).
+  - The areola is the small MakeHuman texture spot.
+  - Garments are exported without morph normals, so the T-shirt shading over the bust is flat (the silhouette is right).
+  - Tools still use `gender: 0` as a "neutral" test body.
+
+## Default underwear (2026-10-01, uncommitted)
+Spec: [CLOTH_SPEC.md](CLOTH_SPEC.md) "Underwear"; build: [BLENDER_WORKFLOW.md](BLENDER_WORKFLOW.md).
+
+- **Items:** male `briefs` (boxer-style trunks with a light waistband), female `panties` + strapless `bra`.
+  - Ordinary catalog items: slots `underwear` / `bra` (UI "Undertøj" / "Bh"), layer 0, primary + secondary
+    colour, 92 morphs, 53 bones, body zones `underwear_m` / `underwear_f` / `bra`.
+  - Generated by project code from the body's own faces (`add_generated`, project-original, LICENSE-NOTES.md).
+  - Sizes: 0.23 / 0.18 / 0.29 MB (budget 0.3 MB); 538 / 389 / 510 vertices (review 2026-10-01).
+- **Default:** worn by default (sex default = male). The sex switch swaps briefs ↔ panties + bra (`setSex`);
+  taking it off keeps it off across the swap.
+  - The bra row is hidden for a male unless worn.
+  - `?outfit=a,b` adds the default underwear unless the list holds an underwear item. `?outfit=none`,
+    `?outfit=` or `__set('outfit', [])` = naked. `?underwear=0` / `__set('underwear', false)` turns it off.
+- **Covered = not drawn:** `_CCZONE` on the underwear holds the bits of the garments covering it.
+  - T-shirt: bra 0 triangles (mesh hidden, `__clothingState().coveredItems`). T-shirt + jeans: briefs 73 / 892,
+    panties 62 / 588 (the waistband at the jeans top and the crotch, whose skin the jeans do not hide; before review
+    2026-10-01 they were 0 and the culled underwear left holes through the body under the tee hem). Tee + skirt:
+    briefs 236 / 892, panties 156 / 588. Coat alone: bra 388 / 860, briefs all.
+  - Not a cloth collision layer, not a lower layer for the other garments' clearance.
+- **Measured** (`cloth_check`, `tests/clothing.test.mjs`):
+  - On the skin at every morph extreme: briefs ≤ 4 vertices, panties ≤ 7, bra ≤ 12. Holes: 0.
+  - Walk / run: ≤ 1 vertex inside the skin.
+  - Outer garments over drawn underwear: jeans 2–3 vertices, skirt 2 (run), others 0.
+- **Integrity harness** (now over the default underwear, + an `underwear` outfit): 470 of 1584 cases above
+  threshold. The old pairs are unchanged (459, was 461). 9 new underwear cases:
+  - skirt:briefs 6 (≤ 5 vertices / 9 mm, the briefs front through the simulated skirt, the same cause as the
+    thighs through the skirt);
+  - briefs:body 1 and panties:body 2 (thigh skin over the leg opening when the hip bends, ≤ 5 vertices).
+- **Tests:** `node --test "tests/*.test.mjs"` = 131 tests, 130 pass, 1 skipped. `check_glb` / `check_anim_glb`:
+  CHECK OK.
+- **Screenshots** (headless Chrome, looked at): default male / female; 6+ shapes (heavy, muscular, old thin,
+  female heavy, cup max, child); tee + jeans (underwear not drawn); skirt in run; coat; naked; sex swap.
+- **Still not good:**
+  - Bra at the extreme breasts. At cup max + old + firmness min, 33 band vertices lie inside the folded
+    breast; at `dyn_breast_back`, 20. The body overlaps itself there.
+  - At cup max + firmness max, small skin-coloured gaps show between the cups and the underbust band.
+  - The briefs can show a few vertices through the skirt (see the harness numbers above).
+
+## Review fixes (2026-10-01, uncommitted)
+Issues 1–11 of the review of the underwear / cloth / breast work. Details: CLOTH_RUNTIME.md "After review
+2026-10-01", CLOTH_SPEC.md "Underwear", BLENDER_WORKFLOW.md (generated underwear), BREAST_PHYSICS.md.
+
+- **Coat stretch, female** (1, 10): trenchcoat `layerThickness` 0.012 → 0.015 (`ccCloth`; `layerThickness` was
+  missing from the exported cloth extras). `cloth.test.mjs`: female p99 1.687 → 1.565, coat over layers 1.587;
+  the test passes. Full matrix: female 1.666 / 1.656 in two cases (no threshold there).
+- **Counts** (2): the earlier "34" was 35; CLOTH_RUNTIME.md corrected, new matrix numbers added.
+- **Integrity MATRIX** (3): 6 → 11 cases, incl. the reported coat over underwear only, socks / shoes through the
+  coat and skirt + coat on female; `KNOWN_FAILING` now holds the 2 cases that still fail (coat+shoes old
+  trenchcoat:socks 5 / 8.6 mm; tee+jeans+shoes old tshirt:body sink 3–4 / ≤ 28 mm).
+- **Holes under the T-shirt hem, missing briefs waistband** (4): a covering garment drops an underwear triangle
+  only where it hides that skin itself or lies snugly on it (≤ 6 mm, skinned garments); `clip_region` per body
+  triangle (no square skin dots). New test: no hole through the body where covered underwear is culled.
+- **Panties through the skirt** (5): `under_outer` keeps every underwear vertex ≥ 1 mm under the outer garments
+  at every shape key; the harness has no skirt:panties / skirt:briefs failure left. `cloth_check` `countInside`
+  now confirms a flagged vertex against its 1-ring triangles (the panties' "weight_max" hits were 1.9–2.0 mm
+  OUTSIDE the skin, a nearest-vertex-plane artefact).
+- **Breast physics limited** (6) and **damped by garments** (7): travel limit 12 mm × (1 − 0.5 s) with a soft
+  stop, output ≤ 0.75; support bra 0.5 / tee 0.2 / coat 0.3 (combined 1 − ∏(1 − s)). Run, size 1: nude ±12 mm
+  (9.1 mm tissue motion), bra 3.4 mm, tee + jeans + coat 1.6 mm. Garments loaded later had all `dyn_*` = 1 with
+  physics off (the bra moved up to 7.7 mm off the body); now zeroed once per mesh part.
+- **Blurry / jagged underwear trim** (8): per-texel trim (rasterised 3D position, exact distance to the edges /
+  the top opening), ~1 mm/texel, antialiased over 1.5 LOCAL texels, 16-texel edge padding, mask as an 8-bit grey
+  PNG. In an extreme close-up of the briefs' back waistband a faint staircase is still visible (left side).
+- **Shoe toe / fingertip through the coat** (9): with the coat layer thickness 0.015 the test cases coat+shoes /
+  neutral and tee+jeans+coat+shoes / female pass; the full matrix still has trenchcoat:shoes 2 (male run 8 / 8.3
+  mm, old run) and trenchcoat:socks 1 (old run). Screenshot (male, run, coat + shoes): no shoe through the hem. Fingertip in walk: not fixed.
+- **Coat over underwear only** (11): `coat` and `coat+shoes` outfits in the matrix and the test; coat over bra at
+  cup max + pointed 8 → 0 vertices. Assertions changed: underwear under jeans ≤ 12 % drawn (was "0 drawn",
+  which caused issue 4); coat-over-underwear in pose ≤ max(4, the bare coat's own skin count) (the rigid sleeve
+  armpit overlap, 16–27 without any underwear).
+- **Full matrix: 26 of 2224 failing** (8 outfits × 9 bodies, ~12 min). Suite: 146 tests, 145 pass, 1 skipped,
+  0 fail. `check_glb` / `check_anim_glb`: CHECK OK.
 
 ## Open issues
-- Macro morphs outside the 16 corrective pairs (and 3-way combinations) are still linear.
+- Visible cloth penetrations: 26 of 2224 cases remain above threshold in the full integrity matrix (see "Review
+  fixes"); 2 of them are in `tests/integrity.test.mjs` `KNOWN_FAILING` (old body). Fingertips through the coat side
+  in walk (hands are not a cloth layer). Coat stretch p99 in the 10 s matrix: 1.666 / 1.656 on female (the test
+  threshold 1.65 is met on the test timeline).
+- Macro morphs outside the 32 corrective pairs (and 3-way combinations) are still linear.
 - Joint offsets are linear per morph (correctives and face morphs move no joints).
 
 ## TODO (scope v1)
 - Jaw bone / mouth expressions (teeth/tongue are rigid on the head).
-- Clothing: cloth vs a simulated (not skinned) lower cloth layer; a dress (occupies top+bottom, rules exist); more garments.
+- Clothing: a dress (occupies top+bottom, rules exist); more garments.
 - More clips (jump, wave, crouch, ...) as new `CLIPS` entries; retarget test of the baked GLB in other engines.
 - Hair: second alpha-blended card layer for a soft hairline; hair physics; CC0 beard if one turns up.
 - Engine ports of `character.js` (Unity/Godot/Unreal) reading the same GLB + joints sidecar.
 
 ## Licensing
 MPFB code is GPL; the MakeHuman base mesh/targets/assets are CC0 -> exported GLBs are free to use. Every shipped
-asset (skin, eyes, brows, lashes, teeth, tongue, 8 hair styles, 4 clothing packs) is checked for CC0 by the build; face/expression
+asset (skin, eyes, brows, lashes, teeth, tongue, 8 hair styles, 4 clothing packs) is checked for CC0 by the build (the generated underwear is project-original geometry, no asset); face/expression
 targets are CC0 per MakeHuman's LICENSE.md; list in `LICENSE-NOTES.md`.
