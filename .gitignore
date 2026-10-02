@@ -23,4 +23,4 @@ desktop.ini
 # Deploy tooling and local agent notes: contain machine paths / server details, kept out of the repo
 deploy.ps1
 deploy.htaccess
-AGENTS.md
+AGENTS.local.md
