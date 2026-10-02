@@ -316,8 +316,9 @@ diverging copies. The plan:
 6. **Native spike.** One engine (suggest Godot or Unity; pick by the owner's own use), JS core compiled or ported only as far as
    needed to show one character with morphs, skin and one cloth garment. Measure cloth write cost, skinning agreement and
    wasm-versus-JS solver speed. Decide section 8's port order from the numbers.
-7. **Outside-author kit** (section 12): fitting tool, pack template, linter CLI, documentation. Test with a pack built by
-   someone who did not write the pipeline.
+7. **Outside-author kit** (section 12): `.mhclo` converter with a public spec format, pack template, standalone linter, handbook
+   that links to MPFB's docs. Test with a pack built in MPFB by someone who did not write the pipeline, and with a few existing
+   community garments.
 8. **Second pack.** Build a small pack (two garments) in its own repository and load it as a submodule without code changes.
 9. Rust core, in the order of section 8, each step accepted by golden vectors. Engine adapters follow the spike's result.
 
@@ -335,8 +336,8 @@ Decided by the owner (2026-10-02)
 Still open
 1. **Which native engine first** for the spike (section 9, step 6)? Suggest the one the owner will actually use.
 2. **TypeScript:** hand-written `.d.ts` kept in sync by a test (proposed), or move the plugin to TypeScript?
-3. **Fitting tool form:** a Blender add-on, a standalone CLI that runs Blender headless, or both (section 12)? The CLI is what CI and
-   outside authors need first.
+3. **Converter form:** a Blender headless CLI (`import_mhclo`, what CI and outside authors need first), a Blender add-on later, or both
+   (section 12)? Fitting itself is not ours to build: authors use MPFB.
 4. **Pack licence policy:** which licences may a pack declare by default (CC0, CC-BY, MIT, proprietary-with-flag)? Hosts can
    restrict further; the plugin only needs a default.
 5. **Pack trust labels:** does the community want "verified" packs (linter passed, licence checked) distinguished from raw ones?
@@ -366,21 +367,47 @@ Today a garment only works because our build pipeline (`blender/cc_clothing.py`)
 skin weights on the 53-bone rig, 92 fitted morph targets, body-zone bits, a cloth pin mask (`COLOR_0.r`), layer/occupies/
 conflicts metadata and clearance against lower layers. An outside author needs all of that without reading our source.
 
-Kit contents (proposed)
-1. **Pack template**: an empty git repository with `pack.json`, `clothing.json`, folder layout, and a CI file that runs the linter.
-2. **Fitting tool**: takes an author's garment mesh (OBJ/FBX/GLB, UVs, textures) plus a small spec (slot, layer, zones, cloth on/off,
-   pin region) and produces the finished GLB with weights, morphs, zones and pin mask. Delivered as a Blender headless CLI
-   (`tools/fit_garment`) first, a Blender add-on later *(open question 3)*. The existing garment specs in `cc_clothing.py` are the
-   model: the spec format becomes public and documented.
-3. **Linter CLI** (`tools/check_pack`): schema validation, licence field and SPDX check, size limits (vertices, textures, bytes),
-   `check_garment`'s geometry and clearance checks on all bodies, cloth sanity run. Exit code for CI.
-4. **Documentation**: [CLOTHING_GUIDE.md](CLOTHING_GUIDE.md) and [AVOIDING_CLIPPING.md](AVOIDING_CLIPPING.md) become the author handbook;
-   a short "make your first garment in an hour" walkthrough is added.
-5. **Licence and provenance**: every asset in a pack lists `license` and `source`; the pack declares what it is built from
-   (e.g. a CC0 MakeHuman garment as a base, as in our own garments). Packs with `proprietary` assets are allowed but flagged, and a
-   host policy can exclude them (section 6).
-6. **Compatibility report**: the linter states which contract version and which body morph set (`fittedFor`) the pack targets, so a
-   host can see at once whether it loads.
+**Reuse the MakeHuman/MPFB ecosystem instead of building a fitting tool.** Findings (full sources and VERIFIED/INFERRED labels
+in [research/mpfb_clothing_ecosystem.md](research/mpfb_clothing_ecosystem.md); MPFB 2.0.17 source also read locally):
+- MPFB already has the authoring side: MakeClothes (template extraction, fitting to the base mesh, delete groups, UUID, a
+  "check" button, store to library), MakeSkin (materials), MakeWeight/MakeRig, weight interpolation from the body to the garment,
+  and an asset-pack installer. Docs: `static.makehumancommunity.org/mpfb/docs/assets/creating_clothes.html`.
+- The garment format (`.mhclo` + OBJ + `.mhmat`, optional `.mhw`) is a de facto standard: the base mesh has been unchanged for
+  over ten years and there is a large community library (50+ packs, CC0 and CC-BY only). No formal spec exists; the code is the spec.
+- What it does not give us: a standalone validator (only the in-Blender `mesh_is_valid_as_clothes`), a pack manifest, licence
+  enforcement, anything for game engines (fit is a Blender-time operation; export is a bake to FBX/glTF), layering/conflict rules
+  (only `z_depth` and `tag`), cloth physics, or garments that follow runtime morphs. Those are ours.
+
+So **the author-facing input format is MakeHuman's clothes format**, authored in MPFB, and our kit adds only what is missing:
+
+Kit contents (revised)
+1. **Pack template**: an empty git repository with the MakeHuman asset-pack folder layout, our `pack.json` and `clothing.json`
+   fragment, and a CI file that runs the linter.
+2. **Converter (`tools/import_mhclo`)**: takes an `.mhclo` garment (mesh, material, weights if present) and a small **spec file**
+   (`slot`, `layer`, `occupies`, `conflicts`, zones to hide, tint slots, cloth on/off and pin region, `breastSupport`) and produces
+   our GLB with 53-bone weights, the 92 fitted morph targets, zone bits and pin mask. This is what `cc_clothing.py` already does
+   for our own garments from MakeHuman clothes (routes A/B/C in the guide); the work is to make it generic, headless
+   (Blender CLI) and driven by the public spec instead of Python code. It uses MPFB's fitting (GPL code runs only at build time,
+   as today); we must **not paste MPFB source** into this MIT repository.
+3. **Linter CLI** (`tools/check_pack`, standalone, own code, no Blender needed for the static part): `.mhclo` syntax and index ranges
+   (the MPFB parser does not validate), tri/quad uniformity, material paths, `delete_verts`, author/licence/uuid present, our
+   `pack.json` and catalog schemas, size limits; then (with Blender) `check_garment`'s geometry, clearance and zone checks on all
+   bodies and a cloth sanity run. Exit code for CI.
+4. **Documentation**: [CLOTHING_GUIDE.md](CLOTHING_GUIDE.md) and [AVOIDING_CLIPPING.md](AVOIDING_CLIPPING.md) become the handbook
+   for our part (rig, morph and GLB rules); it **links to the MPFB documentation** for modelling and fitting rather than repeating it.
+5. **Licence and provenance**: `license`, `author` and `source` per asset (MakeHuman already stores license/author as comment lines in
+   the `.mhclo`); the linter checks an allow-list (default CC0 and CC-BY; reject unknown, AGPL, NC), generates an attribution file for
+   CC-BY, and flags `proprietary` packs, which a host policy can exclude (section 6). Old community uploads before the 2020
+   change may carry an older licence line, so every file is checked. Whether a declared licence is true cannot be checked.
+6. **Compatibility report**: the linter states which contract version and which body morph set (`fittedFor`) the pack targets, and
+   reports clipping across the slider ranges, so a host can see at once whether it loads.
+
+Bonus: existing MakeHuman community garments can be run through the converter, giving content from day one. Quality varies per
+author and extreme body shapes can clip; the bake step does not make a bad garment good.
+
+Unknowns to close before building: how the community library handles upload and review (not found), the `.mhmat` and `.mhw`
+syntax (not read), and whether community garments bound to the `default` rig weigh correctly on our `game_engine` rig after
+interpolation (inferred, untested).
 
 What the plugin does not promise authors: that every combination of garments looks right. The linter reports clipping against
 the bodies and common layers; combinations between two third-party packs are the authors' and hosts' to test (the integrity harness
