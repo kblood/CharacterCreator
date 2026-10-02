@@ -81,3 +81,28 @@ The textures in the GLBs are derived from these CC0 images (resized, colour-norm
 normal map generated from the albedo luminance plus procedural noise); no other image source is used.
 
 Not used: MakeHuman community assets (other packs, often CC-BY); only the CC0 system pack is used.
+
+## Contributing to GPL projects
+
+This is the project's working rule, not legal advice. Ask a lawyer if it matters for a concrete case.
+
+- **Own new lines can be both.** The owner may contribute code he wrote himself to MPFB 2 (or another GPL
+  project) under GPL-3.0-or-later. He keeps the copyright (MPFB asks for no CLA as far as we know), so the same newly written lines may
+  also stay MIT in these repos. Write such code as new code in a separate clone outside these repos
+  (`<scratch>`), not by editing MPFB code that is then copied back.
+- **Nothing flows back from GPL into MIT.** Code from mpfb2, or from a fork or branch where our code is mixed with
+  MPFB's, is never copied into the MIT repos. That includes changes the MPFB maintainer or anyone else makes to
+  our contribution, review suggestions written as code, and mechanical ports of MPFB code to JavaScript.
+- **Calling is fine, copying is not.** Build scripts may import MPFB and call its API inside Blender at build time
+  (as `blender/build_base.py` does); MPFB is not distributed with this repo. Its output data (meshes, targets,
+  weights from the CC0 assets) is not GPL.
+- **CC0 assets are fine** in both directions: MakeHuman's CC0 targets, `macro.json`, meshes and textures may be
+  used here and referenced in an MPFB contribution.
+- **When in doubt, clean-room.** If code here was written by someone who read the GPL source it re-implements and
+  it is unclear whether it is a re-expression, rewrite it from CC0 data, documentation and black-box behaviour by
+  someone who has not read that source. `docs/PROVENANCE.md` records the method and the one case found so far
+  (the Baseline's macro-weight code: pending clean-room).
+- **Tripwire.** `tools/check_no_gpl_paste.mjs` (run by `node --test tests/`, intended for CI) fails on
+  MPFB-specific identifiers, scaffolding and comment strings in our code files. A clean run is not proof that
+  nothing was copied.
+- Whether AI assistance is disclosed upstream is the owner's decision (roadmap decision 4).
