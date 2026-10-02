@@ -1,0 +1,27 @@
+# Node test suite (npm test): runtime, cloth, clothing and integrity tests against the committed output/.
+# No Blender in CI: the build (blender/) is run locally; CI checks what is committed.
+# PROVISIONAL (ROADMAP decision 3): kept on a local branch, not pushed; the roadmap recommends pushing it after M2.
+# Note: tests/cloth.test.mjs asserts a PROVISIONAL threshold for the chaotic coat case (>= 6 of 8 perturbations);
+# on the build of 2026-10-02 it measures 5 of 8, so this job is red until the owner decides decision 3.
+name: test
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node --version
+      - run: npm test

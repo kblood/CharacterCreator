@@ -9,7 +9,7 @@
 - **Garments in the browser:** use our own small XPBD solver in plain JS (candidate D). It was the only solver with 0 collision penetrations in all 12 test runs. It is also stable, deterministic and about 2 KB gzipped.
 - **Jolt soft body** is the fallback option. It was the fastest at 2048 particles. But at that resolution the skirt flips up in about 40 % of the frames.
 - **Hair and loose parts:** use VRM spring bones.
-- **Data format:** glTF with `COLOR_0.r` as the cloth mask, plus a small `extras.cloth` block for parameters, and colliders defined as capsules between canonical joints.
+- **Data format:** glTF with the custom vertex attribute `_CLOTH_PIN` as the cloth mask (see [CLOTH_SPEC.md](CLOTH_SPEC.md); this report first proposed `COLOR_0.r`, see section 6), plus a small `extras.cloth` block for parameters, and colliders defined as capsules between canonical joints.
 
 All numbers come from the experiment in `experiments/cloth/`; its README lists the commands to reproduce them.
 
@@ -197,17 +197,16 @@ C runs on the GPU, so it is timed separately:
 Each garment is a skinned glTF mesh on the body skeleton, exactly as garments are loaded now.
 
 **Mask.**
-- `COLOR_0.r` is the cloth mask: 1 = follows the skin, 0 = fully simulated, with a smooth gradient in between.
-- `G` and `B` are reserved and written as 1.
-- `COLOR_0` is used because Blender, Unity, Unreal and Godot all import it. Underscore-prefixed custom attributes are dropped by several importers.
-- If the viewer ever needs vertex colours for tinting, move the mask to a named attribute and keep `COLOR_0` for colour.
+- The custom vertex attribute `_CLOTH_PIN` (one float per vertex) is the cloth mask: 1 = follows the skin, 0 = fully simulated, with a smooth gradient in between. [CLOTH_SPEC.md](CLOTH_SPEC.md) is the normative definition.
+- This report first proposed `COLOR_0.r`, because Blender, Unity, Unreal and Godot all import vertex colours, while underscore-prefixed custom attributes are dropped by several importers. The build uses `_CLOTH_PIN` instead, because three.js multiplies `COLOR_0` into the base colour and darkened the cloth (CLOTH_SPEC, "Deviation from a COLOR_0 mask").
+- An engine that needs a vertex-colour mask copies `_CLOTH_PIN` into one channel on import, or uses the exporter's `pinAsColor` option (docs/EXPORT.md), which also writes the mask as `COLOR_0`.
 
 **Parameters.** Mesh `extras.cloth`, all in SI units:
 
 ```json
 { "cloth": {
   "version": 1,
-  "maxDistance": 0.6,          // m; per vertex: (1 - COLOR_0.r) * maxDistance
+  "maxDistance": 0.6,          // m; per vertex: (1 - _CLOTH_PIN) * maxDistance
   "stretchStiffness": 1.0,     // 0..1 (1 = inextensible)
   "bendStiffness": 0.05,       // 0..1
   "damping": 0.4,              // 1/s air drag relative to the wind
@@ -241,7 +240,7 @@ Each garment is a skinned glTF mesh on the body skeleton, exactly as garments ar
 | **Native Jolt** (any C++ engine) | `SoftBodySharedSettings` | `Skinned.mMaxDistance = max(1 mm, (1-mask)·maxDistance)`; `mInvMass = 0` where mask = 1 | Capsule bodies | `mCompliance`, `mLinearDamping`, `mFriction` |
 | **Hair**, all engines | `VRMC_springBone` via UniVRM, VRM4U, the Godot VRM add-on or three-vrm | – | – | – |
 
-Import in each engine is a small editor script that reads `COLOR_0` and `extras` from the glTF: Unity through glTFast or UnityGLTF with a post-processor, Unreal through a Python or editor utility, Godot through an import script.
+Import in each engine is a small editor script that reads `_CLOTH_PIN` (or `COLOR_0` from a `pinAsColor` export) and `extras` from the glTF: Unity through glTFast or UnityGLTF with a post-processor, Unreal through a Python or editor utility, Godot through an import script.
 
 ## 8. Risks, and what was not verified
 

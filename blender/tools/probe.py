@@ -1,7 +1,7 @@
 """Diagnostic only (not part of the build): print MPFB's default macro dict, vertex/shape-key/
 vertex-group info and the bbox of a freshly created human.
 
-Run: C:\\Tools\\Blender\\blender.exe -b --python blender/tools/probe.py
+Run: <blender> -b --python blender/tools/probe.py
 Grep the output for "PROBE".
 """
 import bpy

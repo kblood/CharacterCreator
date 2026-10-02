@@ -1,0 +1,25 @@
+{
+ "commit": "87bd0d7",
+ "node": "v24.6.0",
+ "measured": "2026-10-02",
+ "command": "npm test",
+ "tests": 206,
+ "pass": 204,
+ "fail": 1,
+ "skipped": 1,
+ "todo": 0,
+ "durationMs": 287618.011,
+ "failing": [
+  "long coat over T-shirt + jeans, female (chaotic): >= 6 of 8 perturbations within <= 1 v / 15 mm"
+ ],
+ "reports": [
+  {
+   "name": "coat layers female summary",
+   "value": {
+    "pass": 5,
+    "of": 8,
+    "stretchP99Median": 1.593
+   }
+  }
+ ]
+}

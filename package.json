@@ -1,0 +1,16 @@
+{
+  "name": "charactercreator",
+  "version": "0.0.0",
+  "private": true,
+  "description": "CharacterCreator: MakeHuman/MPFB based character system (Blender build, glTF output, three.js runtime)",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test --test-concurrency=4 \"tests/*.test.mjs\"",
+    "test:cloth": "node --test tests/cloth.test.mjs",
+    "integrity": "node tools/cloth_integrity.mjs"
+  }
+}

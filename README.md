@@ -41,12 +41,13 @@ Details and the running TODO list: [docs/STATUS.md](docs/STATUS.md).
 
 ## Build the assets
 
-Requires Blender 5.2 (portable at `C:\Tools\Blender`) with the MPFB 2 extension installed
+Requires Blender 5.2 (a portable install is fine; `<blender>` below is the path to its `blender.exe`, `<scratch>` a
+work folder outside the repo) with the MPFB 2 extension installed
 (see [docs/BLENDER_WORKFLOW.md](docs/BLENDER_WORKFLOW.md) for the install workaround).
 
 ```powershell
 python blender\tools\fetch_mh_assets.py      # once: MakeHuman CC0 system asset pack (280 MB download) -> build\mh_assets
-C:\Tools\Blender\blender.exe -b --python blender\build_base.py -- output\base_body.glb
+<blender> -b --python blender\build_base.py -- output\base_body.glb
 python blender\tools\check_glb.py            # must end with CHECK OK
 node tools\make_colliders.mjs               # output\body_colliders.json (cloth colliders)
 node tools\cloth_check.mjs                  # optional: garment penetration report
@@ -103,11 +104,11 @@ are deterministic). Sex: `__set('sex', 'male'|'female'|1|0)` (`__values().sex`);
 ## Tests and baking the animations
 
 ```powershell
-node --test "tests/*.test.mjs"              # Node 24; quotes needed. One three.js test is skipped unless THREE_DIR points at a three package
+npm test                                    # = node --test "tests/*.test.mjs" (Node >= 22; package.json). One three.js test is skipped unless THREE_DIR points at a three package
 node tools/sample_clips.mjs                 # clips -> output/animations/*.json (60 fps default)
 # fresh .blend of the base body into a scratch folder (never into output/), then bake:
-C:\Tools\Blender\blender.exe -b --python blender\build_base.py -- <scratch>\base_body.glb --blend <scratch>\base_body.blend
-C:\Tools\Blender\blender.exe -b --python blender\bake_clips.py -- --blend <scratch>\base_body.blend
+<blender> -b --python blender\build_base.py -- <scratch>\base_body.glb --blend <scratch>\base_body.blend
+<blender> -b --python blender\bake_clips.py -- --blend <scratch>\base_body.blend
 node tools/check_anim_glb.mjs               # must end with CHECK OK
 ```
 

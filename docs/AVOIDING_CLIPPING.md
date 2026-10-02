@@ -87,6 +87,10 @@ Fast loops used while tuning: build into a scratch folder (`build_base.py -- <di
 **Coat over T-shirt + jeans, female (`tests/cloth.test.mjs`)** - chaotic. Moving the T-shirt by +-1e-7 m flips
 pass / fail; 4 of 8 perturbations pass on the dress / jacket / boots build (1 of 8 before). Seen: tee / jeans at
 the front hip through the coat in run, 2-4 vertices, 24-36 mm.
+- Since ROADMAP M2 the test runs a FIXED set of 8 seeded perturbations (`tools/perturb.mjs`, the T-shirt's bind
+  positions +-1e-7 m) and asserts how many pass (`COAT_CHAOTIC` in `tests/cloth.test.mjs`; threshold >= 6 of 8 is
+  PROVISIONAL until the owner decides ROADMAP decision 3). Same seeds -> same count on every run. Measured on
+  87bd0d7: 5 of 8 (seeds 3, 4, 6, 7, 8 pass), so the test is red; the solver is not tuned to make it green.
 - Hypothesis: the coat's free panel at the hip sits within one solver iteration of the layer; a small phase
   difference decides which side it settles on.
 - Next: measure the margin (closest coat particle to the tee at the hip over the run) instead of pass / fail;

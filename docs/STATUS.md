@@ -5,7 +5,7 @@
 - `blender/build_base.py` -> `output/base_body.glb` (7.43 MB): 12 morph targets, body + eyes/brows/lashes/teeth/tongue,
   textured skin (see below), plus the hair GLBs,
   plus `output/base_body.joints.json` (bind-pose joint heads + per-morph joint offsets).
-  Run: `C:\Tools\Blender\blender.exe -b --python blender/build_base.py -- <out.glb>`
+  Run: `<blender> -b --python blender/build_base.py -- <out.glb>`
 - `web/` Three.js viewer. `web/character.js` is the engine-agnostic mapping: bipolar slider -1..1 = two morph
   targets, per-slider `scale` caps a side's influence, `applySkeleton()` moves bones from the sidecar,
   `validateMorphs()` reports missing morph names.
@@ -475,6 +475,8 @@ Tests: 206, 204 pass, 1 skipped, 1 fail (the chaotic coat test below; 4 of 8 per
 
 ## Open issues
 - `tests/cloth.test.mjs` coat over T-shirt + jeans, female, is chaotic (see above) and fails on the current build.
+  Since ROADMAP M2 it asserts over 8 fixed perturbations (>= 6 of 8, PROVISIONAL, decision 3); measured 5 of 8.
+  Measured baseline of this build: [docs/baseline/](baseline/).
 - Visible cloth penetrations: 20 of 5108 cases remain above threshold in the full integrity matrix (see "Dress,
   jacket, boots"); 2 of them are in `tests/integrity.test.mjs` `KNOWN_FAILING` (old body). Fingertips through the coat side
   in walk (hands are not a cloth layer). Coat stretch p99 in the 10 s matrix: 1.666 / 1.656 on female (the test

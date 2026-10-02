@@ -2,7 +2,7 @@
 exported as GLB, plus a joints sidecar so the skeleton can follow the morphs at runtime.
 
 Run (from the project root, PowerShell):
-    C:\\Tools\\Blender\\blender.exe -b --python blender/build_base.py -- [out.glb] [--blend PATH] [--no-ground-fix]
+    <blender> -b --python blender/build_base.py -- [out.glb] [--blend PATH] [--no-ground-fix]
 
     out.glb          default <project>/output/base_body.glb  (env CC_OUT_GLB)
     --blend PATH     where the .blend snapshot is saved; default <project>/build/blend/base_body.blend

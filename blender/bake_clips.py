@@ -4,7 +4,7 @@ output/base_body_anim.glb = the base body (Body + eye/brow/lash/teeth/tongue mes
 Contract: docs/ANIMATION_PLAN.md section 4 D.
 
 Run (project root, PowerShell), after `node tools/sample_clips.mjs`:
-    C:\\Tools\\Blender\\blender.exe -b --python blender/bake_clips.py -- --blend <scratch>/base_body.blend
+    <blender> -b --python blender/bake_clips.py -- --blend <scratch>/base_body.blend
         [--anim-dir output/animations] [--out output/base_body_anim.glb]
 
 --blend must be a FRESH build (blender/build_base.py -- <scratch>/base_body.glb --blend <scratch>/base_body.blend);
