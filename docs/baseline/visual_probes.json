@@ -1,0 +1,6212 @@
+{
+ "tool": "visual_probes",
+ "roadmap": "M2b",
+ "commit": "042fe10",
+ "node": "v24.6.0",
+ "measured": "2026-10-02",
+ "quick": false,
+ "ms": {
+  "animzone": 766,
+  "integrity": 9,
+  "jaw": 1058375,
+  "dressstep": 21028,
+  "hair": 22995,
+  "dresscoat": 47543
+ },
+ "cases": {
+  "animzone": {
+   "what": "base_body_anim.glb carries the body _CCZONE attribute like base_body.glb (ROADMAP M2b; hidden-skin zones are lost in the animation GLB without it).",
+   "baseBodyHasZone": true,
+   "animBodyHasZone": false,
+   "perMesh": {
+    "base_body.glb": {
+     "Body": true,
+     "Eyebrows": false,
+     "Eyelashes": false,
+     "Eyes": false,
+     "Teeth": false,
+     "Tongue": false
+    },
+    "base_body_anim.glb": {
+     "Body": false,
+     "Eyebrows": false,
+     "Eyelashes": false,
+     "Eyes": false,
+     "Teeth": false,
+     "Tongue": false
+    }
+   },
+   "target": "animBodyHasZone = true"
+  },
+  "integrity": {
+   "what": "Existing numbers from the M2 integrity baseline, kept as the baseline of three faults (ROADMAP M2b). No new run.",
+   "method": {
+    "source": "docs/baseline/integrity_{default,moves,land}.json (failingRows + hitRows; rows without any hit are not stored there, i.e. 0)",
+    "braIdleFidget": "pair bra:<inner> in clip idle_fidget (every outfit and body)",
+    "fingersThroughCoat": "pair trenchcoat:body whose deepest POKE vertex is on a hand / finger bone (any clip; the count n is all poke vertices of that case, the bone is only that of the deepest)",
+    "coatJeansJump": "pair trenchcoat:jeans in clip jump"
+   },
+   "note": "dress / jacket outfits have no bra row in idle_fidget: the bra under them had no hit above 2 mm in the baseline; the reported 3 v / 29.9 mm is the female underwear-only and boots outfits",
+   "sources": {
+    "default": {
+     "commit": "87bd0d7",
+     "measured": "2026-10-02",
+     "cases": 5108,
+     "failing": 20
+    },
+    "moves": {
+     "commit": "87bd0d7",
+     "measured": "2026-10-02",
+     "cases": 7662,
+     "failing": 63
+    },
+    "land": {
+     "commit": "87bd0d7",
+     "measured": "2026-10-02",
+     "cases": 3831,
+     "failing": 32
+    }
+   },
+   "braIdleFidget": [
+    {
+     "timeline": "moves",
+     "outfit": "underwear",
+     "body": "female",
+     "pair": "bra:body",
+     "clip": "idle_fidget",
+     "poke": {
+      "n": 0,
+      "mm": 0,
+      "bone": null
+     },
+     "sink": {
+      "n": 3,
+      "mm": 29.9,
+      "bone": "spine_02"
+     },
+     "fail": true
+    },
+    {
+     "timeline": "moves",
+     "outfit": "boots+jeans",
+     "body": "female",
+     "pair": "bra:body",
+     "clip": "idle_fidget",
+     "poke": {
+      "n": 0,
+      "mm": 0,
+      "bone": null
+     },
+     "sink": {
+      "n": 3,
+      "mm": 29.9,
+      "bone": "spine_02"
+     },
+     "fail": true
+    },
+    {
+     "timeline": "moves",
+     "outfit": "boots+shorts",
+     "body": "female",
+     "pair": "bra:body",
+     "clip": "idle_fidget",
+     "poke": {
+      "n": 0,
+      "mm": 0,
+      "bone": null
+     },
+     "sink": {
+      "n": 3,
+      "mm": 29.9,
+      "bone": "spine_02"
+     },
+     "fail": true
+    },
+    {
+     "timeline": "moves",
+     "outfit": "boots+skirt",
+     "body": "female",
+     "pair": "bra:body",
+     "clip": "idle_fidget",
+     "poke": {
+      "n": 0,
+      "mm": 0,
+      "bone": null
+     },
+     "sink": {
+      "n": 3,
+      "mm": 29.9,
+      "bone": "spine_02"
+     },
+     "fail": true
+    }
+   ],
+   "fingersThroughCoat": [
+    {
+     "timeline": "default",
+     "outfit": "tee+jeans+coat+shoes",
+     "body": "muscular",
+     "pair": "trenchcoat:body",
+     "clip": "walk",
+     "poke": {
+      "n": 1,
+      "mm": 28.7,
+      "bone": "hand_l"
+     },
+     "sink": {
+      "n": 0,
+      "mm": 0,
+      "bone": null
+     },
+     "fail": false
+    },
+    {
+     "timeline": "default",
+     "outfit": "tee+skirt+coat",
+     "body": "muscular",
+     "pair": "trenchcoat:body",
+     "clip": "walk",
+     "poke": {
+      "n": 1,
+      "mm": 28.8,
+      "bone": "hand_l"
+     },
+     "sink": {
+      "n": 0,
+      "mm": 0,
+      "bone": null
+     },
+     "fail": false
+    },
+    {
+     "timeline": "default",
+     "outfit": "jeans+coat",
+     "body": "muscular",
+     "pair": "trenchcoat:body",
+     "clip": "walk",
+     "poke": {
+      "n": 2,
+      "mm": 28.8,
+      "bone": "hand_l"
+     },
+     "sink": {
+      "n": 0,
+      "mm": 0,
+      "bone": null
+     },
+     "fail": false
+    },
+    {
+     "timeline": "default",
+     "outfit": "coat",
+     "body": "muscular",
+     "pair": "trenchcoat:body",
+     "clip": "walk",
+     "poke": {
+      "n": 2,
+      "mm": 28.9,
+      "bone": "hand_l"
+     },
+     "sink": {
+      "n": 2,
+      "mm": 25.7,
+      "bone": "thigh_l"
+     },
+     "fail": false
+    },
+    {
+     "timeline": "default",
+     "outfit": "coat+shoes",
+     "body": "muscular",
+     "pair": "trenchcoat:body",
+     "clip": "walk",
+     "poke": {
+      "n": 2,
+      "mm": 28.8,
+      "bone": "hand_l"
+     },
+     "sink": {
+      "n": 2,
+      "mm": 22.1,
+      "bone": "thigh_r"
+     },
+     "fail": false
+    },
+    {
+     "timeline": "default",
+     "outfit": "shirt+jeans+coat",
+     "body": "child",
+     "pair": "trenchcoat:body",
+     "clip": "run",
+     "poke": {
+      "n": 1,
+      "mm": 29.2,
+      "bone": "hand_l"
+     },
+     "sink": {
+      "n": 0,
+      "mm": 0,
+      "bone": null
+     },
+     "fail": false
+    },
+    {
+     "timeline": "default",
+     "outfit": "shirt+jeans+coat",
+     "body": "child",
+     "pair": "trenchcoat:body",
+     "clip": "idle>run",
+     "poke": {
+      "n": 1,
+      "mm": 28.8,
+      "bone": "hand_l"
+     },
+     "sink": {
+      "n": 0,
+      "mm": 0,
+      "bone": null
+     },
+     "fail": false
+    },
+    {
+     "timeline": "default",
+     "outfit": "shirt+jeans+coat",
+     "body": "muscular",
+     "pair": "trenchcoat:body",
+     "clip": "walk",
+     "poke": {
+      "n": 1,
+      "mm": 28.8,
+      "bone": "hand_l"
+     },
+     "sink": {
+      "n": 0,
+      "mm": 0,
+      "bone": null
+     },
+     "fail": false
+    }
+   ],
+   "coatJeansJump": [
+    {
+     "timeline": "moves",
+     "outfit": "tee+jeans+coat+shoes",
+     "body": "neutral",
+     "pair": "trenchcoat:jeans",
+     "clip": "jump",
+     "poke": {
+      "n": 5,
+      "mm": 7.4,
+      "bone": "calf_l"
+     },
+     "sink": {
+      "n": 0,
+      "mm": 0,
+      "bone": null
+     },
+     "fail": true
+    }
+   ]
+  },
+  "jaw": {
+   "what": "Red fragment under the jaw with the jacket (ROADMAP M2b). Per body x outfit, max over the bind pose and the sampled frames.",
+   "method": {
+    "teethVisibleBelow": "tooth vertices from which a ray down / 45 deg down (front, back, sides) escapes 0.5 m without hitting drawn skin or any worn garment, but would hit the skin if nothing were hidden (mouth interior seen through hidden skin; rays leaving past the lips do not count)",
+    "tongueVisibleBelow": "the same for the tongue",
+    "hiddenJawNeckTris": "body triangles hidden by the outfit zones (_CCZONE) with a vertex in the jaw (head-weighted, below the lowest tooth) or neck (neck_01-weighted) zone",
+    "hiddenAboveTopVerts": "hidden jaw / neck skin vertices above the top of the garment that hides them + 5 mm (the rule of the late fix in blender/cc_clothing.py)",
+    "uncoveredHiddenTris": "hidden jaw / neck triangles whose outward ray meets no garment within 5 cm (tests/clothing.test.mjs uses 20 cm, which the jacket collar satisfied)",
+    "garmentVertsAtJaw": "garment vertices within 1 cm of the jaw-underside skin",
+    "garmentVertsInsideJawNeck": "garment vertices > 2 mm inside the jaw / neck skin (nearest skin vertex, fan normal)",
+    "frames": "bind + idle 1.5 s, idle_look 6 s, walk 1.5 s, every 0.4 s (30 fps animator, 0.35 s fade skipped)"
+   },
+   "target": "teethVisibleBelow = tongueVisibleBelow = hiddenAboveTopVerts = uncoveredHiddenTris = 0 on every body (jacket outfits)",
+   "jacketTotals": {
+    "rows": 18,
+    "teethVisibleBelow": 4,
+    "tongueVisibleBelow": 0,
+    "hiddenAboveTopVerts": 0,
+    "uncoveredHiddenTris": 664,
+    "garmentVertsAtJaw": 0,
+    "garmentVertsInsideJawNeck": 0
+   },
+   "rows": [
+    {
+     "body": "neutral",
+     "outfit": "jacket+tee+jeans+shoes",
+     "worn": [
+      "briefs",
+      "tshirt",
+      "jeans",
+      "shoes",
+      "jacket"
+     ],
+     "hiddenJawNeckTris": 50,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 38,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 38,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 38
+     }
+    },
+    {
+     "body": "neutral",
+     "outfit": "jacket+shirt+shorts+boots",
+     "worn": [
+      "briefs",
+      "shirt",
+      "shorts",
+      "boots",
+      "jacket"
+     ],
+     "hiddenJawNeckTris": 63,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 38,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 38,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 38
+     }
+    },
+    {
+     "body": "neutral",
+     "outfit": "tee+jeans+shoes",
+     "worn": [
+      "briefs",
+      "tshirt",
+      "jeans",
+      "shoes"
+     ],
+     "hiddenJawNeckTris": 6,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 0,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 0,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 0
+     }
+    },
+    {
+     "body": "neutral",
+     "outfit": "shirt+jeans+coat",
+     "worn": [
+      "briefs",
+      "shirt",
+      "jeans",
+      "trenchcoat"
+     ],
+     "hiddenJawNeckTris": 17,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 0,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 0,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 0
+     }
+    },
+    {
+     "body": "neutral",
+     "outfit": "hoodie+jeans+shoes",
+     "worn": [
+      "briefs",
+      "hoodie",
+      "jeans",
+      "shoes"
+     ],
+     "hiddenJawNeckTris": 0,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 0,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 0,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 0
+     }
+    },
+    {
+     "body": "neutral",
+     "outfit": "dress+shoes",
+     "worn": [
+      "briefs",
+      "dress",
+      "shoes"
+     ],
+     "hiddenJawNeckTris": 0,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 0,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 0,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 0
+     }
+    },
+    {
+     "body": "neutral",
+     "outfit": "naked",
+     "worn": [
+      "briefs"
+     ],
+     "hiddenJawNeckTris": 0,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 0,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 0,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 0
+     }
+    },
+    {
+     "body": "tall",
+     "outfit": "jacket+tee+jeans+shoes",
+     "worn": [
+      "briefs",
+      "tshirt",
+      "jeans",
+      "shoes",
+      "jacket"
+     ],
+     "hiddenJawNeckTris": 50,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 38,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 38,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 38
+     }
+    },
+    {
+     "body": "tall",
+     "outfit": "jacket+shirt+shorts+boots",
+     "worn": [
+      "briefs",
+      "shirt",
+      "shorts",
+      "boots",
+      "jacket"
+     ],
+     "hiddenJawNeckTris": 63,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 38,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 38,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 38
+     }
+    },
+    {
+     "body": "tall",
+     "outfit": "tee+jeans+shoes",
+     "worn": [
+      "briefs",
+      "tshirt",
+      "jeans",
+      "shoes"
+     ],
+     "hiddenJawNeckTris": 6,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 0,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 0,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 0
+     }
+    },
+    {
+     "body": "tall",
+     "outfit": "shirt+jeans+coat",
+     "worn": [
+      "briefs",
+      "shirt",
+      "jeans",
+      "trenchcoat"
+     ],
+     "hiddenJawNeckTris": 17,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 0,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 0,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 0
+     }
+    },
+    {
+     "body": "tall",
+     "outfit": "hoodie+jeans+shoes",
+     "worn": [
+      "briefs",
+      "hoodie",
+      "jeans",
+      "shoes"
+     ],
+     "hiddenJawNeckTris": 0,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 0,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 0,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 0
+     }
+    },
+    {
+     "body": "tall",
+     "outfit": "dress+shoes",
+     "worn": [
+      "briefs",
+      "dress",
+      "shoes"
+     ],
+     "hiddenJawNeckTris": 0,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 0,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 0,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 0
+     }
+    },
+    {
+     "body": "tall",
+     "outfit": "naked",
+     "worn": [
+      "briefs"
+     ],
+     "hiddenJawNeckTris": 0,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 0,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 0,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 0
+     }
+    },
+    {
+     "body": "short",
+     "outfit": "jacket+tee+jeans+shoes",
+     "worn": [
+      "briefs",
+      "tshirt",
+      "jeans",
+      "shoes",
+      "jacket"
+     ],
+     "hiddenJawNeckTris": 46,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 34,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 34,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 34
+     }
+    },
+    {
+     "body": "short",
+     "outfit": "jacket+shirt+shorts+boots",
+     "worn": [
+      "briefs",
+      "shirt",
+      "shorts",
+      "boots",
+      "jacket"
+     ],
+     "hiddenJawNeckTris": 59,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 34,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 34,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 34
+     }
+    },
+    {
+     "body": "short",
+     "outfit": "tee+jeans+shoes",
+     "worn": [
+      "briefs",
+      "tshirt",
+      "jeans",
+      "shoes"
+     ],
+     "hiddenJawNeckTris": 6,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 0,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 0,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 0
+     }
+    },
+    {
+     "body": "short",
+     "outfit": "shirt+jeans+coat",
+     "worn": [
+      "briefs",
+      "shirt",
+      "jeans",
+      "trenchcoat"
+     ],
+     "hiddenJawNeckTris": 17,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 0,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 0,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 0
+     }
+    },
+    {
+     "body": "short",
+     "outfit": "hoodie+jeans+shoes",
+     "worn": [
+      "briefs",
+      "hoodie",
+      "jeans",
+      "shoes"
+     ],
+     "hiddenJawNeckTris": 0,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 0,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 0,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 0
+     }
+    },
+    {
+     "body": "short",
+     "outfit": "dress+shoes",
+     "worn": [
+      "briefs",
+      "dress",
+      "shoes"
+     ],
+     "hiddenJawNeckTris": 0,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 0,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 0,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 0
+     }
+    },
+    {
+     "body": "short",
+     "outfit": "naked",
+     "worn": [
+      "briefs"
+     ],
+     "hiddenJawNeckTris": 0,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 0,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 0,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 0
+     }
+    },
+    {
+     "body": "heavy",
+     "outfit": "jacket+tee+jeans+shoes",
+     "worn": [
+      "briefs",
+      "tshirt",
+      "jeans",
+      "shoes",
+      "jacket"
+     ],
+     "hiddenJawNeckTris": 50,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 38,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 38,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 38
+     }
+    },
+    {
+     "body": "heavy",
+     "outfit": "jacket+shirt+shorts+boots",
+     "worn": [
+      "briefs",
+      "shirt",
+      "shorts",
+      "boots",
+      "jacket"
+     ],
+     "hiddenJawNeckTris": 63,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 38,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 38,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 38
+     }
+    },
+    {
+     "body": "heavy",
+     "outfit": "tee+jeans+shoes",
+     "worn": [
+      "briefs",
+      "tshirt",
+      "jeans",
+      "shoes"
+     ],
+     "hiddenJawNeckTris": 6,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 0,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 0,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 0
+     }
+    },
+    {
+     "body": "heavy",
+     "outfit": "shirt+jeans+coat",
+     "worn": [
+      "briefs",
+      "shirt",
+      "jeans",
+      "trenchcoat"
+     ],
+     "hiddenJawNeckTris": 17,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 0,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 0,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 0
+     }
+    },
+    {
+     "body": "heavy",
+     "outfit": "hoodie+jeans+shoes",
+     "worn": [
+      "briefs",
+      "hoodie",
+      "jeans",
+      "shoes"
+     ],
+     "hiddenJawNeckTris": 0,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 0,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 0,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 0
+     }
+    },
+    {
+     "body": "heavy",
+     "outfit": "dress+shoes",
+     "worn": [
+      "briefs",
+      "dress",
+      "shoes"
+     ],
+     "hiddenJawNeckTris": 0,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 0,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 0,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 0
+     }
+    },
+    {
+     "body": "heavy",
+     "outfit": "naked",
+     "worn": [
+      "briefs"
+     ],
+     "hiddenJawNeckTris": 0,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 0,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 0,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 0
+     }
+    },
+    {
+     "body": "child",
+     "outfit": "jacket+tee+jeans+shoes",
+     "worn": [
+      "briefs",
+      "tshirt",
+      "jeans",
+      "shoes",
+      "jacket"
+     ],
+     "hiddenJawNeckTris": 46,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 2,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 34,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "idle_look",
+      "t": 2,
+      "score": 36,
+      "teeth": 2,
+      "tongue": 0,
+      "uncovered": 34
+     }
+    },
+    {
+     "body": "child",
+     "outfit": "jacket+shirt+shorts+boots",
+     "worn": [
+      "briefs",
+      "shirt",
+      "shorts",
+      "boots",
+      "jacket"
+     ],
+     "hiddenJawNeckTris": 59,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 2,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 28,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "walk",
+      "t": 0.4,
+      "score": 29,
+      "teeth": 1,
+      "tongue": 0,
+      "uncovered": 28
+     }
+    },
+    {
+     "body": "child",
+     "outfit": "tee+jeans+shoes",
+     "worn": [
+      "briefs",
+      "tshirt",
+      "jeans",
+      "shoes"
+     ],
+     "hiddenJawNeckTris": 6,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 0,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 0,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 0
+     }
+    },
+    {
+     "body": "child",
+     "outfit": "shirt+jeans+coat",
+     "worn": [
+      "briefs",
+      "shirt",
+      "jeans",
+      "trenchcoat"
+     ],
+     "hiddenJawNeckTris": 17,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 0,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 0,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 0
+     }
+    },
+    {
+     "body": "child",
+     "outfit": "hoodie+jeans+shoes",
+     "worn": [
+      "briefs",
+      "hoodie",
+      "jeans",
+      "shoes"
+     ],
+     "hiddenJawNeckTris": 0,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 0,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 0,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 0
+     }
+    },
+    {
+     "body": "child",
+     "outfit": "dress+shoes",
+     "worn": [
+      "briefs",
+      "dress",
+      "shoes"
+     ],
+     "hiddenJawNeckTris": 0,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 0,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 0,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 0
+     }
+    },
+    {
+     "body": "child",
+     "outfit": "naked",
+     "worn": [
+      "briefs"
+     ],
+     "hiddenJawNeckTris": 0,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 0,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 0,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 0
+     }
+    },
+    {
+     "body": "old",
+     "outfit": "jacket+tee+jeans+shoes",
+     "worn": [
+      "briefs",
+      "tshirt",
+      "jeans",
+      "shoes",
+      "jacket"
+     ],
+     "hiddenJawNeckTris": 50,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 40,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "walk",
+      "t": 0.4,
+      "score": 40,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 40
+     }
+    },
+    {
+     "body": "old",
+     "outfit": "jacket+shirt+shorts+boots",
+     "worn": [
+      "briefs",
+      "shirt",
+      "shorts",
+      "boots",
+      "jacket"
+     ],
+     "hiddenJawNeckTris": 63,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 38,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 38,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 38
+     }
+    },
+    {
+     "body": "old",
+     "outfit": "tee+jeans+shoes",
+     "worn": [
+      "briefs",
+      "tshirt",
+      "jeans",
+      "shoes"
+     ],
+     "hiddenJawNeckTris": 6,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 0,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 0,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 0
+     }
+    },
+    {
+     "body": "old",
+     "outfit": "shirt+jeans+coat",
+     "worn": [
+      "briefs",
+      "shirt",
+      "jeans",
+      "trenchcoat"
+     ],
+     "hiddenJawNeckTris": 17,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 1,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "idle_look",
+      "t": 2.4,
+      "score": 1,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 1
+     }
+    },
+    {
+     "body": "old",
+     "outfit": "hoodie+jeans+shoes",
+     "worn": [
+      "briefs",
+      "hoodie",
+      "jeans",
+      "shoes"
+     ],
+     "hiddenJawNeckTris": 0,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 0,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 0,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 0
+     }
+    },
+    {
+     "body": "old",
+     "outfit": "dress+shoes",
+     "worn": [
+      "briefs",
+      "dress",
+      "shoes"
+     ],
+     "hiddenJawNeckTris": 0,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 0,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 0,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 0
+     }
+    },
+    {
+     "body": "old",
+     "outfit": "naked",
+     "worn": [
+      "briefs"
+     ],
+     "hiddenJawNeckTris": 0,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 0,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 0,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 0
+     }
+    },
+    {
+     "body": "muscular",
+     "outfit": "jacket+tee+jeans+shoes",
+     "worn": [
+      "briefs",
+      "tshirt",
+      "jeans",
+      "shoes",
+      "jacket"
+     ],
+     "hiddenJawNeckTris": 50,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 38,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 38,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 38
+     }
+    },
+    {
+     "body": "muscular",
+     "outfit": "jacket+shirt+shorts+boots",
+     "worn": [
+      "briefs",
+      "shirt",
+      "shorts",
+      "boots",
+      "jacket"
+     ],
+     "hiddenJawNeckTris": 63,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 38,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 38,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 38
+     }
+    },
+    {
+     "body": "muscular",
+     "outfit": "tee+jeans+shoes",
+     "worn": [
+      "briefs",
+      "tshirt",
+      "jeans",
+      "shoes"
+     ],
+     "hiddenJawNeckTris": 6,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 0,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 0,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 0
+     }
+    },
+    {
+     "body": "muscular",
+     "outfit": "shirt+jeans+coat",
+     "worn": [
+      "briefs",
+      "shirt",
+      "jeans",
+      "trenchcoat"
+     ],
+     "hiddenJawNeckTris": 17,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 0,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 0,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 0
+     }
+    },
+    {
+     "body": "muscular",
+     "outfit": "hoodie+jeans+shoes",
+     "worn": [
+      "briefs",
+      "hoodie",
+      "jeans",
+      "shoes"
+     ],
+     "hiddenJawNeckTris": 0,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 0,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 0,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 0
+     }
+    },
+    {
+     "body": "muscular",
+     "outfit": "dress+shoes",
+     "worn": [
+      "briefs",
+      "dress",
+      "shoes"
+     ],
+     "hiddenJawNeckTris": 0,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 0,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 0,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 0
+     }
+    },
+    {
+     "body": "muscular",
+     "outfit": "naked",
+     "worn": [
+      "briefs"
+     ],
+     "hiddenJawNeckTris": 0,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 0,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 0,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 0
+     }
+    },
+    {
+     "body": "female",
+     "outfit": "jacket+tee+jeans+shoes",
+     "worn": [
+      "panties",
+      "bra",
+      "tshirt",
+      "jeans",
+      "shoes",
+      "jacket"
+     ],
+     "hiddenJawNeckTris": 50,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 38,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 38,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 38
+     }
+    },
+    {
+     "body": "female",
+     "outfit": "jacket+shirt+shorts+boots",
+     "worn": [
+      "panties",
+      "bra",
+      "shirt",
+      "shorts",
+      "boots",
+      "jacket"
+     ],
+     "hiddenJawNeckTris": 63,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 38,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 38,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 38
+     }
+    },
+    {
+     "body": "female",
+     "outfit": "tee+jeans+shoes",
+     "worn": [
+      "panties",
+      "bra",
+      "tshirt",
+      "jeans",
+      "shoes"
+     ],
+     "hiddenJawNeckTris": 6,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 0,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 0,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 0
+     }
+    },
+    {
+     "body": "female",
+     "outfit": "shirt+jeans+coat",
+     "worn": [
+      "panties",
+      "bra",
+      "shirt",
+      "jeans",
+      "trenchcoat"
+     ],
+     "hiddenJawNeckTris": 17,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 0,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 0,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 0
+     }
+    },
+    {
+     "body": "female",
+     "outfit": "hoodie+jeans+shoes",
+     "worn": [
+      "panties",
+      "bra",
+      "hoodie",
+      "jeans",
+      "shoes"
+     ],
+     "hiddenJawNeckTris": 0,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 0,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 0,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 0
+     }
+    },
+    {
+     "body": "female",
+     "outfit": "dress+shoes",
+     "worn": [
+      "panties",
+      "bra",
+      "dress",
+      "shoes"
+     ],
+     "hiddenJawNeckTris": 0,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 0,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 0,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 0
+     }
+    },
+    {
+     "body": "female",
+     "outfit": "naked",
+     "worn": [
+      "panties",
+      "bra"
+     ],
+     "hiddenJawNeckTris": 0,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 0,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 0,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 0
+     }
+    },
+    {
+     "body": "male",
+     "outfit": "jacket+tee+jeans+shoes",
+     "worn": [
+      "briefs",
+      "tshirt",
+      "jeans",
+      "shoes",
+      "jacket"
+     ],
+     "hiddenJawNeckTris": 50,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 38,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 38,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 38
+     }
+    },
+    {
+     "body": "male",
+     "outfit": "jacket+shirt+shorts+boots",
+     "worn": [
+      "briefs",
+      "shirt",
+      "shorts",
+      "boots",
+      "jacket"
+     ],
+     "hiddenJawNeckTris": 63,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 38,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 38,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 38
+     }
+    },
+    {
+     "body": "male",
+     "outfit": "tee+jeans+shoes",
+     "worn": [
+      "briefs",
+      "tshirt",
+      "jeans",
+      "shoes"
+     ],
+     "hiddenJawNeckTris": 6,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 0,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 0,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 0
+     }
+    },
+    {
+     "body": "male",
+     "outfit": "shirt+jeans+coat",
+     "worn": [
+      "briefs",
+      "shirt",
+      "jeans",
+      "trenchcoat"
+     ],
+     "hiddenJawNeckTris": 17,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 0,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 0,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 0
+     }
+    },
+    {
+     "body": "male",
+     "outfit": "hoodie+jeans+shoes",
+     "worn": [
+      "briefs",
+      "hoodie",
+      "jeans",
+      "shoes"
+     ],
+     "hiddenJawNeckTris": 0,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 0,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 0,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 0
+     }
+    },
+    {
+     "body": "male",
+     "outfit": "dress+shoes",
+     "worn": [
+      "briefs",
+      "dress",
+      "shoes"
+     ],
+     "hiddenJawNeckTris": 0,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 0,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 0,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 0
+     }
+    },
+    {
+     "body": "male",
+     "outfit": "naked",
+     "worn": [
+      "briefs"
+     ],
+     "hiddenJawNeckTris": 0,
+     "hiddenAboveTopVerts": 0,
+     "hiddenAboveTopMm": 0,
+     "frames": 22,
+     "teethVisibleBelow": 0,
+     "tongueVisibleBelow": 0,
+     "uncoveredHiddenTris": 0,
+     "garmentVertsAtJaw": 0,
+     "garmentVertsInsideJawNeck": 0,
+     "worst": {
+      "clip": "bind",
+      "t": 0,
+      "score": 0,
+      "teeth": 0,
+      "tongue": 0,
+      "uncovered": 0
+     }
+    }
+   ]
+  },
+  "dressstep": {
+   "what": "Step / bump in the dress skirt at the hips (ROADMAP M2b), cloth on and off, male and female.",
+   "method": {
+    "band": "dress edges with bind midpoint between 15 cm under the thigh joints and 10 cm over the pelvis joint (rest pose, slider shape)",
+    "angleMaxDeg": "max angle between the normals of the two drawn triangles of an edge (welded at UV seams), max over frames",
+    "angleExcessDeg": "max over edges and frames of (posed angle - bind angle): the belt rim and other built-in creases cancel out",
+    "ringJumpMm": "max |dy| along ring edges (bind |dy| < 0.25 x length), posed",
+    "ringJumpExcessMm": "the same minus the bind |dy| of that edge",
+    "all_hipSides": "every number twice: 'all' = the whole band, 'hipSides' = edges 45-135 deg around from the front on either side (atan2(x, z) of the bind midpoint)",
+    "frames": "tools/cloth_integrity.mjs runCase default timeline (worker path), measured every 3rd 60 Hz frame in idle / walk / run"
+   },
+   "target": "none yet (cause unknown): the cloth-on rows should come close to the cloth-off rows; this is the baseline",
+   "rows": [
+    {
+     "body": "male",
+     "cloth": true,
+     "clip": "idle",
+     "frames": 60,
+     "band": {
+      "fromAboveThighMm": -150,
+      "toAbovePelvisMm": 100,
+      "edges": 748,
+      "ringEdges": 254,
+      "sideEdges": 392
+     },
+     "bindAngleMaxDeg": 41.1,
+     "all": {
+      "angleMaxDeg": 90.8,
+      "angleExcessDeg": 87.7,
+      "ringJumpMm": 20.9,
+      "ringJumpExcessMm": 19.1,
+      "worstAngle": {
+       "deg": 88.1,
+       "bindDeg": 0.4,
+       "yAboveThighMm": -41,
+       "aroundDeg": 24
+      },
+      "worstRing": {
+       "mm": 20.9,
+       "bindMm": 1.8,
+       "yAboveThighMm": -74,
+       "aroundDeg": 75
+      }
+     },
+     "hipSides": {
+      "angleMaxDeg": 79.9,
+      "angleExcessDeg": 78.5,
+      "ringJumpMm": 20.9,
+      "ringJumpExcessMm": 19.1,
+      "worstAngle": {
+       "deg": 79.9,
+       "bindDeg": 1.3,
+       "yAboveThighMm": -41,
+       "aroundDeg": 125
+      },
+      "worstRing": {
+       "mm": 20.9,
+       "bindMm": 1.8,
+       "yAboveThighMm": -74,
+       "aroundDeg": 75
+      }
+     }
+    },
+    {
+     "body": "male",
+     "cloth": true,
+     "clip": "walk",
+     "frames": 60,
+     "band": {
+      "fromAboveThighMm": -150,
+      "toAbovePelvisMm": 100,
+      "edges": 748,
+      "ringEdges": 254,
+      "sideEdges": 392
+     },
+     "bindAngleMaxDeg": 41.1,
+     "all": {
+      "angleMaxDeg": 147.2,
+      "angleExcessDeg": 146.4,
+      "ringJumpMm": 25,
+      "ringJumpExcessMm": 25,
+      "worstAngle": {
+       "deg": 147.2,
+       "bindDeg": 0.8,
+       "yAboveThighMm": -22,
+       "aroundDeg": -75
+      },
+      "worstRing": {
+       "mm": 25,
+       "bindMm": 0,
+       "yAboveThighMm": -37,
+       "aroundDeg": -96
+      }
+     },
+     "hipSides": {
+      "angleMaxDeg": 147.2,
+      "angleExcessDeg": 146.4,
+      "ringJumpMm": 25,
+      "ringJumpExcessMm": 25,
+      "worstAngle": {
+       "deg": 147.2,
+       "bindDeg": 0.8,
+       "yAboveThighMm": -22,
+       "aroundDeg": -75
+      },
+      "worstRing": {
+       "mm": 25,
+       "bindMm": 0,
+       "yAboveThighMm": -37,
+       "aroundDeg": -96
+      }
+     }
+    },
+    {
+     "body": "male",
+     "cloth": true,
+     "clip": "run",
+     "frames": 50,
+     "band": {
+      "fromAboveThighMm": -150,
+      "toAbovePelvisMm": 100,
+      "edges": 748,
+      "ringEdges": 254,
+      "sideEdges": 392
+     },
+     "bindAngleMaxDeg": 41.1,
+     "all": {
+      "angleMaxDeg": 165.9,
+      "angleExcessDeg": 159.4,
+      "ringJumpMm": 31.9,
+      "ringJumpExcessMm": 31,
+      "worstAngle": {
+       "deg": 165.9,
+       "bindDeg": 6.5,
+       "yAboveThighMm": -3,
+       "aroundDeg": 13
+      },
+      "worstRing": {
+       "mm": 31.9,
+       "bindMm": 0.9,
+       "yAboveThighMm": -3,
+       "aroundDeg": 85
+      }
+     },
+     "hipSides": {
+      "angleMaxDeg": 104.6,
+      "angleExcessDeg": 101.8,
+      "ringJumpMm": 31.9,
+      "ringJumpExcessMm": 31,
+      "worstAngle": {
+       "deg": 104.6,
+       "bindDeg": 2.8,
+       "yAboveThighMm": -41,
+       "aroundDeg": -65
+      },
+      "worstRing": {
+       "mm": 31.9,
+       "bindMm": 0.9,
+       "yAboveThighMm": -3,
+       "aroundDeg": 85
+      }
+     }
+    },
+    {
+     "body": "male",
+     "cloth": false,
+     "clip": "idle",
+     "frames": 60,
+     "band": {
+      "fromAboveThighMm": -150,
+      "toAbovePelvisMm": 100,
+      "edges": 748,
+      "ringEdges": 254,
+      "sideEdges": 392
+     },
+     "bindAngleMaxDeg": 41.1,
+     "all": {
+      "angleMaxDeg": 172.8,
+      "angleExcessDeg": 164.3,
+      "ringJumpMm": 46.1,
+      "ringJumpExcessMm": 45.9,
+      "worstAngle": {
+       "deg": 172.8,
+       "bindDeg": 8.5,
+       "yAboveThighMm": -82,
+       "aroundDeg": -5
+      },
+      "worstRing": {
+       "mm": 46.1,
+       "bindMm": 0.2,
+       "yAboveThighMm": -118,
+       "aroundDeg": -5
+      }
+     },
+     "hipSides": {
+      "angleMaxDeg": 59.6,
+      "angleExcessDeg": 56.3,
+      "ringJumpMm": 25.1,
+      "ringJumpExcessMm": 23.5,
+      "worstAngle": {
+       "deg": 59.6,
+       "bindDeg": 3.3,
+       "yAboveThighMm": -43,
+       "aroundDeg": -45
+      },
+      "worstRing": {
+       "mm": 25.1,
+       "bindMm": 1.6,
+       "yAboveThighMm": -145,
+       "aroundDeg": -85
+      }
+     }
+    },
+    {
+     "body": "male",
+     "cloth": false,
+     "clip": "walk",
+     "frames": 60,
+     "band": {
+      "fromAboveThighMm": -150,
+      "toAbovePelvisMm": 100,
+      "edges": 748,
+      "ringEdges": 254,
+      "sideEdges": 392
+     },
+     "bindAngleMaxDeg": 41.1,
+     "all": {
+      "angleMaxDeg": 99,
+      "angleExcessDeg": 65.2,
+      "ringJumpMm": 39.1,
+      "ringJumpExcessMm": 38.9,
+      "worstAngle": {
+       "deg": 70.4,
+       "bindDeg": 5.2,
+       "yAboveThighMm": -23,
+       "aroundDeg": -4
+      },
+      "worstRing": {
+       "mm": 39.1,
+       "bindMm": 0.2,
+       "yAboveThighMm": -118,
+       "aroundDeg": 5
+      }
+     },
+     "hipSides": {
+      "angleMaxDeg": 33.5,
+      "angleExcessDeg": 28.3,
+      "ringJumpMm": 15.6,
+      "ringJumpExcessMm": 14.8,
+      "worstAngle": {
+       "deg": 29.2,
+       "bindDeg": 0.8,
+       "yAboveThighMm": -43,
+       "aroundDeg": 45
+      },
+      "worstRing": {
+       "mm": 14.9,
+       "bindMm": 0.1,
+       "yAboveThighMm": -109,
+       "aroundDeg": 75
+      }
+     }
+    },
+    {
+     "body": "male",
+     "cloth": false,
+     "clip": "run",
+     "frames": 50,
+     "band": {
+      "fromAboveThighMm": -150,
+      "toAbovePelvisMm": 100,
+      "edges": 748,
+      "ringEdges": 254,
+      "sideEdges": 392
+     },
+     "bindAngleMaxDeg": 41.1,
+     "all": {
+      "angleMaxDeg": 179.3,
+      "angleExcessDeg": 176.9,
+      "ringJumpMm": 55.2,
+      "ringJumpExcessMm": 55,
+      "worstAngle": {
+       "deg": 177.8,
+       "bindDeg": 0.8,
+       "yAboveThighMm": -3,
+       "aroundDeg": -13
+      },
+      "worstRing": {
+       "mm": 55.2,
+       "bindMm": 0.2,
+       "yAboveThighMm": -118,
+       "aroundDeg": -5
+      }
+     },
+     "hipSides": {
+      "angleMaxDeg": 63.5,
+      "angleExcessDeg": 60.1,
+      "ringJumpMm": 26.4,
+      "ringJumpExcessMm": 24.8,
+      "worstAngle": {
+       "deg": 63.5,
+       "bindDeg": 3.3,
+       "yAboveThighMm": -43,
+       "aroundDeg": -45
+      },
+      "worstRing": {
+       "mm": 26.4,
+       "bindMm": 1.6,
+       "yAboveThighMm": -145,
+       "aroundDeg": 85
+      }
+     }
+    },
+    {
+     "body": "female",
+     "cloth": true,
+     "clip": "idle",
+     "frames": 60,
+     "band": {
+      "fromAboveThighMm": -150,
+      "toAbovePelvisMm": 100,
+      "edges": 730,
+      "ringEdges": 232,
+      "sideEdges": 372
+     },
+     "bindAngleMaxDeg": 45.1,
+     "all": {
+      "angleMaxDeg": 78.1,
+      "angleExcessDeg": 77.4,
+      "ringJumpMm": 16.6,
+      "ringJumpExcessMm": 13.5,
+      "worstAngle": {
+       "deg": 78.1,
+       "bindDeg": 0.8,
+       "yAboveThighMm": -13,
+       "aroundDeg": 23
+      },
+      "worstRing": {
+       "mm": 16.6,
+       "bindMm": 3.1,
+       "yAboveThighMm": -67,
+       "aroundDeg": 140
+      }
+     },
+     "hipSides": {
+      "angleMaxDeg": 63.3,
+      "angleExcessDeg": 60.5,
+      "ringJumpMm": 12.9,
+      "ringJumpExcessMm": 10.9,
+      "worstAngle": {
+       "deg": 63.3,
+       "bindDeg": 2.8,
+       "yAboveThighMm": -93,
+       "aroundDeg": -49
+      },
+      "worstRing": {
+       "mm": 12.9,
+       "bindMm": 2,
+       "yAboveThighMm": -114,
+       "aroundDeg": 49
+      }
+     }
+    },
+    {
+     "body": "female",
+     "cloth": true,
+     "clip": "walk",
+     "frames": 60,
+     "band": {
+      "fromAboveThighMm": -150,
+      "toAbovePelvisMm": 100,
+      "edges": 730,
+      "ringEdges": 232,
+      "sideEdges": 372
+     },
+     "bindAngleMaxDeg": 45.1,
+     "all": {
+      "angleMaxDeg": 179.8,
+      "angleExcessDeg": 177.9,
+      "ringJumpMm": 71.9,
+      "ringJumpExcessMm": 70,
+      "worstAngle": {
+       "deg": 179.8,
+       "bindDeg": 1.9,
+       "yAboveThighMm": -53,
+       "aroundDeg": 59
+      },
+      "worstRing": {
+       "mm": 71.9,
+       "bindMm": 1.9,
+       "yAboveThighMm": -69,
+       "aroundDeg": 40
+      }
+     },
+     "hipSides": {
+      "angleMaxDeg": 179.8,
+      "angleExcessDeg": 177.9,
+      "ringJumpMm": 48.2,
+      "ringJumpExcessMm": 46.9,
+      "worstAngle": {
+       "deg": 179.8,
+       "bindDeg": 1.9,
+       "yAboveThighMm": -53,
+       "aroundDeg": 59
+      },
+      "worstRing": {
+       "mm": 48.2,
+       "bindMm": 1.3,
+       "yAboveThighMm": -31,
+       "aroundDeg": 49
+      }
+     }
+    },
+    {
+     "body": "female",
+     "cloth": true,
+     "clip": "run",
+     "frames": 50,
+     "band": {
+      "fromAboveThighMm": -150,
+      "toAbovePelvisMm": 100,
+      "edges": 730,
+      "ringEdges": 232,
+      "sideEdges": 372
+     },
+     "bindAngleMaxDeg": 45.1,
+     "all": {
+      "angleMaxDeg": 166.9,
+      "angleExcessDeg": 165.5,
+      "ringJumpMm": 22,
+      "ringJumpExcessMm": 20.4,
+      "worstAngle": {
+       "deg": 166.9,
+       "bindDeg": 1.4,
+       "yAboveThighMm": -23,
+       "aroundDeg": -152
+      },
+      "worstRing": {
+       "mm": 21.4,
+       "bindMm": 1,
+       "yAboveThighMm": -116,
+       "aroundDeg": -59
+      }
+     },
+     "hipSides": {
+      "angleMaxDeg": 106.2,
+      "angleExcessDeg": 104.1,
+      "ringJumpMm": 21.4,
+      "ringJumpExcessMm": 20.4,
+      "worstAngle": {
+       "deg": 106.2,
+       "bindDeg": 2.1,
+       "yAboveThighMm": -11,
+       "aroundDeg": -50
+      },
+      "worstRing": {
+       "mm": 21.4,
+       "bindMm": 1,
+       "yAboveThighMm": -116,
+       "aroundDeg": -59
+      }
+     }
+    },
+    {
+     "body": "female",
+     "cloth": false,
+     "clip": "idle",
+     "frames": 60,
+     "band": {
+      "fromAboveThighMm": -150,
+      "toAbovePelvisMm": 100,
+      "edges": 730,
+      "ringEdges": 232,
+      "sideEdges": 372
+     },
+     "bindAngleMaxDeg": 45.1,
+     "all": {
+      "angleMaxDeg": 97.8,
+      "angleExcessDeg": 77.7,
+      "ringJumpMm": 36.1,
+      "ringJumpExcessMm": 35.2,
+      "worstAngle": {
+       "deg": 90.1,
+       "bindDeg": 12.4,
+       "yAboveThighMm": -31,
+       "aroundDeg": 14
+      },
+      "worstRing": {
+       "mm": 36.1,
+       "bindMm": 0.9,
+       "yAboveThighMm": -150,
+       "aroundDeg": -4
+      }
+     },
+     "hipSides": {
+      "angleMaxDeg": 32.6,
+      "angleExcessDeg": 19.7,
+      "ringJumpMm": 20.1,
+      "ringJumpExcessMm": 18.5,
+      "worstAngle": {
+       "deg": 21.2,
+       "bindDeg": 1.5,
+       "yAboveThighMm": 7,
+       "aroundDeg": 50
+      },
+      "worstRing": {
+       "mm": 20.1,
+       "bindMm": 1.6,
+       "yAboveThighMm": -117,
+       "aroundDeg": 78
+      }
+     }
+    },
+    {
+     "body": "female",
+     "cloth": false,
+     "clip": "walk",
+     "frames": 60,
+     "band": {
+      "fromAboveThighMm": -150,
+      "toAbovePelvisMm": 100,
+      "edges": 730,
+      "ringEdges": 232,
+      "sideEdges": 372
+     },
+     "bindAngleMaxDeg": 45.1,
+     "all": {
+      "angleMaxDeg": 84.4,
+      "angleExcessDeg": 58,
+      "ringJumpMm": 41.8,
+      "ringJumpExcessMm": 40.9,
+      "worstAngle": {
+       "deg": 84.4,
+       "bindDeg": 26.4,
+       "yAboveThighMm": -87,
+       "aroundDeg": 4
+      },
+      "worstRing": {
+       "mm": 41.8,
+       "bindMm": 0.9,
+       "yAboveThighMm": -150,
+       "aroundDeg": 4
+      }
+     },
+     "hipSides": {
+      "angleMaxDeg": 33.7,
+      "angleExcessDeg": 14.3,
+      "ringJumpMm": 16.1,
+      "ringJumpExcessMm": 14.6,
+      "worstAngle": {
+       "deg": 15.2,
+       "bindDeg": 0.9,
+       "yAboveThighMm": 7,
+       "aroundDeg": -50
+      },
+      "worstRing": {
+       "mm": 16.1,
+       "bindMm": 1.6,
+       "yAboveThighMm": -117,
+       "aroundDeg": 78
+      }
+     }
+    },
+    {
+     "body": "female",
+     "cloth": false,
+     "clip": "run",
+     "frames": 50,
+     "band": {
+      "fromAboveThighMm": -150,
+      "toAbovePelvisMm": 100,
+      "edges": 730,
+      "ringEdges": 232,
+      "sideEdges": 372
+     },
+     "bindAngleMaxDeg": 45.1,
+     "all": {
+      "angleMaxDeg": 179.2,
+      "angleExcessDeg": 178.1,
+      "ringJumpMm": 58,
+      "ringJumpExcessMm": 57.2,
+      "worstAngle": {
+       "deg": 178.7,
+       "bindDeg": 0.6,
+       "yAboveThighMm": -30,
+       "aroundDeg": -5
+      },
+      "worstRing": {
+       "mm": 58,
+       "bindMm": 0.9,
+       "yAboveThighMm": -150,
+       "aroundDeg": 4
+      }
+     },
+     "hipSides": {
+      "angleMaxDeg": 61,
+      "angleExcessDeg": 60.1,
+      "ringJumpMm": 25.6,
+      "ringJumpExcessMm": 24.1,
+      "worstAngle": {
+       "deg": 61,
+       "bindDeg": 0.9,
+       "yAboveThighMm": 7,
+       "aroundDeg": -50
+      },
+      "worstRing": {
+       "mm": 25.6,
+       "bindMm": 1.6,
+       "yAboveThighMm": -117,
+       "aroundDeg": 78
+      }
+     }
+    }
+   ]
+  },
+  "hair": {
+   "what": "Hair against the collar / hood (ROADMAP M2b): hair is static and skinned to head / neck / upper spine / clavicles.",
+   "method": {
+    "region": "coat collar and hoodie hood: _CCCOLLAR = 1 triangles; jacket (CC0 collar, no attribute): triangles within 14 cm of the neck joint horizontally and above neck - 7 cm (rest pose)",
+    "hairInside": "max per frame of hair vertices whose nearest region triangle (projection inside it, within 3 cm) has them 2-30 mm on its INNER side (between collar / hood and neck). Placement, not necessarily visible: nape hair of short styles under a standing collar counts too",
+    "edgesCrossing": "max per frame of hair triangle edges that intersect a region triangle (hair through the collar / hood: the visible clipping; docs/STATUS.md counted the same for the coat collar)",
+    "push": "false = skinned hair as exported; true = the viewer default (?hairCollide on): the capsule push of web/materials.js ported to node (constants checked against the source: constantsMatch)",
+    "frames": "idle 3 s, walk 2 s (30 fps animator), every 1/6 s, 0.35 s fade skipped",
+    "garments": "skinned (the coat collar is fully pinned, so cloth does not move it)"
+   },
+   "constantsMatch": true,
+   "target": "none set by the roadmap (count only); fewer is better, 0 = no hair inside or through the collar",
+   "rows": [
+    {
+     "body": "male",
+     "hair": "short02",
+     "garment": "jacket",
+     "push": false,
+     "clip": "idle",
+     "regionTris": 318,
+     "hairVerts": 1794,
+     "frames": 16,
+     "hairInside": 0,
+     "edgesCrossing": 0
+    },
+    {
+     "body": "male",
+     "hair": "short02",
+     "garment": "jacket",
+     "push": false,
+     "clip": "walk",
+     "regionTris": 318,
+     "hairVerts": 1794,
+     "frames": 10,
+     "hairInside": 0,
+     "edgesCrossing": 0
+    },
+    {
+     "body": "male",
+     "hair": "short02",
+     "garment": "jacket",
+     "push": true,
+     "clip": "idle",
+     "regionTris": 318,
+     "hairVerts": 1794,
+     "frames": 16,
+     "hairInside": 0,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.152
+     ],
+     "cleared": true
+    },
+    {
+     "body": "male",
+     "hair": "short02",
+     "garment": "jacket",
+     "push": true,
+     "clip": "walk",
+     "regionTris": 318,
+     "hairVerts": 1794,
+     "frames": 10,
+     "hairInside": 0,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.152
+     ],
+     "cleared": true
+    },
+    {
+     "body": "male",
+     "hair": "bob02",
+     "garment": "jacket",
+     "push": false,
+     "clip": "idle",
+     "regionTris": 318,
+     "hairVerts": 1688,
+     "frames": 16,
+     "hairInside": 0,
+     "edgesCrossing": 0
+    },
+    {
+     "body": "male",
+     "hair": "bob02",
+     "garment": "jacket",
+     "push": false,
+     "clip": "walk",
+     "regionTris": 318,
+     "hairVerts": 1688,
+     "frames": 10,
+     "hairInside": 0,
+     "edgesCrossing": 0
+    },
+    {
+     "body": "male",
+     "hair": "bob02",
+     "garment": "jacket",
+     "push": true,
+     "clip": "idle",
+     "regionTris": 318,
+     "hairVerts": 1688,
+     "frames": 16,
+     "hairInside": 0,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.152
+     ],
+     "cleared": true
+    },
+    {
+     "body": "male",
+     "hair": "bob02",
+     "garment": "jacket",
+     "push": true,
+     "clip": "walk",
+     "regionTris": 318,
+     "hairVerts": 1688,
+     "frames": 10,
+     "hairInside": 0,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.152
+     ],
+     "cleared": true
+    },
+    {
+     "body": "male",
+     "hair": "long01",
+     "garment": "jacket",
+     "push": false,
+     "clip": "idle",
+     "regionTris": 318,
+     "hairVerts": 3312,
+     "frames": 16,
+     "hairInside": 105,
+     "edgesCrossing": 106
+    },
+    {
+     "body": "male",
+     "hair": "long01",
+     "garment": "jacket",
+     "push": false,
+     "clip": "walk",
+     "regionTris": 318,
+     "hairVerts": 3312,
+     "frames": 10,
+     "hairInside": 110,
+     "edgesCrossing": 104
+    },
+    {
+     "body": "male",
+     "hair": "long01",
+     "garment": "jacket",
+     "push": true,
+     "clip": "idle",
+     "regionTris": 318,
+     "hairVerts": 3312,
+     "frames": 16,
+     "hairInside": 90,
+     "edgesCrossing": 93,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.152
+     ],
+     "cleared": true
+    },
+    {
+     "body": "male",
+     "hair": "long01",
+     "garment": "jacket",
+     "push": true,
+     "clip": "walk",
+     "regionTris": 318,
+     "hairVerts": 3312,
+     "frames": 10,
+     "hairInside": 90,
+     "edgesCrossing": 94,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.152
+     ],
+     "cleared": true
+    },
+    {
+     "body": "male",
+     "hair": "ponytail01",
+     "garment": "jacket",
+     "push": false,
+     "clip": "idle",
+     "regionTris": 318,
+     "hairVerts": 3902,
+     "frames": 16,
+     "hairInside": 89,
+     "edgesCrossing": 173
+    },
+    {
+     "body": "male",
+     "hair": "ponytail01",
+     "garment": "jacket",
+     "push": false,
+     "clip": "walk",
+     "regionTris": 318,
+     "hairVerts": 3902,
+     "frames": 10,
+     "hairInside": 89,
+     "edgesCrossing": 179
+    },
+    {
+     "body": "male",
+     "hair": "ponytail01",
+     "garment": "jacket",
+     "push": true,
+     "clip": "idle",
+     "regionTris": 318,
+     "hairVerts": 3902,
+     "frames": 16,
+     "hairInside": 0,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.152
+     ],
+     "cleared": true
+    },
+    {
+     "body": "male",
+     "hair": "ponytail01",
+     "garment": "jacket",
+     "push": true,
+     "clip": "walk",
+     "regionTris": 318,
+     "hairVerts": 3902,
+     "frames": 10,
+     "hairInside": 0,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.152
+     ],
+     "cleared": true
+    },
+    {
+     "body": "male",
+     "hair": "braid01",
+     "garment": "jacket",
+     "push": false,
+     "clip": "idle",
+     "regionTris": 318,
+     "hairVerts": 4663,
+     "frames": 16,
+     "hairInside": 270,
+     "edgesCrossing": 416
+    },
+    {
+     "body": "male",
+     "hair": "braid01",
+     "garment": "jacket",
+     "push": false,
+     "clip": "walk",
+     "regionTris": 318,
+     "hairVerts": 4663,
+     "frames": 10,
+     "hairInside": 279,
+     "edgesCrossing": 425
+    },
+    {
+     "body": "male",
+     "hair": "braid01",
+     "garment": "jacket",
+     "push": true,
+     "clip": "idle",
+     "regionTris": 318,
+     "hairVerts": 4663,
+     "frames": 16,
+     "hairInside": 15,
+     "edgesCrossing": 116,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.152
+     ],
+     "cleared": true
+    },
+    {
+     "body": "male",
+     "hair": "braid01",
+     "garment": "jacket",
+     "push": true,
+     "clip": "walk",
+     "regionTris": 318,
+     "hairVerts": 4663,
+     "frames": 10,
+     "hairInside": 16,
+     "edgesCrossing": 115,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.152
+     ],
+     "cleared": true
+    },
+    {
+     "body": "male",
+     "hair": "short04",
+     "garment": "jacket",
+     "push": false,
+     "clip": "idle",
+     "regionTris": 318,
+     "hairVerts": 983,
+     "frames": 16,
+     "hairInside": 0,
+     "edgesCrossing": 0
+    },
+    {
+     "body": "male",
+     "hair": "short04",
+     "garment": "jacket",
+     "push": false,
+     "clip": "walk",
+     "regionTris": 318,
+     "hairVerts": 983,
+     "frames": 10,
+     "hairInside": 0,
+     "edgesCrossing": 0
+    },
+    {
+     "body": "male",
+     "hair": "short04",
+     "garment": "jacket",
+     "push": true,
+     "clip": "idle",
+     "regionTris": 318,
+     "hairVerts": 983,
+     "frames": 16,
+     "hairInside": 0,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.152
+     ],
+     "cleared": true
+    },
+    {
+     "body": "male",
+     "hair": "short04",
+     "garment": "jacket",
+     "push": true,
+     "clip": "walk",
+     "regionTris": 318,
+     "hairVerts": 983,
+     "frames": 10,
+     "hairInside": 0,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.152
+     ],
+     "cleared": true
+    },
+    {
+     "body": "male",
+     "hair": "bob01",
+     "garment": "jacket",
+     "push": false,
+     "clip": "idle",
+     "regionTris": 318,
+     "hairVerts": 5432,
+     "frames": 16,
+     "hairInside": 0,
+     "edgesCrossing": 0
+    },
+    {
+     "body": "male",
+     "hair": "bob01",
+     "garment": "jacket",
+     "push": false,
+     "clip": "walk",
+     "regionTris": 318,
+     "hairVerts": 5432,
+     "frames": 10,
+     "hairInside": 0,
+     "edgesCrossing": 0
+    },
+    {
+     "body": "male",
+     "hair": "bob01",
+     "garment": "jacket",
+     "push": true,
+     "clip": "idle",
+     "regionTris": 318,
+     "hairVerts": 5432,
+     "frames": 16,
+     "hairInside": 2,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.152
+     ],
+     "cleared": true
+    },
+    {
+     "body": "male",
+     "hair": "bob01",
+     "garment": "jacket",
+     "push": true,
+     "clip": "walk",
+     "regionTris": 318,
+     "hairVerts": 5432,
+     "frames": 10,
+     "hairInside": 2,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.152
+     ],
+     "cleared": true
+    },
+    {
+     "body": "male",
+     "hair": "afro01",
+     "garment": "jacket",
+     "push": false,
+     "clip": "idle",
+     "regionTris": 318,
+     "hairVerts": 2196,
+     "frames": 16,
+     "hairInside": 0,
+     "edgesCrossing": 0
+    },
+    {
+     "body": "male",
+     "hair": "afro01",
+     "garment": "jacket",
+     "push": false,
+     "clip": "walk",
+     "regionTris": 318,
+     "hairVerts": 2196,
+     "frames": 10,
+     "hairInside": 0,
+     "edgesCrossing": 0
+    },
+    {
+     "body": "male",
+     "hair": "afro01",
+     "garment": "jacket",
+     "push": true,
+     "clip": "idle",
+     "regionTris": 318,
+     "hairVerts": 2196,
+     "frames": 16,
+     "hairInside": 0,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.152
+     ],
+     "cleared": true
+    },
+    {
+     "body": "male",
+     "hair": "afro01",
+     "garment": "jacket",
+     "push": true,
+     "clip": "walk",
+     "regionTris": 318,
+     "hairVerts": 2196,
+     "frames": 10,
+     "hairInside": 0,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.152
+     ],
+     "cleared": true
+    },
+    {
+     "body": "male",
+     "hair": "short02",
+     "garment": "hoodie",
+     "push": false,
+     "clip": "idle",
+     "regionTris": 768,
+     "hairVerts": 1794,
+     "frames": 16,
+     "hairInside": 0,
+     "edgesCrossing": 0
+    },
+    {
+     "body": "male",
+     "hair": "short02",
+     "garment": "hoodie",
+     "push": false,
+     "clip": "walk",
+     "regionTris": 768,
+     "hairVerts": 1794,
+     "frames": 10,
+     "hairInside": 0,
+     "edgesCrossing": 0
+    },
+    {
+     "body": "male",
+     "hair": "short02",
+     "garment": "hoodie",
+     "push": true,
+     "clip": "idle",
+     "regionTris": 768,
+     "hairVerts": 1794,
+     "frames": 16,
+     "hairInside": 0,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.158
+     ],
+     "cleared": true
+    },
+    {
+     "body": "male",
+     "hair": "short02",
+     "garment": "hoodie",
+     "push": true,
+     "clip": "walk",
+     "regionTris": 768,
+     "hairVerts": 1794,
+     "frames": 10,
+     "hairInside": 0,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.158
+     ],
+     "cleared": true
+    },
+    {
+     "body": "male",
+     "hair": "bob02",
+     "garment": "hoodie",
+     "push": false,
+     "clip": "idle",
+     "regionTris": 768,
+     "hairVerts": 1688,
+     "frames": 16,
+     "hairInside": 24,
+     "edgesCrossing": 63
+    },
+    {
+     "body": "male",
+     "hair": "bob02",
+     "garment": "hoodie",
+     "push": false,
+     "clip": "walk",
+     "regionTris": 768,
+     "hairVerts": 1688,
+     "frames": 10,
+     "hairInside": 25,
+     "edgesCrossing": 63
+    },
+    {
+     "body": "male",
+     "hair": "bob02",
+     "garment": "hoodie",
+     "push": true,
+     "clip": "idle",
+     "regionTris": 768,
+     "hairVerts": 1688,
+     "frames": 16,
+     "hairInside": 0,
+     "edgesCrossing": 10,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.158
+     ],
+     "cleared": true
+    },
+    {
+     "body": "male",
+     "hair": "bob02",
+     "garment": "hoodie",
+     "push": true,
+     "clip": "walk",
+     "regionTris": 768,
+     "hairVerts": 1688,
+     "frames": 10,
+     "hairInside": 0,
+     "edgesCrossing": 11,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.158
+     ],
+     "cleared": true
+    },
+    {
+     "body": "male",
+     "hair": "long01",
+     "garment": "hoodie",
+     "push": false,
+     "clip": "idle",
+     "regionTris": 768,
+     "hairVerts": 3312,
+     "frames": 16,
+     "hairInside": 517,
+     "edgesCrossing": 336
+    },
+    {
+     "body": "male",
+     "hair": "long01",
+     "garment": "hoodie",
+     "push": false,
+     "clip": "walk",
+     "regionTris": 768,
+     "hairVerts": 3312,
+     "frames": 10,
+     "hairInside": 522,
+     "edgesCrossing": 343
+    },
+    {
+     "body": "male",
+     "hair": "long01",
+     "garment": "hoodie",
+     "push": true,
+     "clip": "idle",
+     "regionTris": 768,
+     "hairVerts": 3312,
+     "frames": 16,
+     "hairInside": 606,
+     "edgesCrossing": 312,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.158
+     ],
+     "cleared": true
+    },
+    {
+     "body": "male",
+     "hair": "long01",
+     "garment": "hoodie",
+     "push": true,
+     "clip": "walk",
+     "regionTris": 768,
+     "hairVerts": 3312,
+     "frames": 10,
+     "hairInside": 607,
+     "edgesCrossing": 321,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.158
+     ],
+     "cleared": true
+    },
+    {
+     "body": "male",
+     "hair": "ponytail01",
+     "garment": "hoodie",
+     "push": false,
+     "clip": "idle",
+     "regionTris": 768,
+     "hairVerts": 3902,
+     "frames": 16,
+     "hairInside": 306,
+     "edgesCrossing": 214
+    },
+    {
+     "body": "male",
+     "hair": "ponytail01",
+     "garment": "hoodie",
+     "push": false,
+     "clip": "walk",
+     "regionTris": 768,
+     "hairVerts": 3902,
+     "frames": 10,
+     "hairInside": 314,
+     "edgesCrossing": 212
+    },
+    {
+     "body": "male",
+     "hair": "ponytail01",
+     "garment": "hoodie",
+     "push": true,
+     "clip": "idle",
+     "regionTris": 768,
+     "hairVerts": 3902,
+     "frames": 16,
+     "hairInside": 0,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.158
+     ],
+     "cleared": true
+    },
+    {
+     "body": "male",
+     "hair": "ponytail01",
+     "garment": "hoodie",
+     "push": true,
+     "clip": "walk",
+     "regionTris": 768,
+     "hairVerts": 3902,
+     "frames": 10,
+     "hairInside": 0,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.158
+     ],
+     "cleared": true
+    },
+    {
+     "body": "male",
+     "hair": "braid01",
+     "garment": "hoodie",
+     "push": false,
+     "clip": "idle",
+     "regionTris": 768,
+     "hairVerts": 4663,
+     "frames": 16,
+     "hairInside": 2032,
+     "edgesCrossing": 882
+    },
+    {
+     "body": "male",
+     "hair": "braid01",
+     "garment": "hoodie",
+     "push": false,
+     "clip": "walk",
+     "regionTris": 768,
+     "hairVerts": 4663,
+     "frames": 10,
+     "hairInside": 2062,
+     "edgesCrossing": 878
+    },
+    {
+     "body": "male",
+     "hair": "braid01",
+     "garment": "hoodie",
+     "push": true,
+     "clip": "idle",
+     "regionTris": 768,
+     "hairVerts": 4663,
+     "frames": 16,
+     "hairInside": 69,
+     "edgesCrossing": 180,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.158
+     ],
+     "cleared": true
+    },
+    {
+     "body": "male",
+     "hair": "braid01",
+     "garment": "hoodie",
+     "push": true,
+     "clip": "walk",
+     "regionTris": 768,
+     "hairVerts": 4663,
+     "frames": 10,
+     "hairInside": 72,
+     "edgesCrossing": 184,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.158
+     ],
+     "cleared": true
+    },
+    {
+     "body": "male",
+     "hair": "short04",
+     "garment": "hoodie",
+     "push": false,
+     "clip": "idle",
+     "regionTris": 768,
+     "hairVerts": 983,
+     "frames": 16,
+     "hairInside": 0,
+     "edgesCrossing": 3
+    },
+    {
+     "body": "male",
+     "hair": "short04",
+     "garment": "hoodie",
+     "push": false,
+     "clip": "walk",
+     "regionTris": 768,
+     "hairVerts": 983,
+     "frames": 10,
+     "hairInside": 1,
+     "edgesCrossing": 3
+    },
+    {
+     "body": "male",
+     "hair": "short04",
+     "garment": "hoodie",
+     "push": true,
+     "clip": "idle",
+     "regionTris": 768,
+     "hairVerts": 983,
+     "frames": 16,
+     "hairInside": 0,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.158
+     ],
+     "cleared": true
+    },
+    {
+     "body": "male",
+     "hair": "short04",
+     "garment": "hoodie",
+     "push": true,
+     "clip": "walk",
+     "regionTris": 768,
+     "hairVerts": 983,
+     "frames": 10,
+     "hairInside": 0,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.158
+     ],
+     "cleared": true
+    },
+    {
+     "body": "male",
+     "hair": "bob01",
+     "garment": "hoodie",
+     "push": false,
+     "clip": "idle",
+     "regionTris": 768,
+     "hairVerts": 5432,
+     "frames": 16,
+     "hairInside": 2,
+     "edgesCrossing": 25
+    },
+    {
+     "body": "male",
+     "hair": "bob01",
+     "garment": "hoodie",
+     "push": false,
+     "clip": "walk",
+     "regionTris": 768,
+     "hairVerts": 5432,
+     "frames": 10,
+     "hairInside": 3,
+     "edgesCrossing": 29
+    },
+    {
+     "body": "male",
+     "hair": "bob01",
+     "garment": "hoodie",
+     "push": true,
+     "clip": "idle",
+     "regionTris": 768,
+     "hairVerts": 5432,
+     "frames": 16,
+     "hairInside": 2,
+     "edgesCrossing": 11,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.158
+     ],
+     "cleared": true
+    },
+    {
+     "body": "male",
+     "hair": "bob01",
+     "garment": "hoodie",
+     "push": true,
+     "clip": "walk",
+     "regionTris": 768,
+     "hairVerts": 5432,
+     "frames": 10,
+     "hairInside": 2,
+     "edgesCrossing": 13,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.158
+     ],
+     "cleared": true
+    },
+    {
+     "body": "male",
+     "hair": "afro01",
+     "garment": "hoodie",
+     "push": false,
+     "clip": "idle",
+     "regionTris": 768,
+     "hairVerts": 2196,
+     "frames": 16,
+     "hairInside": 0,
+     "edgesCrossing": 0
+    },
+    {
+     "body": "male",
+     "hair": "afro01",
+     "garment": "hoodie",
+     "push": false,
+     "clip": "walk",
+     "regionTris": 768,
+     "hairVerts": 2196,
+     "frames": 10,
+     "hairInside": 0,
+     "edgesCrossing": 0
+    },
+    {
+     "body": "male",
+     "hair": "afro01",
+     "garment": "hoodie",
+     "push": true,
+     "clip": "idle",
+     "regionTris": 768,
+     "hairVerts": 2196,
+     "frames": 16,
+     "hairInside": 0,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.158
+     ],
+     "cleared": true
+    },
+    {
+     "body": "male",
+     "hair": "afro01",
+     "garment": "hoodie",
+     "push": true,
+     "clip": "walk",
+     "regionTris": 768,
+     "hairVerts": 2196,
+     "frames": 10,
+     "hairInside": 0,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.158
+     ],
+     "cleared": true
+    },
+    {
+     "body": "male",
+     "hair": "short02",
+     "garment": "coat",
+     "push": false,
+     "clip": "idle",
+     "regionTris": 192,
+     "hairVerts": 1794,
+     "frames": 16,
+     "hairInside": 51,
+     "edgesCrossing": 0
+    },
+    {
+     "body": "male",
+     "hair": "short02",
+     "garment": "coat",
+     "push": false,
+     "clip": "walk",
+     "regionTris": 192,
+     "hairVerts": 1794,
+     "frames": 10,
+     "hairInside": 56,
+     "edgesCrossing": 0
+    },
+    {
+     "body": "male",
+     "hair": "short02",
+     "garment": "coat",
+     "push": true,
+     "clip": "idle",
+     "regionTris": 192,
+     "hairVerts": 1794,
+     "frames": 16,
+     "hairInside": 44,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.179
+     ],
+     "cleared": true
+    },
+    {
+     "body": "male",
+     "hair": "short02",
+     "garment": "coat",
+     "push": true,
+     "clip": "walk",
+     "regionTris": 192,
+     "hairVerts": 1794,
+     "frames": 10,
+     "hairInside": 56,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.179
+     ],
+     "cleared": true
+    },
+    {
+     "body": "male",
+     "hair": "bob02",
+     "garment": "coat",
+     "push": false,
+     "clip": "idle",
+     "regionTris": 192,
+     "hairVerts": 1688,
+     "frames": 16,
+     "hairInside": 72,
+     "edgesCrossing": 15
+    },
+    {
+     "body": "male",
+     "hair": "bob02",
+     "garment": "coat",
+     "push": false,
+     "clip": "walk",
+     "regionTris": 192,
+     "hairVerts": 1688,
+     "frames": 10,
+     "hairInside": 74,
+     "edgesCrossing": 23
+    },
+    {
+     "body": "male",
+     "hair": "bob02",
+     "garment": "coat",
+     "push": true,
+     "clip": "idle",
+     "regionTris": 192,
+     "hairVerts": 1688,
+     "frames": 16,
+     "hairInside": 33,
+     "edgesCrossing": 12,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.179
+     ],
+     "cleared": true
+    },
+    {
+     "body": "male",
+     "hair": "bob02",
+     "garment": "coat",
+     "push": true,
+     "clip": "walk",
+     "regionTris": 192,
+     "hairVerts": 1688,
+     "frames": 10,
+     "hairInside": 31,
+     "edgesCrossing": 20,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.179
+     ],
+     "cleared": true
+    },
+    {
+     "body": "male",
+     "hair": "long01",
+     "garment": "coat",
+     "push": false,
+     "clip": "idle",
+     "regionTris": 192,
+     "hairVerts": 3312,
+     "frames": 16,
+     "hairInside": 83,
+     "edgesCrossing": 40
+    },
+    {
+     "body": "male",
+     "hair": "long01",
+     "garment": "coat",
+     "push": false,
+     "clip": "walk",
+     "regionTris": 192,
+     "hairVerts": 3312,
+     "frames": 10,
+     "hairInside": 78,
+     "edgesCrossing": 42
+    },
+    {
+     "body": "male",
+     "hair": "long01",
+     "garment": "coat",
+     "push": true,
+     "clip": "idle",
+     "regionTris": 192,
+     "hairVerts": 3312,
+     "frames": 16,
+     "hairInside": 91,
+     "edgesCrossing": 45,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.179
+     ],
+     "cleared": true
+    },
+    {
+     "body": "male",
+     "hair": "long01",
+     "garment": "coat",
+     "push": true,
+     "clip": "walk",
+     "regionTris": 192,
+     "hairVerts": 3312,
+     "frames": 10,
+     "hairInside": 89,
+     "edgesCrossing": 46,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.179
+     ],
+     "cleared": true
+    },
+    {
+     "body": "male",
+     "hair": "ponytail01",
+     "garment": "coat",
+     "push": false,
+     "clip": "idle",
+     "regionTris": 192,
+     "hairVerts": 3902,
+     "frames": 16,
+     "hairInside": 48,
+     "edgesCrossing": 0
+    },
+    {
+     "body": "male",
+     "hair": "ponytail01",
+     "garment": "coat",
+     "push": false,
+     "clip": "walk",
+     "regionTris": 192,
+     "hairVerts": 3902,
+     "frames": 10,
+     "hairInside": 49,
+     "edgesCrossing": 0
+    },
+    {
+     "body": "male",
+     "hair": "ponytail01",
+     "garment": "coat",
+     "push": true,
+     "clip": "idle",
+     "regionTris": 192,
+     "hairVerts": 3902,
+     "frames": 16,
+     "hairInside": 6,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.179
+     ],
+     "cleared": true
+    },
+    {
+     "body": "male",
+     "hair": "ponytail01",
+     "garment": "coat",
+     "push": true,
+     "clip": "walk",
+     "regionTris": 192,
+     "hairVerts": 3902,
+     "frames": 10,
+     "hairInside": 9,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.179
+     ],
+     "cleared": true
+    },
+    {
+     "body": "male",
+     "hair": "braid01",
+     "garment": "coat",
+     "push": false,
+     "clip": "idle",
+     "regionTris": 192,
+     "hairVerts": 4663,
+     "frames": 16,
+     "hairInside": 277,
+     "edgesCrossing": 254
+    },
+    {
+     "body": "male",
+     "hair": "braid01",
+     "garment": "coat",
+     "push": false,
+     "clip": "walk",
+     "regionTris": 192,
+     "hairVerts": 4663,
+     "frames": 10,
+     "hairInside": 261,
+     "edgesCrossing": 243
+    },
+    {
+     "body": "male",
+     "hair": "braid01",
+     "garment": "coat",
+     "push": true,
+     "clip": "idle",
+     "regionTris": 192,
+     "hairVerts": 4663,
+     "frames": 16,
+     "hairInside": 185,
+     "edgesCrossing": 132,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.179
+     ],
+     "cleared": true
+    },
+    {
+     "body": "male",
+     "hair": "braid01",
+     "garment": "coat",
+     "push": true,
+     "clip": "walk",
+     "regionTris": 192,
+     "hairVerts": 4663,
+     "frames": 10,
+     "hairInside": 188,
+     "edgesCrossing": 142,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.179
+     ],
+     "cleared": true
+    },
+    {
+     "body": "male",
+     "hair": "short04",
+     "garment": "coat",
+     "push": false,
+     "clip": "idle",
+     "regionTris": 192,
+     "hairVerts": 983,
+     "frames": 16,
+     "hairInside": 68,
+     "edgesCrossing": 0
+    },
+    {
+     "body": "male",
+     "hair": "short04",
+     "garment": "coat",
+     "push": false,
+     "clip": "walk",
+     "regionTris": 192,
+     "hairVerts": 983,
+     "frames": 10,
+     "hairInside": 66,
+     "edgesCrossing": 0
+    },
+    {
+     "body": "male",
+     "hair": "short04",
+     "garment": "coat",
+     "push": true,
+     "clip": "idle",
+     "regionTris": 192,
+     "hairVerts": 983,
+     "frames": 16,
+     "hairInside": 63,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.179
+     ],
+     "cleared": true
+    },
+    {
+     "body": "male",
+     "hair": "short04",
+     "garment": "coat",
+     "push": true,
+     "clip": "walk",
+     "regionTris": 192,
+     "hairVerts": 983,
+     "frames": 10,
+     "hairInside": 65,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.179
+     ],
+     "cleared": true
+    },
+    {
+     "body": "male",
+     "hair": "bob01",
+     "garment": "coat",
+     "push": false,
+     "clip": "idle",
+     "regionTris": 192,
+     "hairVerts": 5432,
+     "frames": 16,
+     "hairInside": 137,
+     "edgesCrossing": 24
+    },
+    {
+     "body": "male",
+     "hair": "bob01",
+     "garment": "coat",
+     "push": false,
+     "clip": "walk",
+     "regionTris": 192,
+     "hairVerts": 5432,
+     "frames": 10,
+     "hairInside": 144,
+     "edgesCrossing": 24
+    },
+    {
+     "body": "male",
+     "hair": "bob01",
+     "garment": "coat",
+     "push": true,
+     "clip": "idle",
+     "regionTris": 192,
+     "hairVerts": 5432,
+     "frames": 16,
+     "hairInside": 93,
+     "edgesCrossing": 5,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.179
+     ],
+     "cleared": true
+    },
+    {
+     "body": "male",
+     "hair": "bob01",
+     "garment": "coat",
+     "push": true,
+     "clip": "walk",
+     "regionTris": 192,
+     "hairVerts": 5432,
+     "frames": 10,
+     "hairInside": 96,
+     "edgesCrossing": 13,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.179
+     ],
+     "cleared": true
+    },
+    {
+     "body": "male",
+     "hair": "afro01",
+     "garment": "coat",
+     "push": false,
+     "clip": "idle",
+     "regionTris": 192,
+     "hairVerts": 2196,
+     "frames": 16,
+     "hairInside": 14,
+     "edgesCrossing": 0
+    },
+    {
+     "body": "male",
+     "hair": "afro01",
+     "garment": "coat",
+     "push": false,
+     "clip": "walk",
+     "regionTris": 192,
+     "hairVerts": 2196,
+     "frames": 10,
+     "hairInside": 17,
+     "edgesCrossing": 0
+    },
+    {
+     "body": "male",
+     "hair": "afro01",
+     "garment": "coat",
+     "push": true,
+     "clip": "idle",
+     "regionTris": 192,
+     "hairVerts": 2196,
+     "frames": 16,
+     "hairInside": 10,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.179
+     ],
+     "cleared": true
+    },
+    {
+     "body": "male",
+     "hair": "afro01",
+     "garment": "coat",
+     "push": true,
+     "clip": "walk",
+     "regionTris": 192,
+     "hairVerts": 2196,
+     "frames": 10,
+     "hairInside": 18,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.179
+     ],
+     "cleared": true
+    },
+    {
+     "body": "female",
+     "hair": "short02",
+     "garment": "jacket",
+     "push": false,
+     "clip": "idle",
+     "regionTris": 450,
+     "hairVerts": 1794,
+     "frames": 16,
+     "hairInside": 0,
+     "edgesCrossing": 0
+    },
+    {
+     "body": "female",
+     "hair": "short02",
+     "garment": "jacket",
+     "push": false,
+     "clip": "walk",
+     "regionTris": 450,
+     "hairVerts": 1794,
+     "frames": 10,
+     "hairInside": 0,
+     "edgesCrossing": 0
+    },
+    {
+     "body": "female",
+     "hair": "short02",
+     "garment": "jacket",
+     "push": true,
+     "clip": "idle",
+     "regionTris": 450,
+     "hairVerts": 1794,
+     "frames": 16,
+     "hairInside": 0,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.137
+     ],
+     "cleared": true
+    },
+    {
+     "body": "female",
+     "hair": "short02",
+     "garment": "jacket",
+     "push": true,
+     "clip": "walk",
+     "regionTris": 450,
+     "hairVerts": 1794,
+     "frames": 10,
+     "hairInside": 0,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.137
+     ],
+     "cleared": true
+    },
+    {
+     "body": "female",
+     "hair": "bob02",
+     "garment": "jacket",
+     "push": false,
+     "clip": "idle",
+     "regionTris": 450,
+     "hairVerts": 1688,
+     "frames": 16,
+     "hairInside": 2,
+     "edgesCrossing": 0
+    },
+    {
+     "body": "female",
+     "hair": "bob02",
+     "garment": "jacket",
+     "push": false,
+     "clip": "walk",
+     "regionTris": 450,
+     "hairVerts": 1688,
+     "frames": 10,
+     "hairInside": 2,
+     "edgesCrossing": 0
+    },
+    {
+     "body": "female",
+     "hair": "bob02",
+     "garment": "jacket",
+     "push": true,
+     "clip": "idle",
+     "regionTris": 450,
+     "hairVerts": 1688,
+     "frames": 16,
+     "hairInside": 0,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.137
+     ],
+     "cleared": true
+    },
+    {
+     "body": "female",
+     "hair": "bob02",
+     "garment": "jacket",
+     "push": true,
+     "clip": "walk",
+     "regionTris": 450,
+     "hairVerts": 1688,
+     "frames": 10,
+     "hairInside": 0,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.137
+     ],
+     "cleared": true
+    },
+    {
+     "body": "female",
+     "hair": "long01",
+     "garment": "jacket",
+     "push": false,
+     "clip": "idle",
+     "regionTris": 450,
+     "hairVerts": 3312,
+     "frames": 16,
+     "hairInside": 213,
+     "edgesCrossing": 186
+    },
+    {
+     "body": "female",
+     "hair": "long01",
+     "garment": "jacket",
+     "push": false,
+     "clip": "walk",
+     "regionTris": 450,
+     "hairVerts": 3312,
+     "frames": 10,
+     "hairInside": 213,
+     "edgesCrossing": 193
+    },
+    {
+     "body": "female",
+     "hair": "long01",
+     "garment": "jacket",
+     "push": true,
+     "clip": "idle",
+     "regionTris": 450,
+     "hairVerts": 3312,
+     "frames": 16,
+     "hairInside": 191,
+     "edgesCrossing": 187,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.137
+     ],
+     "cleared": true
+    },
+    {
+     "body": "female",
+     "hair": "long01",
+     "garment": "jacket",
+     "push": true,
+     "clip": "walk",
+     "regionTris": 450,
+     "hairVerts": 3312,
+     "frames": 10,
+     "hairInside": 191,
+     "edgesCrossing": 187,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.137
+     ],
+     "cleared": true
+    },
+    {
+     "body": "female",
+     "hair": "ponytail01",
+     "garment": "jacket",
+     "push": false,
+     "clip": "idle",
+     "regionTris": 450,
+     "hairVerts": 3902,
+     "frames": 16,
+     "hairInside": 254,
+     "edgesCrossing": 314
+    },
+    {
+     "body": "female",
+     "hair": "ponytail01",
+     "garment": "jacket",
+     "push": false,
+     "clip": "walk",
+     "regionTris": 450,
+     "hairVerts": 3902,
+     "frames": 10,
+     "hairInside": 259,
+     "edgesCrossing": 316
+    },
+    {
+     "body": "female",
+     "hair": "ponytail01",
+     "garment": "jacket",
+     "push": true,
+     "clip": "idle",
+     "regionTris": 450,
+     "hairVerts": 3902,
+     "frames": 16,
+     "hairInside": 0,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.137
+     ],
+     "cleared": true
+    },
+    {
+     "body": "female",
+     "hair": "ponytail01",
+     "garment": "jacket",
+     "push": true,
+     "clip": "walk",
+     "regionTris": 450,
+     "hairVerts": 3902,
+     "frames": 10,
+     "hairInside": 0,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.137
+     ],
+     "cleared": true
+    },
+    {
+     "body": "female",
+     "hair": "braid01",
+     "garment": "jacket",
+     "push": false,
+     "clip": "idle",
+     "regionTris": 450,
+     "hairVerts": 4663,
+     "frames": 16,
+     "hairInside": 568,
+     "edgesCrossing": 563
+    },
+    {
+     "body": "female",
+     "hair": "braid01",
+     "garment": "jacket",
+     "push": false,
+     "clip": "walk",
+     "regionTris": 450,
+     "hairVerts": 4663,
+     "frames": 10,
+     "hairInside": 584,
+     "edgesCrossing": 566
+    },
+    {
+     "body": "female",
+     "hair": "braid01",
+     "garment": "jacket",
+     "push": true,
+     "clip": "idle",
+     "regionTris": 450,
+     "hairVerts": 4663,
+     "frames": 16,
+     "hairInside": 32,
+     "edgesCrossing": 175,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.137
+     ],
+     "cleared": true
+    },
+    {
+     "body": "female",
+     "hair": "braid01",
+     "garment": "jacket",
+     "push": true,
+     "clip": "walk",
+     "regionTris": 450,
+     "hairVerts": 4663,
+     "frames": 10,
+     "hairInside": 26,
+     "edgesCrossing": 178,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.137
+     ],
+     "cleared": true
+    },
+    {
+     "body": "female",
+     "hair": "short04",
+     "garment": "jacket",
+     "push": false,
+     "clip": "idle",
+     "regionTris": 450,
+     "hairVerts": 983,
+     "frames": 16,
+     "hairInside": 0,
+     "edgesCrossing": 0
+    },
+    {
+     "body": "female",
+     "hair": "short04",
+     "garment": "jacket",
+     "push": false,
+     "clip": "walk",
+     "regionTris": 450,
+     "hairVerts": 983,
+     "frames": 10,
+     "hairInside": 0,
+     "edgesCrossing": 0
+    },
+    {
+     "body": "female",
+     "hair": "short04",
+     "garment": "jacket",
+     "push": true,
+     "clip": "idle",
+     "regionTris": 450,
+     "hairVerts": 983,
+     "frames": 16,
+     "hairInside": 0,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.137
+     ],
+     "cleared": true
+    },
+    {
+     "body": "female",
+     "hair": "short04",
+     "garment": "jacket",
+     "push": true,
+     "clip": "walk",
+     "regionTris": 450,
+     "hairVerts": 983,
+     "frames": 10,
+     "hairInside": 0,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.137
+     ],
+     "cleared": true
+    },
+    {
+     "body": "female",
+     "hair": "bob01",
+     "garment": "jacket",
+     "push": false,
+     "clip": "idle",
+     "regionTris": 450,
+     "hairVerts": 5432,
+     "frames": 16,
+     "hairInside": 0,
+     "edgesCrossing": 0
+    },
+    {
+     "body": "female",
+     "hair": "bob01",
+     "garment": "jacket",
+     "push": false,
+     "clip": "walk",
+     "regionTris": 450,
+     "hairVerts": 5432,
+     "frames": 10,
+     "hairInside": 0,
+     "edgesCrossing": 0
+    },
+    {
+     "body": "female",
+     "hair": "bob01",
+     "garment": "jacket",
+     "push": true,
+     "clip": "idle",
+     "regionTris": 450,
+     "hairVerts": 5432,
+     "frames": 16,
+     "hairInside": 0,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.137
+     ],
+     "cleared": true
+    },
+    {
+     "body": "female",
+     "hair": "bob01",
+     "garment": "jacket",
+     "push": true,
+     "clip": "walk",
+     "regionTris": 450,
+     "hairVerts": 5432,
+     "frames": 10,
+     "hairInside": 0,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.137
+     ],
+     "cleared": true
+    },
+    {
+     "body": "female",
+     "hair": "afro01",
+     "garment": "jacket",
+     "push": false,
+     "clip": "idle",
+     "regionTris": 450,
+     "hairVerts": 2196,
+     "frames": 16,
+     "hairInside": 0,
+     "edgesCrossing": 0
+    },
+    {
+     "body": "female",
+     "hair": "afro01",
+     "garment": "jacket",
+     "push": false,
+     "clip": "walk",
+     "regionTris": 450,
+     "hairVerts": 2196,
+     "frames": 10,
+     "hairInside": 0,
+     "edgesCrossing": 0
+    },
+    {
+     "body": "female",
+     "hair": "afro01",
+     "garment": "jacket",
+     "push": true,
+     "clip": "idle",
+     "regionTris": 450,
+     "hairVerts": 2196,
+     "frames": 16,
+     "hairInside": 0,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.137
+     ],
+     "cleared": true
+    },
+    {
+     "body": "female",
+     "hair": "afro01",
+     "garment": "jacket",
+     "push": true,
+     "clip": "walk",
+     "regionTris": 450,
+     "hairVerts": 2196,
+     "frames": 10,
+     "hairInside": 0,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.137
+     ],
+     "cleared": true
+    },
+    {
+     "body": "female",
+     "hair": "short02",
+     "garment": "hoodie",
+     "push": false,
+     "clip": "idle",
+     "regionTris": 768,
+     "hairVerts": 1794,
+     "frames": 16,
+     "hairInside": 0,
+     "edgesCrossing": 0
+    },
+    {
+     "body": "female",
+     "hair": "short02",
+     "garment": "hoodie",
+     "push": false,
+     "clip": "walk",
+     "regionTris": 768,
+     "hairVerts": 1794,
+     "frames": 10,
+     "hairInside": 0,
+     "edgesCrossing": 0
+    },
+    {
+     "body": "female",
+     "hair": "short02",
+     "garment": "hoodie",
+     "push": true,
+     "clip": "idle",
+     "regionTris": 768,
+     "hairVerts": 1794,
+     "frames": 16,
+     "hairInside": 0,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.144
+     ],
+     "cleared": true
+    },
+    {
+     "body": "female",
+     "hair": "short02",
+     "garment": "hoodie",
+     "push": true,
+     "clip": "walk",
+     "regionTris": 768,
+     "hairVerts": 1794,
+     "frames": 10,
+     "hairInside": 0,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.144
+     ],
+     "cleared": true
+    },
+    {
+     "body": "female",
+     "hair": "bob02",
+     "garment": "hoodie",
+     "push": false,
+     "clip": "idle",
+     "regionTris": 768,
+     "hairVerts": 1688,
+     "frames": 16,
+     "hairInside": 23,
+     "edgesCrossing": 57
+    },
+    {
+     "body": "female",
+     "hair": "bob02",
+     "garment": "hoodie",
+     "push": false,
+     "clip": "walk",
+     "regionTris": 768,
+     "hairVerts": 1688,
+     "frames": 10,
+     "hairInside": 26,
+     "edgesCrossing": 62
+    },
+    {
+     "body": "female",
+     "hair": "bob02",
+     "garment": "hoodie",
+     "push": true,
+     "clip": "idle",
+     "regionTris": 768,
+     "hairVerts": 1688,
+     "frames": 16,
+     "hairInside": 4,
+     "edgesCrossing": 25,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.144
+     ],
+     "cleared": true
+    },
+    {
+     "body": "female",
+     "hair": "bob02",
+     "garment": "hoodie",
+     "push": true,
+     "clip": "walk",
+     "regionTris": 768,
+     "hairVerts": 1688,
+     "frames": 10,
+     "hairInside": 4,
+     "edgesCrossing": 26,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.144
+     ],
+     "cleared": true
+    },
+    {
+     "body": "female",
+     "hair": "long01",
+     "garment": "hoodie",
+     "push": false,
+     "clip": "idle",
+     "regionTris": 768,
+     "hairVerts": 3312,
+     "frames": 16,
+     "hairInside": 558,
+     "edgesCrossing": 298
+    },
+    {
+     "body": "female",
+     "hair": "long01",
+     "garment": "hoodie",
+     "push": false,
+     "clip": "walk",
+     "regionTris": 768,
+     "hairVerts": 3312,
+     "frames": 10,
+     "hairInside": 561,
+     "edgesCrossing": 296
+    },
+    {
+     "body": "female",
+     "hair": "long01",
+     "garment": "hoodie",
+     "push": true,
+     "clip": "idle",
+     "regionTris": 768,
+     "hairVerts": 3312,
+     "frames": 16,
+     "hairInside": 482,
+     "edgesCrossing": 351,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.144
+     ],
+     "cleared": true
+    },
+    {
+     "body": "female",
+     "hair": "long01",
+     "garment": "hoodie",
+     "push": true,
+     "clip": "walk",
+     "regionTris": 768,
+     "hairVerts": 3312,
+     "frames": 10,
+     "hairInside": 486,
+     "edgesCrossing": 351,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.144
+     ],
+     "cleared": true
+    },
+    {
+     "body": "female",
+     "hair": "ponytail01",
+     "garment": "hoodie",
+     "push": false,
+     "clip": "idle",
+     "regionTris": 768,
+     "hairVerts": 3902,
+     "frames": 16,
+     "hairInside": 333,
+     "edgesCrossing": 232
+    },
+    {
+     "body": "female",
+     "hair": "ponytail01",
+     "garment": "hoodie",
+     "push": false,
+     "clip": "walk",
+     "regionTris": 768,
+     "hairVerts": 3902,
+     "frames": 10,
+     "hairInside": 351,
+     "edgesCrossing": 232
+    },
+    {
+     "body": "female",
+     "hair": "ponytail01",
+     "garment": "hoodie",
+     "push": true,
+     "clip": "idle",
+     "regionTris": 768,
+     "hairVerts": 3902,
+     "frames": 16,
+     "hairInside": 0,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.144
+     ],
+     "cleared": true
+    },
+    {
+     "body": "female",
+     "hair": "ponytail01",
+     "garment": "hoodie",
+     "push": true,
+     "clip": "walk",
+     "regionTris": 768,
+     "hairVerts": 3902,
+     "frames": 10,
+     "hairInside": 0,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.144
+     ],
+     "cleared": true
+    },
+    {
+     "body": "female",
+     "hair": "braid01",
+     "garment": "hoodie",
+     "push": false,
+     "clip": "idle",
+     "regionTris": 768,
+     "hairVerts": 4663,
+     "frames": 16,
+     "hairInside": 1439,
+     "edgesCrossing": 718
+    },
+    {
+     "body": "female",
+     "hair": "braid01",
+     "garment": "hoodie",
+     "push": false,
+     "clip": "walk",
+     "regionTris": 768,
+     "hairVerts": 4663,
+     "frames": 10,
+     "hairInside": 1460,
+     "edgesCrossing": 726
+    },
+    {
+     "body": "female",
+     "hair": "braid01",
+     "garment": "hoodie",
+     "push": true,
+     "clip": "idle",
+     "regionTris": 768,
+     "hairVerts": 4663,
+     "frames": 16,
+     "hairInside": 88,
+     "edgesCrossing": 210,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.144
+     ],
+     "cleared": true
+    },
+    {
+     "body": "female",
+     "hair": "braid01",
+     "garment": "hoodie",
+     "push": true,
+     "clip": "walk",
+     "regionTris": 768,
+     "hairVerts": 4663,
+     "frames": 10,
+     "hairInside": 88,
+     "edgesCrossing": 215,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.144
+     ],
+     "cleared": true
+    },
+    {
+     "body": "female",
+     "hair": "short04",
+     "garment": "hoodie",
+     "push": false,
+     "clip": "idle",
+     "regionTris": 768,
+     "hairVerts": 983,
+     "frames": 16,
+     "hairInside": 0,
+     "edgesCrossing": 3
+    },
+    {
+     "body": "female",
+     "hair": "short04",
+     "garment": "hoodie",
+     "push": false,
+     "clip": "walk",
+     "regionTris": 768,
+     "hairVerts": 983,
+     "frames": 10,
+     "hairInside": 0,
+     "edgesCrossing": 3
+    },
+    {
+     "body": "female",
+     "hair": "short04",
+     "garment": "hoodie",
+     "push": true,
+     "clip": "idle",
+     "regionTris": 768,
+     "hairVerts": 983,
+     "frames": 16,
+     "hairInside": 0,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.144
+     ],
+     "cleared": true
+    },
+    {
+     "body": "female",
+     "hair": "short04",
+     "garment": "hoodie",
+     "push": true,
+     "clip": "walk",
+     "regionTris": 768,
+     "hairVerts": 983,
+     "frames": 10,
+     "hairInside": 0,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.144
+     ],
+     "cleared": true
+    },
+    {
+     "body": "female",
+     "hair": "bob01",
+     "garment": "hoodie",
+     "push": false,
+     "clip": "idle",
+     "regionTris": 768,
+     "hairVerts": 5432,
+     "frames": 16,
+     "hairInside": 0,
+     "edgesCrossing": 9
+    },
+    {
+     "body": "female",
+     "hair": "bob01",
+     "garment": "hoodie",
+     "push": false,
+     "clip": "walk",
+     "regionTris": 768,
+     "hairVerts": 5432,
+     "frames": 10,
+     "hairInside": 0,
+     "edgesCrossing": 10
+    },
+    {
+     "body": "female",
+     "hair": "bob01",
+     "garment": "hoodie",
+     "push": true,
+     "clip": "idle",
+     "regionTris": 768,
+     "hairVerts": 5432,
+     "frames": 16,
+     "hairInside": 0,
+     "edgesCrossing": 8,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.144
+     ],
+     "cleared": true
+    },
+    {
+     "body": "female",
+     "hair": "bob01",
+     "garment": "hoodie",
+     "push": true,
+     "clip": "walk",
+     "regionTris": 768,
+     "hairVerts": 5432,
+     "frames": 10,
+     "hairInside": 0,
+     "edgesCrossing": 8,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.144
+     ],
+     "cleared": true
+    },
+    {
+     "body": "female",
+     "hair": "afro01",
+     "garment": "hoodie",
+     "push": false,
+     "clip": "idle",
+     "regionTris": 768,
+     "hairVerts": 2196,
+     "frames": 16,
+     "hairInside": 0,
+     "edgesCrossing": 0
+    },
+    {
+     "body": "female",
+     "hair": "afro01",
+     "garment": "hoodie",
+     "push": false,
+     "clip": "walk",
+     "regionTris": 768,
+     "hairVerts": 2196,
+     "frames": 10,
+     "hairInside": 0,
+     "edgesCrossing": 0
+    },
+    {
+     "body": "female",
+     "hair": "afro01",
+     "garment": "hoodie",
+     "push": true,
+     "clip": "idle",
+     "regionTris": 768,
+     "hairVerts": 2196,
+     "frames": 16,
+     "hairInside": 0,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.144
+     ],
+     "cleared": true
+    },
+    {
+     "body": "female",
+     "hair": "afro01",
+     "garment": "hoodie",
+     "push": true,
+     "clip": "walk",
+     "regionTris": 768,
+     "hairVerts": 2196,
+     "frames": 10,
+     "hairInside": 0,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.144
+     ],
+     "cleared": true
+    },
+    {
+     "body": "female",
+     "hair": "short02",
+     "garment": "coat",
+     "push": false,
+     "clip": "idle",
+     "regionTris": 192,
+     "hairVerts": 1794,
+     "frames": 16,
+     "hairInside": 55,
+     "edgesCrossing": 0
+    },
+    {
+     "body": "female",
+     "hair": "short02",
+     "garment": "coat",
+     "push": false,
+     "clip": "walk",
+     "regionTris": 192,
+     "hairVerts": 1794,
+     "frames": 10,
+     "hairInside": 61,
+     "edgesCrossing": 0
+    },
+    {
+     "body": "female",
+     "hair": "short02",
+     "garment": "coat",
+     "push": true,
+     "clip": "idle",
+     "regionTris": 192,
+     "hairVerts": 1794,
+     "frames": 16,
+     "hairInside": 52,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.169
+     ],
+     "cleared": true
+    },
+    {
+     "body": "female",
+     "hair": "short02",
+     "garment": "coat",
+     "push": true,
+     "clip": "walk",
+     "regionTris": 192,
+     "hairVerts": 1794,
+     "frames": 10,
+     "hairInside": 56,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.169
+     ],
+     "cleared": true
+    },
+    {
+     "body": "female",
+     "hair": "bob02",
+     "garment": "coat",
+     "push": false,
+     "clip": "idle",
+     "regionTris": 192,
+     "hairVerts": 1688,
+     "frames": 16,
+     "hairInside": 74,
+     "edgesCrossing": 6
+    },
+    {
+     "body": "female",
+     "hair": "bob02",
+     "garment": "coat",
+     "push": false,
+     "clip": "walk",
+     "regionTris": 192,
+     "hairVerts": 1688,
+     "frames": 10,
+     "hairInside": 77,
+     "edgesCrossing": 14
+    },
+    {
+     "body": "female",
+     "hair": "bob02",
+     "garment": "coat",
+     "push": true,
+     "clip": "idle",
+     "regionTris": 192,
+     "hairVerts": 1688,
+     "frames": 16,
+     "hairInside": 47,
+     "edgesCrossing": 7,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.169
+     ],
+     "cleared": true
+    },
+    {
+     "body": "female",
+     "hair": "bob02",
+     "garment": "coat",
+     "push": true,
+     "clip": "walk",
+     "regionTris": 192,
+     "hairVerts": 1688,
+     "frames": 10,
+     "hairInside": 46,
+     "edgesCrossing": 6,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.169
+     ],
+     "cleared": true
+    },
+    {
+     "body": "female",
+     "hair": "long01",
+     "garment": "coat",
+     "push": false,
+     "clip": "idle",
+     "regionTris": 192,
+     "hairVerts": 3312,
+     "frames": 16,
+     "hairInside": 79,
+     "edgesCrossing": 41
+    },
+    {
+     "body": "female",
+     "hair": "long01",
+     "garment": "coat",
+     "push": false,
+     "clip": "walk",
+     "regionTris": 192,
+     "hairVerts": 3312,
+     "frames": 10,
+     "hairInside": 87,
+     "edgesCrossing": 40
+    },
+    {
+     "body": "female",
+     "hair": "long01",
+     "garment": "coat",
+     "push": true,
+     "clip": "idle",
+     "regionTris": 192,
+     "hairVerts": 3312,
+     "frames": 16,
+     "hairInside": 91,
+     "edgesCrossing": 59,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.169
+     ],
+     "cleared": true
+    },
+    {
+     "body": "female",
+     "hair": "long01",
+     "garment": "coat",
+     "push": true,
+     "clip": "walk",
+     "regionTris": 192,
+     "hairVerts": 3312,
+     "frames": 10,
+     "hairInside": 89,
+     "edgesCrossing": 57,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.169
+     ],
+     "cleared": true
+    },
+    {
+     "body": "female",
+     "hair": "ponytail01",
+     "garment": "coat",
+     "push": false,
+     "clip": "idle",
+     "regionTris": 192,
+     "hairVerts": 3902,
+     "frames": 16,
+     "hairInside": 57,
+     "edgesCrossing": 6
+    },
+    {
+     "body": "female",
+     "hair": "ponytail01",
+     "garment": "coat",
+     "push": false,
+     "clip": "walk",
+     "regionTris": 192,
+     "hairVerts": 3902,
+     "frames": 10,
+     "hairInside": 52,
+     "edgesCrossing": 6
+    },
+    {
+     "body": "female",
+     "hair": "ponytail01",
+     "garment": "coat",
+     "push": true,
+     "clip": "idle",
+     "regionTris": 192,
+     "hairVerts": 3902,
+     "frames": 16,
+     "hairInside": 12,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.169
+     ],
+     "cleared": true
+    },
+    {
+     "body": "female",
+     "hair": "ponytail01",
+     "garment": "coat",
+     "push": true,
+     "clip": "walk",
+     "regionTris": 192,
+     "hairVerts": 3902,
+     "frames": 10,
+     "hairInside": 14,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.169
+     ],
+     "cleared": true
+    },
+    {
+     "body": "female",
+     "hair": "braid01",
+     "garment": "coat",
+     "push": false,
+     "clip": "idle",
+     "regionTris": 192,
+     "hairVerts": 4663,
+     "frames": 16,
+     "hairInside": 295,
+     "edgesCrossing": 280
+    },
+    {
+     "body": "female",
+     "hair": "braid01",
+     "garment": "coat",
+     "push": false,
+     "clip": "walk",
+     "regionTris": 192,
+     "hairVerts": 4663,
+     "frames": 10,
+     "hairInside": 274,
+     "edgesCrossing": 268
+    },
+    {
+     "body": "female",
+     "hair": "braid01",
+     "garment": "coat",
+     "push": true,
+     "clip": "idle",
+     "regionTris": 192,
+     "hairVerts": 4663,
+     "frames": 16,
+     "hairInside": 219,
+     "edgesCrossing": 138,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.169
+     ],
+     "cleared": true
+    },
+    {
+     "body": "female",
+     "hair": "braid01",
+     "garment": "coat",
+     "push": true,
+     "clip": "walk",
+     "regionTris": 192,
+     "hairVerts": 4663,
+     "frames": 10,
+     "hairInside": 223,
+     "edgesCrossing": 144,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.169
+     ],
+     "cleared": true
+    },
+    {
+     "body": "female",
+     "hair": "short04",
+     "garment": "coat",
+     "push": false,
+     "clip": "idle",
+     "regionTris": 192,
+     "hairVerts": 983,
+     "frames": 16,
+     "hairInside": 66,
+     "edgesCrossing": 0
+    },
+    {
+     "body": "female",
+     "hair": "short04",
+     "garment": "coat",
+     "push": false,
+     "clip": "walk",
+     "regionTris": 192,
+     "hairVerts": 983,
+     "frames": 10,
+     "hairInside": 66,
+     "edgesCrossing": 0
+    },
+    {
+     "body": "female",
+     "hair": "short04",
+     "garment": "coat",
+     "push": true,
+     "clip": "idle",
+     "regionTris": 192,
+     "hairVerts": 983,
+     "frames": 16,
+     "hairInside": 60,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.169
+     ],
+     "cleared": true
+    },
+    {
+     "body": "female",
+     "hair": "short04",
+     "garment": "coat",
+     "push": true,
+     "clip": "walk",
+     "regionTris": 192,
+     "hairVerts": 983,
+     "frames": 10,
+     "hairInside": 60,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.169
+     ],
+     "cleared": true
+    },
+    {
+     "body": "female",
+     "hair": "bob01",
+     "garment": "coat",
+     "push": false,
+     "clip": "idle",
+     "regionTris": 192,
+     "hairVerts": 5432,
+     "frames": 16,
+     "hairInside": 146,
+     "edgesCrossing": 11
+    },
+    {
+     "body": "female",
+     "hair": "bob01",
+     "garment": "coat",
+     "push": false,
+     "clip": "walk",
+     "regionTris": 192,
+     "hairVerts": 5432,
+     "frames": 10,
+     "hairInside": 150,
+     "edgesCrossing": 24
+    },
+    {
+     "body": "female",
+     "hair": "bob01",
+     "garment": "coat",
+     "push": true,
+     "clip": "idle",
+     "regionTris": 192,
+     "hairVerts": 5432,
+     "frames": 16,
+     "hairInside": 104,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.169
+     ],
+     "cleared": true
+    },
+    {
+     "body": "female",
+     "hair": "bob01",
+     "garment": "coat",
+     "push": true,
+     "clip": "walk",
+     "regionTris": 192,
+     "hairVerts": 5432,
+     "frames": 10,
+     "hairInside": 112,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.169
+     ],
+     "cleared": true
+    },
+    {
+     "body": "female",
+     "hair": "afro01",
+     "garment": "coat",
+     "push": false,
+     "clip": "idle",
+     "regionTris": 192,
+     "hairVerts": 2196,
+     "frames": 16,
+     "hairInside": 25,
+     "edgesCrossing": 0
+    },
+    {
+     "body": "female",
+     "hair": "afro01",
+     "garment": "coat",
+     "push": false,
+     "clip": "walk",
+     "regionTris": 192,
+     "hairVerts": 2196,
+     "frames": 10,
+     "hairInside": 34,
+     "edgesCrossing": 0
+    },
+    {
+     "body": "female",
+     "hair": "afro01",
+     "garment": "coat",
+     "push": true,
+     "clip": "idle",
+     "regionTris": 192,
+     "hairVerts": 2196,
+     "frames": 16,
+     "hairInside": 23,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.169
+     ],
+     "cleared": true
+    },
+    {
+     "body": "female",
+     "hair": "afro01",
+     "garment": "coat",
+     "push": true,
+     "clip": "walk",
+     "regionTris": 192,
+     "hairVerts": 2196,
+     "frames": 10,
+     "hairInside": 33,
+     "edgesCrossing": 0,
+     "capsuleRadii": [
+      0.06,
+      0.06,
+      0.169
+     ],
+     "cleared": true
+    }
+   ]
+  },
+  "dresscoat": {
+   "what": "Dress + trench coat in the crouched jump / land poses (ROADMAP M2b). The pair is in CONFLICTS; it is measured FORCED (conflicts removed in a copy of the catalog).",
+   "method": {
+    "rules": "resolveOutfit / wearRules in both orders on the real catalog",
+    "penetration": "tools/cloth_integrity.mjs runCase (worker path, drawfix, layers; moves timeline measured in jump, land timeline in land): per pair max vertices / deepest mm over the frames; pokeVerts / sinkVerts = sum over pairs and clips",
+    "edgeStretch": "solver.stretch() of the DRAWN cloth shape (drawX): p99 and max edge length / rest length over the measured frames"
+   },
+   "target": "rules.pairReachable = false (the test in tests/visual_probes.test.mjs). The forced numbers are a baseline, no target: the pair is not offered.",
+   "rules": {
+    "orders": [
+     {
+      "order": [
+       "dress",
+       "trenchcoat"
+      ],
+      "resolveOutfit": [
+       "trenchcoat"
+      ],
+      "wearRules": [
+       "trenchcoat"
+      ]
+     },
+     {
+      "order": [
+       "trenchcoat",
+       "dress"
+      ],
+      "resolveOutfit": [
+       "dress"
+      ],
+      "wearRules": [
+       "dress"
+      ]
+     }
+    ],
+    "pairReachable": false
+   },
+   "runs": [
+    {
+     "body": "female",
+     "timeline": "moves",
+     "clips": [
+      "jump"
+     ],
+     "outfit": "dress+coat (forced)",
+     "worn": [
+      "panties",
+      "bra",
+      "dress",
+      "trenchcoat"
+     ],
+     "measured": 50,
+     "pokeVerts": 21,
+     "pokeMm": 15.2,
+     "sinkVerts": 2,
+     "sinkMm": 19.2,
+     "dressBody": null,
+     "coatDress": {
+      "jump": {
+       "poke": {
+        "n": 21,
+        "mm": 15.2,
+        "at": "upperarm_l"
+       },
+       "sink": {
+        "n": 2,
+        "mm": 19.2,
+        "at": "spine_03"
+       }
+      }
+     },
+     "edgeStretch": {
+      "dress": {
+       "jump": {
+        "p99": 1.662,
+        "max": 2.406
+       }
+      },
+      "trenchcoat": {
+       "jump": {
+        "p99": 1.652,
+        "max": 3.915
+       }
+      }
+     },
+     "pairs": {
+      "trenchcoat:dress": {
+       "jump": {
+        "poke": {
+         "n": 21,
+         "mm": 15.2,
+         "at": "upperarm_l"
+        },
+        "sink": {
+         "n": 2,
+         "mm": 19.2,
+         "at": "spine_03"
+        }
+       }
+      }
+     }
+    },
+    {
+     "body": "female",
+     "timeline": "moves",
+     "clips": [
+      "jump"
+     ],
+     "outfit": "dress (reference)",
+     "worn": [
+      "panties",
+      "bra",
+      "dress"
+     ],
+     "measured": 50,
+     "pokeVerts": 0,
+     "pokeMm": 0,
+     "sinkVerts": 0,
+     "sinkMm": 0,
+     "dressBody": null,
+     "coatDress": null,
+     "edgeStretch": {
+      "dress": {
+       "jump": {
+        "p99": 1.662,
+        "max": 2.406
+       }
+      }
+     },
+     "pairs": {}
+    },
+    {
+     "body": "female",
+     "timeline": "land",
+     "clips": [
+      "land"
+     ],
+     "outfit": "dress+coat (forced)",
+     "worn": [
+      "panties",
+      "bra",
+      "dress",
+      "trenchcoat"
+     ],
+     "measured": 40,
+     "pokeVerts": 19,
+     "pokeMm": 13.9,
+     "sinkVerts": 2,
+     "sinkMm": 25.4,
+     "dressBody": null,
+     "coatDress": {
+      "land": {
+       "poke": {
+        "n": 19,
+        "mm": 13.9,
+        "at": "upperarm_r"
+       },
+       "sink": {
+        "n": 2,
+        "mm": 25.4,
+        "at": "spine_03"
+       }
+      }
+     },
+     "edgeStretch": {
+      "dress": {
+       "land": {
+        "p99": 1.365,
+        "max": 1.7
+       }
+      },
+      "trenchcoat": {
+       "land": {
+        "p99": 1.381,
+        "max": 2.788
+       }
+      }
+     },
+     "pairs": {
+      "trenchcoat:dress": {
+       "land": {
+        "poke": {
+         "n": 19,
+         "mm": 13.9,
+         "at": "upperarm_r"
+        },
+        "sink": {
+         "n": 2,
+         "mm": 25.4,
+         "at": "spine_03"
+        }
+       }
+      }
+     }
+    },
+    {
+     "body": "female",
+     "timeline": "land",
+     "clips": [
+      "land"
+     ],
+     "outfit": "dress (reference)",
+     "worn": [
+      "panties",
+      "bra",
+      "dress"
+     ],
+     "measured": 40,
+     "pokeVerts": 0,
+     "pokeMm": 0,
+     "sinkVerts": 0,
+     "sinkMm": 0,
+     "dressBody": null,
+     "coatDress": null,
+     "edgeStretch": {
+      "dress": {
+       "land": {
+        "p99": 1.365,
+        "max": 1.7
+       }
+      }
+     },
+     "pairs": {}
+    },
+    {
+     "body": "male",
+     "timeline": "moves",
+     "clips": [
+      "jump"
+     ],
+     "outfit": "dress+coat (forced)",
+     "worn": [
+      "briefs",
+      "dress",
+      "trenchcoat"
+     ],
+     "measured": 50,
+     "pokeVerts": 19,
+     "pokeMm": 26.9,
+     "sinkVerts": 8,
+     "sinkMm": 29.8,
+     "dressBody": null,
+     "coatDress": {
+      "jump": {
+       "poke": {
+        "n": 19,
+        "mm": 26.9,
+        "at": "thigh_r"
+       },
+       "sink": {
+        "n": 8,
+        "mm": 29.8,
+        "at": "spine_01"
+       }
+      }
+     },
+     "edgeStretch": {
+      "dress": {
+       "jump": {
+        "p99": 1.975,
+        "max": 2.882
+       }
+      },
+      "trenchcoat": {
+       "jump": {
+        "p99": 1.604,
+        "max": 3.466
+       }
+      }
+     },
+     "pairs": {
+      "trenchcoat:dress": {
+       "jump": {
+        "poke": {
+         "n": 19,
+         "mm": 26.9,
+         "at": "thigh_r"
+        },
+        "sink": {
+         "n": 8,
+         "mm": 29.8,
+         "at": "spine_01"
+        }
+       }
+      }
+     }
+    },
+    {
+     "body": "male",
+     "timeline": "moves",
+     "clips": [
+      "jump"
+     ],
+     "outfit": "dress (reference)",
+     "worn": [
+      "briefs",
+      "dress"
+     ],
+     "measured": 50,
+     "pokeVerts": 1,
+     "pokeMm": 2.6,
+     "sinkVerts": 1,
+     "sinkMm": 20.7,
+     "dressBody": {
+      "jump": {
+       "poke": {
+        "n": 1,
+        "mm": 2.6,
+        "at": "spine_03"
+       },
+       "sink": {
+        "n": 1,
+        "mm": 20.7,
+        "at": "spine_03"
+       }
+      }
+     },
+     "coatDress": null,
+     "edgeStretch": {
+      "dress": {
+       "jump": {
+        "p99": 1.975,
+        "max": 2.882
+       }
+      }
+     },
+     "pairs": {
+      "dress:body": {
+       "jump": {
+        "poke": {
+         "n": 1,
+         "mm": 2.6,
+         "at": "spine_03"
+        },
+        "sink": {
+         "n": 1,
+         "mm": 20.7,
+         "at": "spine_03"
+        }
+       }
+      }
+     }
+    },
+    {
+     "body": "male",
+     "timeline": "land",
+     "clips": [
+      "land"
+     ],
+     "outfit": "dress+coat (forced)",
+     "worn": [
+      "briefs",
+      "dress",
+      "trenchcoat"
+     ],
+     "measured": 40,
+     "pokeVerts": 17,
+     "pokeMm": 20.6,
+     "sinkVerts": 6,
+     "sinkMm": 29.5,
+     "dressBody": null,
+     "coatDress": {
+      "land": {
+       "poke": {
+        "n": 17,
+        "mm": 20.6,
+        "at": "thigh_r"
+       },
+       "sink": {
+        "n": 6,
+        "mm": 29.5,
+        "at": "spine_02"
+       }
+      }
+     },
+     "edgeStretch": {
+      "dress": {
+       "land": {
+        "p99": 1.386,
+        "max": 1.804
+       }
+      },
+      "trenchcoat": {
+       "land": {
+        "p99": 1.403,
+        "max": 2.991
+       }
+      }
+     },
+     "pairs": {
+      "trenchcoat:dress": {
+       "land": {
+        "poke": {
+         "n": 17,
+         "mm": 20.6,
+         "at": "thigh_r"
+        },
+        "sink": {
+         "n": 6,
+         "mm": 29.5,
+         "at": "spine_02"
+        }
+       }
+      }
+     }
+    },
+    {
+     "body": "male",
+     "timeline": "land",
+     "clips": [
+      "land"
+     ],
+     "outfit": "dress (reference)",
+     "worn": [
+      "briefs",
+      "dress"
+     ],
+     "measured": 40,
+     "pokeVerts": 0,
+     "pokeMm": 0,
+     "sinkVerts": 1,
+     "sinkMm": 21.4,
+     "dressBody": {
+      "land": {
+       "poke": {
+        "n": 0,
+        "mm": 0,
+        "at": null
+       },
+       "sink": {
+        "n": 1,
+        "mm": 21.4,
+        "at": "spine_03"
+       }
+      }
+     },
+     "coatDress": null,
+     "edgeStretch": {
+      "dress": {
+       "land": {
+        "p99": 1.386,
+        "max": 1.804
+       }
+      }
+     },
+     "pairs": {
+      "dress:body": {
+       "land": {
+        "poke": {
+         "n": 0,
+         "mm": 0,
+         "at": null
+        },
+        "sink": {
+         "n": 1,
+         "mm": 21.4,
+         "at": "spine_03"
+        }
+       }
+      }
+     }
+    },
+    {
+     "body": "neutral",
+     "timeline": "moves",
+     "clips": [
+      "jump"
+     ],
+     "outfit": "dress+coat (forced)",
+     "worn": [
+      "briefs",
+      "dress",
+      "trenchcoat"
+     ],
+     "measured": 50,
+     "pokeVerts": 26,
+     "pokeMm": 28.8,
+     "sinkVerts": 5,
+     "sinkMm": 28.8,
+     "dressBody": null,
+     "coatDress": {
+      "jump": {
+       "poke": {
+        "n": 24,
+        "mm": 19.3,
+        "at": "thigh_r"
+       },
+       "sink": {
+        "n": 4,
+        "mm": 28.8,
+        "at": "spine_01"
+       }
+      }
+     },
+     "edgeStretch": {
+      "dress": {
+       "jump": {
+        "p99": 1.727,
+        "max": 2.825
+       }
+      },
+      "trenchcoat": {
+       "jump": {
+        "p99": 2.027,
+        "max": 3.838
+       }
+      }
+     },
+     "pairs": {
+      "trenchcoat:dress": {
+       "jump": {
+        "poke": {
+         "n": 24,
+         "mm": 19.3,
+         "at": "thigh_r"
+        },
+        "sink": {
+         "n": 4,
+         "mm": 28.8,
+         "at": "spine_01"
+        }
+       }
+      },
+      "trenchcoat:body": {
+       "jump": {
+        "poke": {
+         "n": 2,
+         "mm": 28.8,
+         "at": "calf_l"
+        },
+        "sink": {
+         "n": 1,
+         "mm": 11.8,
+         "at": "thigh_r"
+        }
+       }
+      }
+     }
+    },
+    {
+     "body": "neutral",
+     "timeline": "moves",
+     "clips": [
+      "jump"
+     ],
+     "outfit": "dress (reference)",
+     "worn": [
+      "briefs",
+      "dress"
+     ],
+     "measured": 50,
+     "pokeVerts": 2,
+     "pokeMm": 18.3,
+     "sinkVerts": 0,
+     "sinkMm": 0,
+     "dressBody": null,
+     "coatDress": null,
+     "edgeStretch": {
+      "dress": {
+       "jump": {
+        "p99": 1.727,
+        "max": 2.825
+       }
+      }
+     },
+     "pairs": {
+      "dress:briefs": {
+       "jump": {
+        "poke": {
+         "n": 2,
+         "mm": 18.3,
+         "at": "thigh_r"
+        },
+        "sink": {
+         "n": 0,
+         "mm": 0,
+         "at": null
+        }
+       }
+      }
+     }
+    },
+    {
+     "body": "neutral",
+     "timeline": "land",
+     "clips": [
+      "land"
+     ],
+     "outfit": "dress+coat (forced)",
+     "worn": [
+      "briefs",
+      "dress",
+      "trenchcoat"
+     ],
+     "measured": 40,
+     "pokeVerts": 21,
+     "pokeMm": 13.3,
+     "sinkVerts": 1,
+     "sinkMm": 9.5,
+     "dressBody": null,
+     "coatDress": {
+      "land": {
+       "poke": {
+        "n": 21,
+        "mm": 13.3,
+        "at": "upperarm_l"
+       },
+       "sink": {
+        "n": 1,
+        "mm": 9.5,
+        "at": "spine_03"
+       }
+      }
+     },
+     "edgeStretch": {
+      "dress": {
+       "land": {
+        "p99": 1.365,
+        "max": 1.86
+       }
+      },
+      "trenchcoat": {
+       "land": {
+        "p99": 1.316,
+        "max": 2.251
+       }
+      }
+     },
+     "pairs": {
+      "trenchcoat:dress": {
+       "land": {
+        "poke": {
+         "n": 21,
+         "mm": 13.3,
+         "at": "upperarm_l"
+        },
+        "sink": {
+         "n": 1,
+         "mm": 9.5,
+         "at": "spine_03"
+        }
+       }
+      }
+     }
+    },
+    {
+     "body": "neutral",
+     "timeline": "land",
+     "clips": [
+      "land"
+     ],
+     "outfit": "dress (reference)",
+     "worn": [
+      "briefs",
+      "dress"
+     ],
+     "measured": 40,
+     "pokeVerts": 0,
+     "pokeMm": 0,
+     "sinkVerts": 0,
+     "sinkMm": 0,
+     "dressBody": null,
+     "coatDress": null,
+     "edgeStretch": {
+      "dress": {
+       "land": {
+        "p99": 1.365,
+        "max": 1.86
+       }
+      }
+     },
+     "pairs": {}
+    }
+   ]
+  }
+ }
+}
