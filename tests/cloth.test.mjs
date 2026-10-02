@@ -8,6 +8,7 @@ import { createSolver, clothParams, advance, hashFloats } from '../web/cloth/sol
 import { buildClothModel } from '../web/cloth/model.js';
 import { clothColliderDefs } from '../web/cloth/colliders.js';
 import { collidesAsLayer } from '../web/clothing_rules.js';
+import { perturbGarment } from '../tools/perturb.mjs';
 
 const D = loadData();
 const report = (name, v, tol) => console.log(`# ${name}: ${JSON.stringify(v)}  (tolerance ${tol})`);
@@ -112,7 +113,38 @@ for (const b of COAT_BODIES) {
 // Visible-layer penetration (tools/cloth_sim.mjs pokeThrough): jeans / T-shirt / skin showing through the coat
 // fabric. "through" = a covered layer vertex lies > 2 mm outside a coat triangle that itself has a particle inside
 // the layers (the blue holes in the knee / hem during walk and run). Cloth off (skinned coat) is the reference.
-for (const b of COAT_BODIES) {
+// The female case is chaotic: moving the T-shirt by +-1e-7 m flips pass / fail (docs/AVOIDING_CLIPPING.md section 4),
+// so one run is a coin toss. It runs over a FIXED set of seeded perturbations (tools/perturb.mjs) and asserts how
+// many pass the per-layer limit. Deterministic: the same seeds give the same count on every run.
+// PROVISIONAL threshold (ROADMAP decision 3, not decided by the owner yet; the roadmap recommends 6 of 8).
+// Change it here only.
+const COAT_CHAOTIC = { bodies: ['female'], garment: 'tshirt', amp: 1e-7, seeds: [1, 2, 3, 4, 5, 6, 7, 8], minPass: 6,
+  maxThrough: 1, maxThroughMm: 15 };
+const layerVerdict = r => {
+  const v = {};
+  for (const [id, x] of Object.entries(r.layer)) v[id] = { walk: x.throughByClip.walk ?? 0, run: x.throughByClip.run ?? 0, mm: x.throughMm };
+  const ok = Object.values(v).every(x => x.walk <= COAT_CHAOTIC.maxThrough && x.run <= COAT_CHAOTIC.maxThrough && x.mm <= COAT_CHAOTIC.maxThroughMm);
+  return { v, ok };
+};
+
+for (const b of COAT_CHAOTIC.bodies) {
+  test(`long coat over T-shirt + jeans, ${b} (chaotic): >= ${COAT_CHAOTIC.minPass} of ${COAT_CHAOTIC.seeds.length} perturbations within <= ${COAT_CHAOTIC.maxThrough} v / ${COAT_CHAOTIC.maxThroughMm} mm`, () => {
+    const runs = COAT_CHAOTIC.seeds.map(seed => {
+      const r = runTimeline(perturbGarment(D, COAT_CHAOTIC.garment, seed, COAT_CHAOTIC.amp), ['trenchcoat'], BODIES[b], { measureEvery: 6, under: ['tshirt', 'jeans'] }).trenchcoat;
+      return { seed, ...layerVerdict(r), stretchP99: r.stretchP99, bodyPen: r.bodyPen, crossed: r.crossed };
+    });
+    const pass = runs.filter(x => x.ok).length;
+    for (const x of runs) report(`coat layers ${b} seed ${x.seed}`, { ok: x.ok, ...x.v, stretchP99: x.stretchP99, bodyPen: x.bodyPen, crossed: x.crossed }, 'per layer walk/run through <= 1 and <= 15 mm');
+    const p99 = runs.map(x => x.stretchP99).sort((a, c) => a - c), median = (p99[3] + p99[4]) / 2;
+    report(`coat layers ${b} summary`, { pass, of: runs.length, stretchP99Median: +median.toFixed(3) },
+      `>= ${COAT_CHAOTIC.minPass} pass (PROVISIONAL), every run pen <= 6 and crossed 0, median p99 <= 1.65`);
+    assert.ok(pass >= COAT_CHAOTIC.minPass, `${pass} of ${runs.length} perturbations pass, need >= ${COAT_CHAOTIC.minPass}`);
+    for (const x of runs) { assert.ok(x.bodyPen <= 6, `seed ${x.seed} pen ${x.bodyPen}`); assert.equal(x.crossed, 0); }
+    assert.ok(median <= 1.65, `median stretch p99 ${median}`);
+  });
+}
+
+for (const b of COAT_BODIES.filter(x => !COAT_CHAOTIC.bodies.includes(x))) {
   test(`long coat over T-shirt + jeans, ${b}: no layer pokes through the coat in walk / run`, () => {
     const r = runTimeline(D, ['trenchcoat'], BODIES[b], { measureEvery: 6, under: ['tshirt', 'jeans'] }).trenchcoat;
     const v = {}, sum = o => Object.values(o).reduce((a, x) => a + x.through, 0);

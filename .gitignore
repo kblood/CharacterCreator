@@ -1,7 +1,7 @@
 # staged deploy site + tarball (deploy.ps1)
 build/
 
-# Blender scratch / backups (scratch normally lives outside the repo in C:\Tools\BlenderWorkTemp)
+# Blender scratch / backups (scratch normally lives outside the repo, in <scratch>)
 *.blend
 *.blend1
 *.blend2

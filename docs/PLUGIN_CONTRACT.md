@@ -33,8 +33,8 @@ Non-goals (for now)
 - A host currently imports about **ten internal modules** directly: `character.js`, `humanoid.js`, `clothing.js`,
   `clothing_rules.js`, `materials.js`, `eyelife.js`, `breastphysics.js`, `cloth/runtime.js`, `animation/*`. Any rename breaks the host.
 - **Assembly lives in app code, twice.** Loading the body GLB, applying sliders and skeleton, tints, hair, clothing,
-  cloth and breast physics, and the order they update in, are written in `web/main.js` (about 790 lines) and again in
-  the WebXR `src/avatar.js` (about 415 lines). The plugin should own this assembly; hosts should not repeat it.
+  cloth and breast physics, and the order they update in, are written in `web/main.js` (820 lines) and again in
+  the WebXR `src/avatar.js` (443 lines; both counted 2026-10-02 on master). The plugin should own this assembly; hosts should not repeat it.
 - `createClothing()` builds a **DOM UI** and needs `loader`, `getBody`, `addPart`, `onChange`, `setStatus`, `t`, `lang`.
   A host without a DOM (or one that wants its own UI) has to feed it a detached element. UI must move out of the core.
 - The **catalog is already data**: `output/clothing.json` (slots, zones, rules, items with `layer`, `occupies`,
@@ -364,7 +364,7 @@ Still open
 ## 12. Outside-author kit (packs from anyone)
 
 Today a garment only works because our build pipeline (`blender/cc_clothing.py`) produces what the runtime expects:
-skin weights on the 53-bone rig, 92 fitted morph targets, body-zone bits, a cloth pin mask (`COLOR_0.r`), layer/occupies/
+skin weights on the 53-bone rig, 92 fitted morph targets, body-zone bits, a cloth pin mask (`_CLOTH_PIN`), layer/occupies/
 conflicts metadata and clearance against lower layers. An outside author needs all of that without reading our source.
 
 **Reuse the MakeHuman/MPFB ecosystem instead of building a fitting tool.** Findings (full sources and VERIFIED/INFERRED labels

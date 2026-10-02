@@ -1,9 +1,9 @@
 # Blender workflow (how this project is built)
 
 ## Environment
-- Blender 5.2.2 LTS, portable: `C:\Tools\Blender\blender.exe` (not on PATH; no admin needed). Scratch area: `C:\Tools\BlenderWorkTemp\{blend,export,render,scripts}`.
+- Blender 5.2.2 LTS, portable: `<blender>` = the path to its `blender.exe` (not on PATH; no admin needed). Scratch area: `<scratch>\{blend,export,render,scripts}` (a work folder outside the repo).
 - Everything is run **headless**: `blender.exe -b --python blender/build_base.py -- <out.glb>`. Blender output is noisy; grep for your own markers (`BUILD ...`).
-- Live control is opt-in via blender-mcp (`C:\Tools\blender-mcp.json`, start Blender with `C:\Tools\start-blender-mcp.ps1`, launch Claude with `--mcp-config`). Not needed for builds. Its tools all require a `user_prompt` argument. See the global `blender` skill.
+- Live control is opt-in via blender-mcp (`<tools>\blender-mcp.json`, start Blender with `<tools>\start-blender-mcp.ps1`, launch Claude with `--mcp-config`). Not needed for builds. Its tools all require a `user_prompt` argument. See the global `blender` skill.
 - Run deploy/PowerShell things from PowerShell, not Git Bash (MSYS rewrites `/var/www/...` into `C:/Program Files/Git/var/www/...`).
 
 ## MPFB (MakeHuman base) setup

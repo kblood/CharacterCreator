@@ -1,0 +1,61 @@
+{
+ "commit": "87bd0d7",
+ "node": "v24.6.0",
+ "measured": "2026-10-02",
+ "check": "two clean builds of the same commit (git archive 87bd0d7 into two different folders), Blender 5.2 + MPFB 2.0.17, Windows",
+ "steps": [
+  "<blender> -b --python blender/build_base.py -- <dir>/base_body.glb --blend <dir>/base_body.blend --textures <dir>/textures",
+  "<blender> -b --python blender/bake_clips.py -- --blend <dir>/base_body.blend --out <dir>/base_body_anim.glb",
+  "node tools/make_colliders.mjs <dir>",
+  "node tools/compare_builds.mjs <dirA> <dirB>"
+ ],
+ "result": {
+  "buildAvsB": {
+   "identical": 29,
+   "different": 0
+  },
+  "buildAvsCommittedOutput": {
+   "identical": 28,
+   "different": [
+    "body_colliders.json"
+   ]
+  }
+ },
+ "verdict": "deterministic: all 24 GLBs and 5 JSON files sha256-identical between build A and build B, and the GLBs sha256-identical to the committed output/",
+ "notes": [
+  "The JSON sidecars differ from a Windows checkout of output/ only by line endings (core.autocrlf: the checkout has CRLF, the build writes LF); their git blobs (git hash-object) are identical to the committed ones.",
+  "Not rebuilt here: output/animations/*.json (node tools/sample_clips.mjs); the bake used the committed clip JSON.",
+  "Build time about 4 min per build_base run, 13 s per bake on this machine."
+ ],
+ "sha256": {
+  "asset_licenses.json": "994357b32144d4ac2a23253359be5a3fd106f76dd49cb7df37b18213be6bd18b",
+  "base_body.glb": "b5b450af89f6fbf8debf387eda8da40cd0a8c3253a2d59871c730ce7e7f46469",
+  "base_body.joints.json": "47c40fcaeb9f089f0f32ba781e2a0ac7d7a925a47b6db3c46102f0091a53a839",
+  "base_body_anim.glb": "0eb271d4adea12b7f6bb1d4d8f7398db702f9449479be559ab9f019b5ab30b0f",
+  "body_colliders.json": "e5b6f304ff08bc94d6e3dfef45cac14c4488f995588d467eea379891ed0e05c4",
+  "clothing.json": "600934279a9a3c57d672f5e8d9e3997259b13c047a1147e01f1b45009d570ba1",
+  "clothing_boots.glb": "ca9bd57f279006c5114cc47fbbc8143d0e53ac5ddb9b40c78099a53a0c904895",
+  "clothing_bra.glb": "5f664e238312be3c4507f77f7e012b30731dbe0618c8e2941c350f516090fd5b",
+  "clothing_briefs.glb": "e5cf944ff423acfdd11f1294c4dc4a87d875e2d6acb0b00747bd7cc37d2cfa21",
+  "clothing_dress.glb": "038fc440ae3932ba0e26a74c3cdcc53d381978832f5ea0fb58ef45e8b5055e06",
+  "clothing_hoodie.glb": "264ad136179ac35326a273116652cf44badc189f6c78f09d188ecda19b3fd969",
+  "clothing_jacket.glb": "22c489abb90fa3af3381948a91016ae2fa5dc5ab1c1152721527ac74c70e9dbd",
+  "clothing_jeans.glb": "dac0e90aba219415e895eed0e471c0a9aab6b53f8870be1f8dfd41cd89c25d11",
+  "clothing_panties.glb": "b860bd0c67694511156a9d3fc8641fb637da5d2327d5a706de0ab6151dddd3eb",
+  "clothing_shirt.glb": "c3467876f712e63a901fa664b1d54eb0127c56d20888dbbb0a606973fd26e9cc",
+  "clothing_shoes.glb": "ea483876a6de5d51bf9fef16e1fd1e8957573398eab3321870d93af8c7dbc9a2",
+  "clothing_shorts.glb": "505d9a6ae140c16a8694d628e65ed7a681dc7410b08631212d6121d4b88d2dfe",
+  "clothing_skirt.glb": "b0c9e31793fc2f0dedd9b1bfb60489711d7bf0c8c72405e949911afd836de6a2",
+  "clothing_trenchcoat.glb": "7ba089a6bd00af369ad9746120a82ac48d949e898493ee3b345d169f7ce6170c",
+  "clothing_tshirt.glb": "f77eaea89354ad57bcce48a877bec314e82d71de84700810e7c8290b20886063",
+  "hair.json": "7522fd4742525bc0f5fca748500b6eb8abb910dc1cb1a6faa6d3b7da74257ffb",
+  "hair_afro01.glb": "872c2b313ccd38476b6be81eaed7f48061f8bf4fd2b37e16046d68c1c2309caf",
+  "hair_bob01.glb": "e9c2561770cf806c17fc38d484c3d74238372a5f121d67f9c263bd0d211ba93c",
+  "hair_bob02.glb": "6fda507823964a160c7552a9a8c283d6770a2944f1e24795026e42ba989aec7d",
+  "hair_braid01.glb": "ff1bb5c33a0ae9f172a2fa44b9dab8ea4c48760ad41d744ad09732814bf370eb",
+  "hair_long01.glb": "d340fff458f920dd16dcc80493a1a33207b00c6bbfb08c4c53aba54704a78818",
+  "hair_ponytail01.glb": "944efb6fb4bc223017697d4838ba27ec95c58866f2c98eac661e32f50467ebed",
+  "hair_short02.glb": "eb341c197acf3948dac1f41f7722e9dad31018149541504a13ebcc8b6aa9d5aa",
+  "hair_short04.glb": "ee2b27b2a004297ed5150edb7f6dc321e22cb87a30b5b7dcea582e1cf4789598"
+ }
+}

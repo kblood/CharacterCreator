@@ -1,0 +1,119 @@
+{
+ "commit": "87bd0d7",
+ "node": "v24.6.0",
+ "measured": "2026-10-02",
+ "command": "node tools/check_garment.mjs <all catalog ids> --bodies all --json",
+ "garments": 14,
+ "failingGarments": [],
+ "perGarment": {
+  "briefs": {
+   "fail": false,
+   "OK": 32,
+   "INFO": 3,
+   "SKIP": 1,
+   "failing": [],
+   "known": []
+  },
+  "panties": {
+   "fail": false,
+   "OK": 32,
+   "INFO": 3,
+   "SKIP": 1,
+   "failing": [],
+   "known": []
+  },
+  "bra": {
+   "fail": false,
+   "OK": 34,
+   "INFO": 2,
+   "SKIP": 1,
+   "failing": [],
+   "known": []
+  },
+  "dress": {
+   "fail": false,
+   "OK": 64,
+   "INFO": 1,
+   "failing": [],
+   "known": []
+  },
+  "shirt": {
+   "fail": false,
+   "OK": 36,
+   "INFO": 2,
+   "SKIP": 1,
+   "failing": [],
+   "known": []
+  },
+  "tshirt": {
+   "fail": false,
+   "OK": 36,
+   "INFO": 2,
+   "SKIP": 1,
+   "failing": [],
+   "known": []
+  },
+  "hoodie": {
+   "fail": false,
+   "OK": 34,
+   "INFO": 2,
+   "SKIP": 1,
+   "failing": [],
+   "known": []
+  },
+  "jeans": {
+   "fail": false,
+   "OK": 33,
+   "INFO": 3,
+   "SKIP": 1,
+   "failing": [],
+   "known": []
+  },
+  "shorts": {
+   "fail": false,
+   "OK": 31,
+   "INFO": 3,
+   "SKIP": 1,
+   "failing": [],
+   "known": []
+  },
+  "skirt": {
+   "fail": false,
+   "OK": 63,
+   "INFO": 2,
+   "failing": [],
+   "known": []
+  },
+  "boots": {
+   "fail": false,
+   "OK": 30,
+   "INFO": 3,
+   "SKIP": 1,
+   "failing": [],
+   "known": []
+  },
+  "shoes": {
+   "fail": false,
+   "OK": 30,
+   "INFO": 3,
+   "SKIP": 1,
+   "failing": [],
+   "known": []
+  },
+  "jacket": {
+   "fail": false,
+   "OK": 34,
+   "INFO": 2,
+   "SKIP": 1,
+   "failing": [],
+   "known": []
+  },
+  "trenchcoat": {
+   "fail": false,
+   "OK": 66,
+   "INFO": 1,
+   "failing": [],
+   "known": []
+  }
+ }
+}
