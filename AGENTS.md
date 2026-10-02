@@ -33,6 +33,19 @@ machine-specific notes go in `AGENTS.local.md` (git-ignored).
   `deploy.ps1` (git-ignored) must not target `charactercreator`: that path is
   the live compare site and is written ONLY by CharacterCreatorBaseline's
   `deploy.ps1`.
+- Rule for the local `deploy.ps1` (it is git-ignored, so this file is where the
+  rule is recorded; re-apply it if the script is ever recreated from an old
+  copy):
+  - `-Name` has no default and is required.
+  - The target `charactercreator` is refused (case-insensitively) in every mode,
+    including `-DryRun`, `-StageOnly` and `-VerifyOnly`, with exit code 3.
+  - Check (PowerShell): `.\deploy.ps1 -Name charactercreator -DryRun` must print
+    `REFUSED: ...` and give `$LASTEXITCODE` 3.
+- The live compare site is built from CharacterCreatorBaseline
+  (`web/compare` + `build/baseline`) and deployed with that repo's
+  `deploy.ps1` (`-DryRun`, `-VerifyOnly`, `-Rollback [-DryRun]`). Its server
+  notes (vhost snippet for `.glb` MIME type, gzip and Cache-Control) are in
+  CharacterCreatorBaseline `docs/SERVER_NOTES.md`.
 - Agents never deploy anywhere. A deploy or server change happens only after
   the owner says yes to that specific action. Dry runs are fine (use
   PowerShell, not Git Bash, which rewrites Linux paths).
