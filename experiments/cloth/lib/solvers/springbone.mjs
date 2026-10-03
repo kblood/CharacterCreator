@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // E) Spring bones: @pixiv/three-vrm-springbone (VRMC_springBone runtime). The skirt is `around` bone
 // chains of `rows` joints hanging from the waistband (row 0 = chain roots, parented to a hips object);
 // every garment vertex is one bone position, so the same metrics apply. No lateral constraints between

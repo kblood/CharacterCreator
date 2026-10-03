@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Samples the procedural clips (web/animation/clips.js) for the NEUTRAL body into portable JSON tracks
 // (docs/ANIMATION_PLAN.md section 4 D). The JSON is the input for blender/bake_clips.py and for any
 // other engine that wants the clips without running our JS.

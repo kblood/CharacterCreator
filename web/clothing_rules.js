@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Clothing rules without three.js (shared by web/clothing.js and the node tests): outfit resolution with the
 // occupies / conflicts rules of output/clothing.json, and the body zone mask / triangle filter.
 

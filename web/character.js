@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Engine-agnostic slider model -> glTF morph target influences (works on any glTF loader).
 // Bipolar sliders map -1..1 onto a pair of morph targets (neg/pos).
 // `scale` caps the maximum influence of a side: a number (both sides) or { neg, pos } (default 1).

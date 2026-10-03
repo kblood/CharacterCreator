@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Diagnostic only (not part of the build): print MPFB's default macro dict, vertex/shape-key/
 vertex-group info and the bbox of a freshly created human.
 

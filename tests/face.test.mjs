@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Slider model (face sliders, correctives) and eye life (blink timer, gaze) - pure logic, no three.js.
 // Run: node --test "tests/*.test.mjs"
 import test from 'node:test';

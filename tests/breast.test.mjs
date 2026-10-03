@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Binary sex, breast sliders / gate, breast morphs in the GLBs and the breast physics spring
 // (web/character.js, web/breastphysics.js, web/cloth/runtime.js dynBase, docs/BREAST_PHYSICS.md).
 // Run: node --test "tests/*.test.mjs"

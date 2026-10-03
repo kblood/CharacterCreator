@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Headless cloth harness: the viewer's cloth runtime (web/cloth: model, skin, solver, colliders) driven by the
 // REAL animator (web/animation) on a duck-typed copy of the exported skeleton, with slider joint offsets applied
 // like character.js applySkeleton (bone positions + rebased inverse bind matrices). Used by tests/cloth.test.mjs

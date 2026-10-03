@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Measures the 6 test bodies from output/base_body.glb (read-only) -> data/bodies.json:
 //   heads    rest joint heads (canonical names, character frame) from the joints sidecar
 //   capsules { name: { a, b, r } } radius = 75th percentile of the distance of the capsule's own vertices

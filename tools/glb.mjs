@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Minimal GLB reader for node tools/tests (no dependencies).
 // readGlb(file) -> { json, bin, size, accessor(i) -> array of numbers or arrays, byName, parent }
 import fs from 'node:fs';

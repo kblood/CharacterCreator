@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Body colliders for the cloth runtime (pure JS): output/body_colliders.json "cloth" set (tools/make_colliders.mjs)
 // evaluated on the LIVE skeleton every frame. Capsule ends = from + t0 * (to - from) .. from + t1 * (to - from) of
 // the posed joint world positions (bone heads; applySkeleton already moved them for the sliders), radius =

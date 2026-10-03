@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // One simulation run: body x garment resolution x solver over the fixed 11 s timeline (1 s preroll +
 // 10 s measured). Shared by the node benchmark and the browser page.
 import { frames, hipsAttach, HZ } from './drive.mjs';

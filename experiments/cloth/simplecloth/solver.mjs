@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // C) three-simplecloth (WebGPU compute, three r182) wrapped in the same solver interface as lib/solvers/*.
 // Browser only. The skirt is a SkinnedMesh with one bone (hips); mask -> vertex colour GREEN channel
 // (the library reads G: 1 = skinned, 0 = cloth). Param noColliders:true for diagnostics. The library only has SPHERE colliders, so every capsule

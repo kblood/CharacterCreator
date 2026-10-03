@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Writes the measured baseline (ROADMAP M2) as small, diffable JSON files under docs/baseline/ from the raw outputs
 // of the long runs. Later milestones compare against these files ("not worse than the M2 baseline").
 //   node tools/baseline_summary.mjs --out docs/baseline [--tests <npm test log>] [--check-garment <json>]

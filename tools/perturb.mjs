@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Fixed, seeded input perturbations for chaotic cloth cases (tests/cloth.test.mjs). The cloth solver is
 // deterministic, but some cases are chaotic: moving a lower layer by ~1e-7 m (about one float32 ulp at 1 m) flips
 // pass / fail. A single run is therefore a coin toss; tests assert over a FIXED set of perturbations instead, so the

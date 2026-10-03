@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Trench coat standing collar + lapels (blender/cc_clothing.py coat_collar) and covered lower layers (hide_lower):
 // size budget, pinning, skinning, clearance to neck / jaw / ears at every morph extreme + face / gaze morphs,
 // short hair styles clear of the collar, T-shirt triangles hidden under the pinned coat.

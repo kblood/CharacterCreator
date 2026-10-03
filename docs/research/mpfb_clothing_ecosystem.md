@@ -54,7 +54,7 @@ Pages that returned 404 or only navigation: oldsite mhclo doc, makeclothes sub-p
 ## 7. Licensing facts
 - VERIFIED: MPFB code GPL-3.0 (https://raw.githubusercontent.com/makehumancommunity/mpfb2/master/LICENSE.CODE.md); MakeHuman code AGPL; system assets CC0 (https://static.makehumancommunity.org/about/license.html , https://raw.githubusercontent.com/makehumancommunity/mpfb2/master/LICENSE.ASSETS.md).
 - VERIFIED: models made with MPFB may be used in closed-source games; third-party assets keep their licence. https://static.makehumancommunity.org/mpfb/faq/use_in_closed_source.html
-- INFERRED (not legal advice) safe in our MIT repo: CC0 assets, our own scripts, our own format notes. CC-BY items only with an attribution file. Do not paste MPFB source (GPL-3.0); write our own parser.
+- INFERRED (not legal advice; written when our repo was MIT, it is GPL-3.0-or-later since 2026-10-03) safe in our repo: CC0 assets, our own scripts, our own format notes. CC-BY items only with an attribution file. Do not paste MPFB source (GPL-3.0); write our own parser.
 - Recommendation: require explicit licence (CC0 / CC-BY / own), author, and source per garment; reject unknown, AGPL, NC.
 
 ## Summary table

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Capsule (segment a-b, radius r) -> rigid transform of an engine capsule whose axis is local +Y.
 // The rotation must be CONTINUOUS over time: a naive "shortest arc from +Y" is singular for segments that
 // point down (thighs, shins), which flips the rotation between frames and gives a kinematic body huge

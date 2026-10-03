@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Limited breast physics (pure JS, no three.js; contract: docs/BREAST_PHYSICS.md).
 // A damped spring per axis moves the breast tissue relative to the chest, driven by the chest's own motion:
 //   x'' = -w^2 x - 2 zeta w x' + f,   f = (g_local - g_rest) - a_local      (clamped to MAX_FORCE)

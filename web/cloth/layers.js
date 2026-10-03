@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Lower-layer collision surface for a cloth garment (pure JS, no three.js; docs/CLOTH_RUNTIME.md "Layers").
 // The body capsules are fitted to the SKIN; the garments worn under the cloth (jeans, T-shirt, skirt) lie outside
 // them by up to ~45 mm (loose jeans legs, the T-shirt hem over the hips), more than the cloth thickness covers. So

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // three-simplecloth (candidate C) on the same skirt / bodies / animation timeline as the other solvers.
 // URL params: n=500|2000 body=neutral|... shots=1.5,4.2 view=front34|side|back params=<json solver params>
 // Two passes: (1) metrics pass with a GPU->CPU readback every frame (ms includes the readback),

@@ -84,7 +84,7 @@ character-system/
   "name": "character-system",
   "version": "1.0.0",
   "contract": "1.0",
-  "license": "MIT",
+  "license": "GPL-3.0-or-later",
   "runtime": { "three": ">=0.170 <0.200", "worker": "optional", "wasm": false },
   "packs": ["packs/core/pack.json"],
   "assetLicense": "CC0-1.0 (see packs/*/pack.json per asset)"
@@ -265,7 +265,7 @@ engine an explicit early step.
 - **Content packs are data, never code.** No `import` from a pack, no scripts, no shaders (materials are chosen from the
   plugin's own set and tinted by catalog fields). That makes third-party packs safe to load and easy to validate.
 - Plugin code is trusted code and is loaded like any other dependency (same origin or pinned URL with a hash).
-- A host policy object can restrict licences, e.g. `allowLicenses: ['CC0-1.0', 'MIT']`; items outside it are not offered.
+- A host policy object can restrict licences, e.g. `allowLicenses: ['CC0-1.0', 'CC-BY-4.0']`; items outside it are not offered.
 - Size limits are part of the schema (vertices, texture sizes) so a pack cannot freeze a headset.
 
 ## 7. Versioning and compatibility
@@ -338,11 +338,14 @@ Still open
 2. **TypeScript:** hand-written `.d.ts` kept in sync by a test (proposed), or move the plugin to TypeScript?
 3. **Converter form:** a Blender headless CLI (`import_mhclo`, what CI and outside authors need first), a Blender add-on later, or both
    (section 12)? Fitting itself is not ours to build: authors use MPFB.
-4. **Pack licence policy:** which licences may a pack declare by default (CC0, CC-BY, MIT, proprietary-with-flag)? Hosts can
-   restrict further; the plugin only needs a default.
+4. **Pack licence policy:** which licences may a pack declare by default (CC0, CC-BY, proprietary-with-flag)? Hosts can
+   restrict further; the plugin only needs a default. Packs are data, not code, so the plugin's GPL-3.0-or-later does
+   not decide a pack's licence; the default allow-list proposed in section 12 is CC0 and CC-BY.
 5. **Pack trust labels:** does the community want "verified" packs (linter passed, licence checked) distinguished from raw ones?
 6. **Optional add-ons:** should tracked-avatar IK, face/eye tracking and the exporter be separate packages built on the Host API? (See the research in the WebXR repo, `docs/research/`.)
-7. **Licence of the plugin:** MIT for code, CC0 for assets (done for the repos). A pack author needs the same clarity per asset.
+7. **Licence of the plugin: DECIDED (2026-10-03).** Code is GPL-3.0-or-later; generated files whose sources are all CC0 or
+   our own data are CC0-1.0 (LICENSE-NOTES.md). A host that loads the plugin into the same program must itself be
+   GPL-compatible. A pack author still needs the same clarity per asset.
 
 ## 11. Risks
 
@@ -388,7 +391,8 @@ Kit contents (revised)
    our GLB with 53-bone weights, the 92 fitted morph targets, zone bits and pin mask. This is what `cc_clothing.py` already does
    for our own garments from MakeHuman clothes (routes A/B/C in the guide); the work is to make it generic, headless
    (Blender CLI) and driven by the public spec instead of Python code. It uses MPFB's fitting (GPL code runs only at build time,
-   as today); we must **not paste MPFB source** into this MIT repository.
+   as today); we do **not paste MPFB source** into the plugin/runtime (architecture rule, ROADMAP section 3 point 4; both
+   are GPL-3.0-or-later, so this is not a licence limit, and copied code would have to keep MPFB's notices).
 3. **Linter CLI** (`tools/check_pack`, standalone, own code, no Blender needed for the static part): `.mhclo` syntax and index ranges
    (the MPFB parser does not validate), tri/quad uniformity, material paths, `delete_verts`, author/licence/uuid present, our
    `pack.json` and catalog schemas, size limits; then (with Blender) `check_garment`'s geometry, clearance and zone checks on all

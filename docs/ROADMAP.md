@@ -9,7 +9,7 @@ Indsats er angivet i agentdage. Alle estimater er INFERRED. Stier skrives som `<
 2. Alt vores eget ligger i navngivne lag, der kan slås fra.
 3. Vi bidrager tilbage til MPFB, hvor det passer.
 
-**Cloth i MPFB.** En PR er realistisk, men kun i den form maintaineren selv har efterspurgt (#65, #228): en Python-hjælper, der sætter Blenders egen Cloth op med en pin-gruppe (arbejdsnavn `mhmask-cloth-pin`), en collision-proxy og fornuftige presets. Vores JS-XPBD-solver bliver ikke en del af MPFB. Den forbliver vores MIT-runtime, som læser den samme pin-gruppe. Den første upstream-PR bør være et lille alpha-fix, så der er tillid, før cloth-forslaget kommer.
+**Cloth i MPFB.** En PR er realistisk, men kun i den form maintaineren selv har efterspurgt (#65, #228): en Python-hjælper, der sætter Blenders egen Cloth op med en pin-gruppe (arbejdsnavn `mhmask-cloth-pin`), en collision-proxy og fornuftige presets. Vores JS-XPBD-solver bliver ikke en del af MPFB. Den forbliver vores runtime (GPL-3.0-or-later siden 2026-10-03), som læser den samme pin-gruppe. Den første upstream-PR bør være et lille alpha-fix, så der er tillid, før cloth-forslaget kommer.
 
 ---
 
@@ -39,7 +39,7 @@ Hver accept kan tjekkes med et script eller en tælling. Billeder produceres kun
 - **VERIFIED:** `dyn_breast_*` kan leveres som almindelige `.target`-filer med 0.000 mm roundtrip-afvigelse.
 - **VERIFIED:** Refit-workaroundet i `build_base.py` (`reposition_edit_bone`, linje 450-455) er en no-op på MPFB 2.0.17 / Blender 5.2: 0.000 mm i 4 scenarier. Det er altså ikke en upstream-bug. **UNKNOWN:** om fejlen opstår med alle 92 keys, så den erstattes af en assert, ikke slettes.
 - **VERIFIED:** De 12 klip er ens på stock-riggen, højst 0.21 grader fra hinanden.
-- **VERIFIED (header læst):** Baselines `web/baseline_viewer/macros.js` (115 linjer, 1 commit) siger selv, at den er skrevet ud fra MakeHumans CC0 `macro.json` og den dokumenterede regel, ikke fra MPFB-kilden. **UNKNOWN:** om det holder ved en sammenligning med MPFB's kode. Den skal tjekkes, før den flyttes ind i det offentlige MIT-repo.
+- **VERIFIED (header læst):** Baselines `web/baseline_viewer/macros.js` (115 linjer, 1 commit) siger selv, at den er skrevet ud fra MakeHumans CC0 `macro.json` og den dokumenterede regel, ikke fra MPFB-kilden. **UNKNOWN:** om det holder ved en sammenligning med MPFB's kode. Den skal tjekkes, før den flyttes ind i det offentlige MIT-repo. (Repoerne er GPL-3.0-or-later siden 2026-10-03; se punkt 3.4.)
 
 ### Tøj (spike clothing-standard: *feasible_with_work*)
 - **VERIFIED:** Vores `MhcloFit` og MPFB's `fit_clothes_to_human` giver identiske resultater (0.000 mm på 22 kroppe × 3 garments). Vores tøj er altså allerede "MPFB-fit + bagte morphs".
@@ -96,13 +96,14 @@ Hver accept kan tjekkes med et script eller en tælling. Billeder produceres kun
    - Intet lag må stå i `extensionsRequired`.
    - Hvert lag har en dom i DECISIONS.md.
 3. **Plugin = karaktersystemet.** `character-system/` er produktet. XR og compare-siden er demo-hosts. Native hosts (Unity, Godot, Unreal) er førsteklasses mål, men bevises med én engine ad gangen. Distribution sker som en mappe i git.
-4. **Licensregel** (INFERRED, ikke juridisk rådgivning).
-   - CC, XR og Baseline er MIT. Ejeren må bidrage sin egen kode til MPFB under GPL-3.0-or-later. Han beholder sin copyright (ingen CLA), så hans egne, nyskrevne linjer kan også forblive MIT i vores repos.
-   - MPFB-bidrag skrives som ny Python i en separat klon under `<scratch>`, uden for vores repos.
-   - Kode fra mpfb2 (eller fra en fork, hvor vores kode er blandet med MPFB's) må aldrig kopieres ind i MIT-repoerne. Det gælder også ændringer, maintaineren laver i vores bidrag.
-   - Vores build-scripts kalder MPFB's API i Blender, men distribuerer ikke MPFB. Det er den nuværende ordning (LICENSE-NOTES.md) og ændres ikke.
+4. **Licensregel** (ikke juridisk rådgivning).
+   - CC, XR og Baseline er GPL-3.0-or-later (besluttet af ejeren 2026-10-03, beslutning 17). Tidligere commits og kopier modtaget under MIT forbliver MIT for dem, der fik dem. Grund: pluginet er ikke tænkt til lukkede spil, og GPL matcher MPFB (GPL-3.0-or-later).
+   - Kode kan derfor gå begge veje mellem vores repos og MPFB, når ophavsrets- og licensnoter følger med. Kopieret kode krediteres (projekt, fil, version), og der kopieres ikke fra en fork uden at tjekke forkens licens og forfattere.
+   - MPFB-bidrag skrives stadig som ny Python i en separat klon under `<scratch>`, uden for vores repos.
+   - Vores build-scripts kalder MPFB's API i Blender, men distribuerer ikke MPFB (LICENSE-NOTES.md).
+   - Konsekvens: lukkede spil der indlæser pluginet skal selv være GPL-kompatible.
    - Om AI-assistance oplyses upstream, er ejerens beslutning (nr. 4). Anbefalingen er ja.
-   - **Grænseregel (ejerens afklaring):** karaktersystemet er et selvstændigt plugin, som værter (web og spilmotorer) indlæser. MPFB er et byggeværktøj, der kører i Blender og kun afleverer **data** (GLB, targets, tøj, materialer). Data går frit over grænsen. **Ingen MPFB-kode (og intet afledt af den) må ligge i runtime eller i pluginet**, så MPFB's GPL aldrig blandes ind i det. Det er grænsen, der beskytter, ikke selve plugin-formen: GPL-kode inde i pluginet ville gøre pluginet og værten til ét samlet værk. Det eneste kendte sted, hvor MPFB-afledt kode kunne ende i runtime, er makrovægtformlen (`macros.js`), og den omskrives clean-room (M3b). Byggescripts i Blender må kalde MPFB og kan være GPL uden at påvirke pluginet.
+   - **Grænseregel (ejerens afklaring; nu en ARKITEKTURREGEL, ikke en licensnødvendighed):** karaktersystemet er et selvstændigt plugin, som værter (web og spilmotorer) indlæser. MPFB er et byggeværktøj, der kører i Blender og kun afleverer **data** (GLB, targets, tøj, materialer). Data går frit over grænsen. **Ingen MPFB-kode (og intet afledt af den) ligger i runtime eller i pluginet**, så pluginet forbliver uafhængigt af Blender og MPFB. Da alt nu er GPL-3.0-or-later, er reglen ikke længere nødvendig af licensgrunde. Det eneste kendte sted med MPFB-afledt logik i runtime er makrovægtformlen (`macros.js`). Clean-room-omskrivningen (M3b) er **ikke længere påkrævet af licensgrunde**; resultatet må stadig bruges. Bruges MPFB-afledt kode, krediteres MPFB. Byggescripts i Blender må kalde MPFB.
 5. **Intet offentligt uden ejerens ja pr. handling.** Det gælder fork, push, issue, kommentar, PR, Khronos-prefix og deploy. Agenter laver kun kladder og lokale branches.
 6. **Ingen screenshot-review af Opus.** Agenter producerer billeder og måler numerisk. Visuelle domme laves af Luna og ejeren. Accept for et agent-trin er altid numerisk. Et visuelt review er en separat gate før deploy eller dom.
 7. **Én worktree pr. agent.** Ingen `checkout` i en delt mappe, aldrig `git add -A`, og ingen ændringer i andre agenters mapper.
@@ -224,7 +225,7 @@ Hver accept kan tjekkes med et script eller en tælling. Billeder produceres kun
 **M7c: CC læser `mhmask-cloth-pin`** (0.5-1 dag, afhænger af M7b-2 for navnet, ikke af svaret)
 - Accept:
   - `cc_clothing.py` bruger gruppen som `_CLOTH_PIN`, når den findes på et asset, og ellers vores egen generator.
-  - Test: et testasset, hvor gruppen er skrevet af vores egen (MIT) kode, giver `_CLOTH_PIN` lig gruppens vægte (maks. afvigelse ≤ 1e-6). Vi importerer ikke GPL-hjælperen fra klonen.
+  - Test: et testasset, hvor gruppen er skrevet af vores egen kode, giver `_CLOTH_PIN` lig gruppens vægte (maks. afvigelse ≤ 1e-6). Vi importerer ikke GPL-hjælperen fra klonen.
   - JS-solveren kører 600 frames på assettet uden NaN med default `ccCloth`-parametre.
   - Integritetsmatricen er ikke dårligere end M2-baseline.
 
@@ -333,9 +334,10 @@ Hver accept kan tjekkes med et script eller en tælling. Billeder produceres kun
     - b) Skal det være en kommentar på #228 eller et nyt issue?
     - c) Skal reweight være default eller opt-in? Målt trade-off: cloth-stræk p99 falder fra 1.97 til 1.65, men skin-only-penetration stiger fra 5.5 til 20.1 mm.
     - *Anbefaling: ja, kommentar på #228, opt-in.*
-14. **Licens på `dyn_breast_*.target`-filerne:** CC0 (som MakeHuman-assets) eller MIT? *Anbefaling: CC0.*
+14. **Licens på `dyn_breast_*.target`-filerne:** CC0 (som MakeHuman-assets) eller MIT? *Anbefaling: CC0.* **Afgjort 2026-10-03:** genererede filer, hvis kilder alle er CC0 eller vores egne data, er CC0-1.0 (LICENSE-NOTES.md, "Generated files").
 15. **Baseline-repoet:** skal det forblive privat, selv om det er kilden til det offentlige site? *Anbefaling: gør det offentligt, når M0 og M2's sti-scrub er gjort, eller flyt compare-siden ind i CC.*
 16. **Rigtig hardware:** vil du køre en Quest 3-test (via adb), før der bygges flere XR-features? *Anbefaling: ja, en kort test efter M9.*
+17. **Licens: GPL-3.0-or-later for alle tre repos - besluttet af ejeren 2026-10-03.** Genererede filer med kun CC0-kilder er CC0-1.0; filer afledt af CC-BY-assets beholder kravet om kreditering.
 
 ---
 
@@ -345,7 +347,7 @@ Hver accept kan tjekkes med et script eller en tælling. Billeder produceres kun
 - **Deploy (VERIFIED):** Én kørsel af det gamle script sletter compare-sitet og den eneste backup.
 - **Upstream (UNKNOWN):** Maintainerens appetit, svartid og AI-politik er ukendte. Det realistiske udfald kan være "kun pin-gruppe og preset-hjælper", ikke "vores cloth i MPFB". Vi afbøder med alpha-PR'en først og issue før fuld PR.
 - **Cloth-kvalitet (VERIFIED):** Stræk p99 1.65-1.97 og ingen periodicitet. Hvis M7b-1 ikke forbedrer det, skal bidraget præsenteres ærligt som authoring- og preview-hjælper.
-- **Licens (INFERRED):** `macros.js` siger selv, at den er skrevet ud fra CC0-data, men det er ikke bekræftet. GPL-kode må aldrig flyde ind i MIT. M3 skal være lukket før M7a og M8.
+- **Licens:** siden 2026-10-03 er repoerne GPL-3.0-or-later, så MPFB-afledt kode er ikke længere et licensproblem, men skal krediteres, og den holdes ude af pluginet af arkitekturgrunde (grænsereglen). Lukkede spil kan ikke bruge pluginet uden selv at være GPL-kompatible.
 - **Ombasering (VERIFIED omfang):** Den rammer alle GLB'er, sidecars, tests og matricen (30-60 min pr. kørsel). Afbødning: gate før M9/M10, alias-map og baseline-målinger.
 - **Native (UNKNOWN):** Understøttelse af quantization og extensions er ukendt. Standardprofilen er 62 % større. M12 kan startes tidligt for at mindske risikoen.
 - **Refaktorering af tre hosts på én gang (M9):** Afbødes med paritets-snapshots og grønne suiter før sletning af sync-scripts.
@@ -393,6 +395,6 @@ Hver accept kan tjekkes med et script eller en tælling. Billeder produceres kun
 - M12 kan startes før M10, så standardprofilen bygger på målt loader-support.
 - `eye-opened-up` er flyttet ud fra "efter M8b" til M5. Det er standarddata og uafhængigt af ombaseringen.
 - AI-oplysning var både en regel og en beslutning. Nu er det kun beslutning 4.
-- Licensprincippet er præciseret: dine egne nyskrevne linjer kan være både MIT og GPL, men intet fra en MPFB-fork må gå tilbage.
+- Licensprincippet er præciseret: dine egne nyskrevne linjer kan være både MIT og GPL, men intet fra en MPFB-fork må gå tilbage. (Afløst 2026-10-03 af beslutning 17: alle tre repos er GPL-3.0-or-later.)
 - Nye beslutninger: 15 (Baseline privat eller offentligt) og 16 (test på rigtig hardware).
 - Samlet estimat rettet fra 22-30 til 26-36 agentdage, fordi M2b og den større M11 nu er med.

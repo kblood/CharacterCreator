@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // B) Jolt Physics soft body (jolt-physics npm = JoltPhysics.js, WASM, single-threaded build).
 // Kinematic (invMass 0) vertices are integrated with their velocity, so each frame they are put at the
 // previous target with velocity (target - previous) / dt and end the step exactly on the target.

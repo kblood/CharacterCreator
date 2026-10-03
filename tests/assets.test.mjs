@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Face assets (eyes, eyebrows, eyelashes, teeth, tongue) in output/base_body.glb and the hair GLBs listed in
 // output/hair.json: structure, skinning, morph targets that really follow the body, materials/tints.
 // Run: node --test "tests/*.test.mjs"

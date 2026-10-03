@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Drawn-frame contacts (pure JS, no three.js; docs/CLOTH_RUNTIME.md "Drawn-frame contacts").
 // The drawn cloth is x_sim + (A_now - A_ref) (runtime.js lag compensation): positions solved against the capsules /
 // lower layers of the frame the job was sent in (the worker's result is one frame late; the sync path drops the

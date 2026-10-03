@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Body shapes used by the experiment + the capsule collider set. Pure JS (node + browser).
 // Capsule endpoints are canonical joints (docs/ANIMATION_PLAN.md), radii are measured from the body mesh
 // per body shape by prep_bodies.mjs (weight/muscle move no joints, so only the mesh knows a heavy thigh).

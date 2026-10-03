@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Clothing (output/clothing.json + clothing_<id>.glb, built by blender/cc_clothing.py): catalog, licences, size
 // budget, skin/morph/tint structure, morph follow, penetration at the morph extremes and in walk/run, body zones
 // (hidden skin is really covered), cloth-ready data (pin mask + extras + colliders), and the outfit rules.

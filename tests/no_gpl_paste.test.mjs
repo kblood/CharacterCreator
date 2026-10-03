@@ -1,5 +1,6 @@
-// No-GPL-paste tripwire (roadmap M3, docs/PROVENANCE.md): the denylist catches MPFB-only identifiers and comment
-// strings, lets our own wording through, and this repo is clean. Run: node --test tests/
+// SPDX-License-Identifier: GPL-3.0-or-later
+// No-MPFB-paste tripwire (roadmap M3, docs/PROVENANCE.md): the denylist catches MPFB-only identifiers and comment
+// strings, lets our own wording (and our own SPDX GPL-3.0-or-later header) through, and this repo is clean. Run: node --test tests/
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
@@ -24,7 +25,7 @@ test('every denylist rule fires on an MPFB-shaped line', () => {
     'mpfb-shapekey-table': '_SHAPEKEY_ENCODING = [',
     'mpfb-macro-locals': 'const positionPct = position / hlrange;',
     'mpfb-comment': '// Excluding forbidden breast modifier combination',
-    'gpl-header': '# SPDX-License-Identifier: GPL-3.0-or-later',
+    'gpl-header': '# SPDX-License-Identifier: GPL-2.0-only',
   };
   for (const d of DENYLIST) {
     assert.ok(samples[d.id], `test sample missing for ${d.id}`);
@@ -42,6 +43,8 @@ test('our own wording and API calls pass', () => {
     "const LOG = console; LOG.debug('x');",
     'const lowest = Math.min(...zs), highest = Math.max(...zs);',
     '// MIT License',
+    '// SPDX-License-Identifier: GPL-3.0-or-later',
+    '# SPDX-License-Identifier: GPL-3.0-or-later',
   ];
   for (const l of clean) assert.deepEqual(ids(l), [], l);
 });

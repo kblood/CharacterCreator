@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Procedural test garment: an A-line skirt made of `around` x `rows` vertices, fitted to one body from
 // data/bodies.json (silhouette rows + capsules at rest). Row 0 = waistband, pinned by the mask.
 // Portable data: pos (rest, character frame), tris, mask (-> glTF COLOR_0.r), and the cloth extras.

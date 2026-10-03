@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "description": "CharacterCreator: MakeHuman/MPFB based character system (Blender build, glTF output, three.js runtime)",
-  "license": "MIT",
+  "license": "GPL-3.0-or-later",
   "type": "module",
   "engines": {
     "node": ">=22"

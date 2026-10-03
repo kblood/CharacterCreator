@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Cloth runtime for the viewer (three.js glue; docs/CLOTH_RUNTIME.md). For every worn garment with cloth data
 // (vertex attribute _CLOTH_PIN + mesh extras ccCloth, blender/cc_clothing.py) it
 //   1. morphs the bind positions with the garment's current slider influences (only when they change: new rest

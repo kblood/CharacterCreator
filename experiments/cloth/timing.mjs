@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Clean CPU timing (node): neutral body, each solver x n repeated R times; reports the best (lowest) median
 // and mean ms/frame of the repeats, to damp noise from other processes. Run with nothing else busy.
 //   node timing.mjs [--solvers=xpbd,rapier,jolt,springbone] [--n=500,2000] [--repeats=3]

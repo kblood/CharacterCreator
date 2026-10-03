@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // The extra clips (docs/ANIMATION_CLIPS.md): jump / fall / land, strafe_left / strafe_right, walk_back and the
 // idle variants: biomechanics in documented human ranges for several bodies, plus breast physics through a jump.
 // The generic contract (finite, unit, seamless loops, planted feet, no sliding, no hyperextension) is checked for

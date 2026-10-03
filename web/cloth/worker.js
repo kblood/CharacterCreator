@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Cloth solver worker (module worker in the browser, worker_threads in node tests). It owns one solver per
 // garment and runs the same advance() as the synchronous fallback, so both give bit-identical positions.
 // Messages in:

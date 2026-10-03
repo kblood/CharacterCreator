@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Binds a skinned mesh (three.js, used duck-typed: no three import) to the canonical humanoid skeleton
 // of web/animation/canonical.js and writes canonical poses onto its bones. Contract and conventions:
 // docs/ANIMATION_PLAN.md sections 1 and 4A.

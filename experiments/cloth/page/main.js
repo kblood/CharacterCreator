@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Browser view of one experiment run: the real body GLB (sliders + skeleton offsets + the same pose as the
 // headless driver) with the simulated skirt. URL params:
 //   solver=xpbd|rapier|jolt|springbone  n=500|2000  body=neutral|tall|short|heavy|child|old
