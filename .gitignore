@@ -24,3 +24,4 @@ desktop.ini
 deploy.ps1
 deploy.htaccess
 AGENTS.local.md
+web/data/
