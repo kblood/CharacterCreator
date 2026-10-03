@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // glTF export helpers (web/export/util.js, web/export/glbpack.js): settings JSON round trip / URL param,
 // export options, tint baking math, name sanitising, credits metadata, bone table, animation helpers and the
 // GLB morph-target compaction on a synthetic GLB. The browser part (web/export/exporter.js, GLTFExporter) is

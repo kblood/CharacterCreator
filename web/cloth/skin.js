@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // CPU skinning for the cloth runtime (pure JS, no three.js). Same math as three.js skinning of a SkinnedMesh
 // in 'attached' bind mode (its modelMatrix * bindMatrixInverse cancels), so the result is in WORLD space:
 //   world = sum_j w_j * M_j * (base + sum_t influence_t * delta_t),   M_j = boneWorld_j * boneInverse_j * bindMatrix

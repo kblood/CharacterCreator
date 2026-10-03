@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Body collision capsules for cloth simulation (docs/CLOTH_SPEC.md), derived from the exported body:
 //   node tools/make_colliders.mjs [output-dir]      -> <output-dir>/body_colliders.json
 //

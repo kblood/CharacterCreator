@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Gate for the baked clips (docs/ANIMATION_PLAN.md section 4 D). Exit code 1 on any failure.
 //
 // Run (project root): node tools/check_anim_glb.mjs [output/base_body_anim.glb] [--base output/base_body.glb]

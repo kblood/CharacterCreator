@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Rig description for the canonical humanoid: concrete bone-name maps and the pure rest-geometry
 // measurement every clip receives as ctx.rig. No three.js; runs in the browser and in node.
 // FROZEN by docs/ANIMATION_PLAN.md: add maps/fields, never rename or change semantics.

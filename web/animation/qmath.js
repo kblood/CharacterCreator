@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Tiny dependency-free quaternion/vector helpers shared by humanoid.js, clips.js, animator.js and the
 // node tools. Quaternions are [x, y, z, w] (glTF order), vectors [x, y, z]. Pure functions, no
 // mutation of arguments. FROZEN by docs/ANIMATION_PLAN.md: add functions, never change semantics.

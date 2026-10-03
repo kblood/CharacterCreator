@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Procedural humanoid clips (idle / walk / run): pure, deterministic functions of time that return a
 // canonical Pose (docs/ANIMATION_PLAN.md section 1 + 4B). No DOM, no three.js; runs in node for tests
 // and baking. Body-adaptive: every length comes from ctx.rig (the current slider body), feet are placed

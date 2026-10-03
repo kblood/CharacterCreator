@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // A) Rapier 0.21 soft body (@dimforge/rapier3d-compat, WASM). Cloth = SoftBodyDesc over raw particle
 // positions with structural + shear edges, bend edges, dihedrals and a non-oriented surface (shell).
 // Pins are binary (setPinnedParticles) and driven with setParticleKinematicTarget; capsules are

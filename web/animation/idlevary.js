@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Automatic idle variation (docs/ANIMATION_CLIPS.md): while the animator rests in `idle`, every so often
 // play one cycle of an idle variant (idle_look / idle_breathe / idle_fidget) and fade back to idle, so a
 // character never stands perfectly still for long. Plain ES module, no DOM; deterministic for a given seed

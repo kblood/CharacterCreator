@@ -1,6 +1,9 @@
 #!/usr/bin/env node
-// No-GPL-paste tripwire (roadmap M3). This repo is MIT; MPFB 2 is GPL-3.0-or-later. Our build scripts may CALL
-// MPFB's API inside Blender (import + call), but no MPFB source may be copied or mechanically ported in here.
+// SPDX-License-Identifier: GPL-3.0-or-later
+// No-MPFB-paste tripwire (roadmap M3). This repo and MPFB 2 are both GPL-3.0-or-later, so this is no longer a
+// licence necessity but an architecture rule (ROADMAP section 3 point 4): our build scripts may CALL MPFB's API
+// inside Blender (import + call), but no MPFB source is copied or mechanically ported into the plugin/runtime.
+// Code copied from anywhere else must keep its copyright and licence notices (LICENSE-NOTES.md).
 //
 // The check scans the tracked code files of a repo for identifiers, plumbing and comments that only exist in
 // MPFB's own source (its logger/profiler/operator scaffolding, the private helpers of its macro code, verbatim
@@ -13,7 +16,7 @@
 //                                                               verbatim with a local MPFB checkout (<dir>);
 //                                                               shared lines fail the run as well
 //   --json   machine-readable output
-// Not legal advice; the denylist only encodes the project rule in LICENSE-NOTES.md.
+// Not legal advice; the denylist only encodes the project rule in LICENSE-NOTES.md and ROADMAP section 3.
 
 import { execFileSync } from 'node:child_process';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
@@ -46,7 +49,11 @@ export const DENYLIST = [
     re: /Excluding forbidden (breast|proportions) modifier combination|complementary targets|There are no baby proportions targets on disk|This is very annoying, but the maximum length of a shape key name/,
     why: 'verbatim MPFB comment or log string',
   },
-  { id: 'gpl-header', re: /SPDX-License-Identifier:\s*(A|L)?GPL|GNU (Affero |Lesser )?General Public License/, why: 'GPL licence header in a code file' },
+  {
+    id: 'gpl-header',
+    re: /SPDX-License-Identifier:\s*(?!GPL-3\.0-or-later\b)(A|L)?GPL|GNU (Affero |Lesser )?General Public License/,
+    why: 'foreign (A/L)GPL licence header or notice in a code file (our own header is exactly SPDX GPL-3.0-or-later)',
+  },
 ];
 
 /**

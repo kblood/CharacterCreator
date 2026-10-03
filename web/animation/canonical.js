@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Canonical humanoid skeleton (VRM 1.0 humanoid bone names) + pose helpers that need only the
 // hierarchy, not a concrete rig. Engine- and rig-agnostic; no imports besides qmath.js.
 // FROZEN by docs/ANIMATION_PLAN.md: add joints/functions, never rename or change semantics.

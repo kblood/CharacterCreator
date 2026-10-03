@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Build determinism check (ROADMAP M2): compares two build output folders file by file (sha256). For a GLB that
 // differs it reports WHERE: the JSON chunk (first differing JSON paths) and / or the BIN chunk (differing byte count
 // and the bufferViews / accessors / meshes that contain the differing bytes).

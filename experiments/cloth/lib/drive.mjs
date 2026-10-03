@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Kinematic driver: the REAL web/animation animator (crossfades, phase matching, ground guard) on a
 // fake bone hierarchy built from the rest joint heads, so it runs headless in node and identically in
 // the browser. Output per 60 Hz frame: posed joint heads, hips rotation, forward travel, capsules.

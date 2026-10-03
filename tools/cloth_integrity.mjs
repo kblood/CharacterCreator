@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Cloth INTEGRITY harness: counts VISIBLE layer penetrations of worn outfits while the character animates, with
 // cloth physics as the viewer runs it (web/cloth solver + lower layers, stepped like web/cloth/runtime.js incl. the
 // worker's one-frame latency; deterministic; the real animator through tools/cloth_sim.mjs). Every pair of drawn

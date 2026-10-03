@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Clothing: one small GLB per garment (output/clothing.json + clothing_<id>.glb, built by blender/cc_clothing.py),
 // loaded on demand, bound to the body skeleton like the hair (so it follows sliders, applySkeleton and the
 // animation), tinted at runtime (primary colour + optional secondary colour through a mask texture) and hiding

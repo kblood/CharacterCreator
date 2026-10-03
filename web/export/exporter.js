@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // glTF / GLB export of the configured character (docs/EXPORT.md) + settings JSON save / load / share.
 // Builds a fresh three.js scene from the viewer's parts (one skeleton, rest pose with the applySkeleton joint
 // positions, baked or morph-target geometry, plain PBR materials with the runtime tints baked in), samples the

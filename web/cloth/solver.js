@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // XPBD cloth solver (pure JS, no three.js, no allocations per step; runs on the main thread or in a worker).
 // Small-steps XPBD (Macklin et al. 2019): every fixed step of 1/hz s is split into `substeps` substeps with one
 // constraint pass each. Order per substep:

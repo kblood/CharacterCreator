@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Eye life: idle blinking + look-at, as morph weights (no bones; the eyes are one rigid mesh on the head).
 // Engine-agnostic, pure logic (unit tested in tests/eyelife.test.mjs); main.js turns the look target into
 // head-relative yaw/pitch and writes the weights into every part's morphTargetInfluences.

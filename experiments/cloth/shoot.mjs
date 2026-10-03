@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Headless Chrome (system Chrome/Edge via puppeteer-core): runs page/index.html for each config, saves
 // screenshots at the requested times and collects the in-browser metrics/timing -> results/browser_<tag>.json.
 //   node shoot.mjs [--solvers=xpbd,rapier,jolt,springbone] [--n=500] [--bodies=neutral] [--shots=1.5,4.2,8.4]

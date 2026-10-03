@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Makes an instrumented copy of three-simplecloth (MIT, bandinopla) in simplecloth/patched/ (git-ignored):
 // the only change is that the returned API also exposes the particle storage buffer (`positions`, vec4 per
 // unique vertex: xyz world position, w = mask) so the experiment can read positions back for the metrics.

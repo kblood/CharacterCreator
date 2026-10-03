@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Headless benchmark (node): every solver x particle count x body shape over the 10 s walk/run/idle->run
 // timeline; plus a determinism re-run. Writes results/bench.json and prints a table.
 //   node bench.mjs [--solvers=xpbd,rapier,jolt,springbone] [--n=500,2000] [--bodies=neutral,tall,...] [--det=1]

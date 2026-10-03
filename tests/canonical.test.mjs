@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Locks the pose convention of docs/ANIMATION_PLAN.md against the real rig in output/base_body.glb.
 // Run: node --test tests/
 import test from 'node:test';

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Hair/loose-part colliders per test body from output/base_body.glb (read-only) -> data/hair_colliders.json
 //   headSphere  centre (rest, character frame) = bbox centre of head-weighted vertices, r = 80th pct distance
 //   capsules    neck (neck -> head), chest (upperChest -> neck), shoulderL/R (Shoulder -> UpperArm), radius =

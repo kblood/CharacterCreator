@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Garment checker (tools/check_garment.mjs, docs/CLOTHING_GUIDE.md): every catalog garment passes it with
 // --bodies quick (static checks, clearance on the 9 bodies, cloth sim + integrity on CONFIG.quickBodies).
 // Measured defects that are accepted are listed with a reason in tools/check_garment.mjs CONFIG.knownExceptions;

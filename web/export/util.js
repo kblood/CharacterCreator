@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Pure helpers of the glTF export (docs/EXPORT.md): settings JSON (save / share / restore), export options,
 // tint baking math, glTF name sanitising, credits / licence metadata and the humanoid bone-name table.
 // No three.js and no DOM: runs in the browser and in node (tests/export.test.mjs).

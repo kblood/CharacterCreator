@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Cloth runtime tests (web/cloth, driven by tools/cloth_sim.mjs = the real animator on the exported skeleton).
 // Numbers are printed with their tolerances; docs/CLOTH_RUNTIME.md explains the metrics.
 import test from 'node:test';

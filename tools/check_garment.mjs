@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Garment checker: one command that tells whether a garment (a catalog id of output/clothing.json, or a GLB path)
 // follows the rules of docs/CLOTHING_GUIDE.md. Static checks (GLB structure, morphs, skin, budgets, catalog entry,
 // licence, tint, zones, cloth data), clearance against the skin and the lower layers on the 8 slider bodies + male

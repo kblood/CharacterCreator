@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Solver-independent measurements on world-space particle positions, one call per 60 Hz frame.
 // Penetration = a free particle closer to a capsule axis than the capsule radius minus TOL.
 import { qConj, qRotate } from '../../../web/animation/qmath.js';

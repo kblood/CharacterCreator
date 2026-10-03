@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Known visual faults as numeric checks (ROADMAP M2b, tools/visual_probes.mjs). A test that documents a fault that
 // is still in the build is an EXPECTED FAILURE: it runs, but is marked `todo` with the fault and the milestone that
 // should fix it, so `npm test` / CI stay green while the TODO line keeps the fault visible in every run. When the

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // GLB post-processing of the export (pure JS, no three.js / DOM; also used by node tests):
 //   * morph target deltas -> sparse accessors where that is smaller (core glTF 2.0), all-zero targets -> accessors
 //     without a bufferView (zeros by definition); optionally int16 normalised values (KHR_mesh_quantization, only

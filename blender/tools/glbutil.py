@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Minimal GLB read/write for post-export patches (plain Python 3, also importable inside Blender).
 
 read_glb(path)  -> (gltf_json_dict, bin_bytes)

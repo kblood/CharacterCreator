@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Hair / loose parts test (node): K strands x M joints hanging from the back of the head, simulated by
 //   springbone  (E, @pixiv/three-vrm-springbone, one VRM joint chain per strand)
 //   xpbd        (D, the same lib/solvers/xpbd.mjs, strands = distance chains + skip-one bending, no cross links)

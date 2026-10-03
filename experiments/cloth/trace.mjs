@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Debug trace: node trace.mjs <solver> [n] [body] ['<json params>'] -> every 0.5 s: max stretch, one hem vertex vs its rigid target.
 import fs from 'node:fs';
 import { frames } from './lib/drive.mjs';

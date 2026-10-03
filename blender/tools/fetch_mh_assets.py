@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Download the MakeHuman CC0 system asset pack (eyes, eyebrows, eyelashes, teeth, tongue, hair, skins, clothes) and
 unpack the parts the build uses into build/mh_assets/ (git-ignored). Plain Python 3, no Blender needed.
 

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Tiny static server for the cloth experiment. Serves the REPO ROOT read-only, so the page can import
 // web/animation/*.js and load output/*.glb without copying anything.
 //   node server.mjs [port]      -> http://localhost:8123/experiments/cloth/page/index.html

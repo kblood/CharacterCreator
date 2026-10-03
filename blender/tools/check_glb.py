@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Sanity-check a built GLB and its joints sidecar (plain Python 3, no Blender needed).
 
 Run: python blender/tools/check_glb.py [output/base_body.glb]

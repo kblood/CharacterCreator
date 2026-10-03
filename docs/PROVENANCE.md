@@ -1,8 +1,13 @@
 # Provenance: the macro-weight code (roadmap M3)
 
-Not legal advice. This file records what was compared, how, and what the project concludes under its own rule
-(LICENSE-NOTES.md: no MPFB/GPL code in the MIT repos; "when in doubt: clean-room rewrite from data and
-documentation").
+Not legal advice. This file records what was compared, how, and what the project concluded under its own rule at
+the time (2026-10-02, when the repos were MIT: no MPFB/GPL code in the MIT repos; "when in doubt: clean-room rewrite
+from data and documentation").
+
+**Update 2026-10-03:** all three repos are now GPL-3.0-or-later (LICENSE-NOTES.md). MPFB-derived code is no longer
+a licence problem, but it must credit MPFB and its copyright holders, and it stays out of the plugin/runtime as an
+architecture rule (ROADMAP section 3 point 4). The clean-room rewrite below is therefore no longer required for
+licence reasons; its result may still be used.
 
 Checked 2026-10-02 against MPFB 2.0.17 as installed in Blender (`<mpfb>` below = the extension folder;
 `blender_manifest.toml` says `license = ["SPDX:GPL-3.0-or-later"]`). The GPL source was read for the comparison;

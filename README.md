@@ -119,16 +119,23 @@ idle-variation rules and how to add a clip: [docs/ANIMATION_CLIPS.md](docs/ANIMA
 
 Short version (full table in [LICENSE-NOTES.md](LICENSE-NOTES.md)):
 
-The code in this repository is released under the MIT license ([LICENSE](LICENSE)). The assets are CC0 as listed below.
+The code in this repository is licensed under **GPL-3.0-or-later** ([LICENSE](LICENSE)), Copyright (C) 2026
+Kasper Olesen. It was MIT until 2026-10-03; earlier commits and copies received under MIT stay MIT for those who
+received them (details in [LICENSE-NOTES.md](LICENSE-NOTES.md)). Generated files under `output/` are CC0-1.0 as
+listed below. Using the plugin in a game:
+[LICENSE-NOTES.md, "Using the plugin in a game"](LICENSE-NOTES.md#using-the-plugin-in-a-game-gpl-30-or-later)
+(not legal advice).
 
-- **MPFB 2** is GPL-3.0 code. It runs inside Blender at build time only and is not part of this repo or the output.
+- **MPFB 2** is GPL-3.0-or-later code (compatible with ours). It runs inside Blender at build time only and is not
+  part of the plugin/runtime or the output.
 - **MakeHuman base mesh, targets, rig and weights** and the shipped **skin texture, eyes, eyebrows,
   eyelashes, teeth, tongue and 8 hair styles** (MakeHuman CC0 system pack, verified per asset by the build)
   are **CC0**, so the exported `output/*.glb` / `*.json` are free to use, including commercially, with no
   attribution required.
-- **three.js** is MIT.
+- **three.js** is MIT (a third-party library, GPL-compatible; its notice is kept).
 - **Clothing**: T-shirt, jeans, skirt, shoes are CC0 MakeHuman system assets (checked by the build); the trench
   coat is the CC0 `male_casualsuit05` jacket plus a project-generated long skirt, belt, standing collar and
   lapels (see LICENSE-NOTES.md).
 - Future assets: check each one's license (prefer CC0) and list it in LICENSE-NOTES.md.
-- The repo's own scripts have no license file yet.
+- Files our pipeline generates from CC0 sources and our own data are CC0-1.0; a file derived from a CC-BY asset
+  would keep the attribution requirement (none today).

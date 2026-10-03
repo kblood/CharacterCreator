@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Bake the sampled humanoid clips (output/animations/*.json) onto the MPFB armature and export
 output/base_body_anim.glb = the base body (Body + eye/brow/lash/teeth/tongue meshes, 12 morphs each, materials)
 + one glTF animation per clip. Hair is not included (separate hair_<id>.glb files).

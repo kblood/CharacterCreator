@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Cloth integrity (tools/cloth_integrity.mjs): visible layer penetrations of layered outfits while the character
 // idles, walks, runs and cross-fades idle -> run, with cloth physics as the viewer runs it (worker path, one frame
 // latency). A reduced but representative matrix on a shortened timeline; the full matrix is

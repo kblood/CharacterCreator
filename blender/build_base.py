@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Build the base body: MPFB human + game_engine rig + linearised macro morph targets,
 exported as GLB, plus a joints sidecar so the skeleton can follow the morphs at runtime.
 

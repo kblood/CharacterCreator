@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Wind for the cloth runtime (pure, deterministic): a steady breeze from the character's front-left plus slow
 // gusts (sum of incommensurate sines, no random state), so a filmstrip or a test reproduces exactly.
 // strength 0..1 (UI slider x ccCloth.wind) -> up to MAX m/s.

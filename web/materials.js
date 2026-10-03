@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Runtime material upgrades that glTF cannot express (three.js r170, onBeforeCompile patches).
 //
 // Skin (material "Skin" -> MeshPhysicalMaterial):

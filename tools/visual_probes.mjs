@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Known VISUAL faults as numeric probes (ROADMAP M2b). Each fault that a reviewer saw in a screenshot gets numbers
 // that can be re-measured without looking at an image. This tool only MEASURES; it changes no solver / garment.
 //   node tools/visual_probes.mjs [--only jaw,dresscoat,dressstep,hair,integrity,animzone] [--quick]

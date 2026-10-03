@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Tests web/humanoid.js against the real rig in output/base_body.glb (docs/ANIMATION_PLAN.md 4A).
 // Run: node --test "tests/*.test.mjs"
 // Fake three-like objects are built from the GLB nodes, so no npm dependency is needed. If the env var

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Texture preparation for build_base.py (runs inside Blender: bpy + numpy, no PIL).
 
 Every texture that is tinted at runtime is *normalised*: its mean colour (linear light, over the opaque
